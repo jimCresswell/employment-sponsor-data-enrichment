@@ -1,6 +1,6 @@
 # AGENT.md
 
-Core directives for this repository. Read this file first.
+Core directives for this repository. Read this file first, then `rules.md` and `project.md`.
 
 ## First Question
 
@@ -25,6 +25,11 @@ Always ask: **could it be simpler without compromising quality?**
   - `uv run typecheck`
   - `uv run test`
   - `uv run coverage` (gated)
+
+## Where to Look
+
+- `project.md` covers goals, pipeline stages, outputs, and configuration.
+- `rules.md` covers quality gates, testing constraints, and working conventions.
 
 ## Engineering Expectations
 

@@ -1,6 +1,6 @@
 # Rules
 
-These rules are mandatory for all work in this repository.
+These rules are mandatory for all work in this repository. For goals and outputs, see `project.md`.
 
 ## Core
 
@@ -9,6 +9,7 @@ These rules are mandatory for all work in this repository.
 - DRY + YAGNI + KISS.
 - Keep boundaries explicit: protocols for interfaces, infrastructure for implementations.
 - Delete unused code, unused files, and dead branches.
+- Use conventional commit messages (e.g. `feat: ...`, `fix: ...`).
 
 ## Error Handling
 
@@ -27,6 +28,12 @@ These rules are mandatory for all work in this repository.
 - Prefer small, injected fakes over complex mocks.
 - Tests must prove behaviour, not implementation details.
 - No skipped tests.
+
+## Style
+
+- Python 3.11+ with type hints.
+- Use snake_case for modules and functions.
+- Keep Ruff and Mypy clean; fix root causes instead of suppressing.
 
 ## Quality Gates
 
