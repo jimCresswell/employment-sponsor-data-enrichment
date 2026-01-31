@@ -55,7 +55,7 @@ uv run uk-sponsor stage2
 uv run uk-sponsor stage3
 ```
 
-`uv run <command>` executes tools inside the project environment (similar to `npx` or `pnpm exec`).
+`uv run <command>` executes tools inside the project environment.
 
 ### Geographic Filtering
 
