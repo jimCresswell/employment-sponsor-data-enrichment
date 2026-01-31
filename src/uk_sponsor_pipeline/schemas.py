@@ -100,17 +100,6 @@ STAGE3_EXPLAIN_COLUMNS = (
     "role_fit_bucket",
 )
 
-# Stage 4 output (optional): web presence signals
-STAGE4_COLUMNS = (
-    *STAGE3_SCORED_COLUMNS,
-    "web_has_website",
-    "web_website_domain",
-    "web_linkedin_exists",
-    "web_github_exists",
-    "web_enriched_at_utc",
-)
-
-
 def validate_columns(df_columns: list[str], required: frozenset[str], stage_name: str) -> None:
     """Validate that DataFrame has required columns.
 

@@ -21,6 +21,8 @@ from dotenv import load_dotenv
 from rich import print as rprint
 
 from ..config import PipelineConfig
+from ..infrastructure import LocalFileSystem
+from ..protocols import FileSystem
 from ..schemas import (
     STAGE2_ENRICHED_COLUMNS,
     STAGE3_EXPLAIN_COLUMNS,
@@ -275,6 +277,7 @@ def run_stage3(
     stage2_path: str | Path = "data/processed/stage2_enriched_companies_house.csv",
     out_dir: str | Path = "data/processed",
     config: PipelineConfig | None = None,
+    fs: FileSystem | None = None,
 ) -> dict[str, Path]:
     """Stage 3: Score companies for tech-likelihood and produce shortlist.
 
@@ -282,6 +285,7 @@ def run_stage3(
         stage2_path: Path to Stage 2 enriched CSV.
         out_dir: Directory for output files.
         config: Pipeline configuration (loads from env if None).
+        fs: Optional filesystem for testing.
 
     Returns:
         Dict with paths to scored, shortlist, and explain files.
@@ -289,11 +293,12 @@ def run_stage3(
     load_dotenv()
     config = config or PipelineConfig.from_env()
 
+    fs = fs or LocalFileSystem()
     stage2_path = Path(stage2_path)
     out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    fs.mkdir(out_dir, parents=True)
 
-    df = pd.read_csv(stage2_path, dtype=str).fillna("")
+    df = fs.read_csv(stage2_path).fillna("")
     validate_columns(
         list(df.columns), frozenset(STAGE2_ENRICHED_COLUMNS), "Stage 2 enriched output"
     )
@@ -324,7 +329,7 @@ def run_stage3(
 
     # Full scored output
     scored_path = out_dir / "stage3_scored.csv"
-    df.to_csv(scored_path, index=False)
+    fs.write_csv(df, scored_path)
     rprint(f"[green]✓ Scored:[/green] {scored_path}")
 
     # Apply filters for shortlist
@@ -347,7 +352,7 @@ def run_stage3(
         rprint(f"[cyan]Geographic filter:[/cyan] {geo_mask.sum()} companies match")
 
     shortlist_path = out_dir / "stage3_shortlist_tech.csv"
-    shortlist.to_csv(shortlist_path, index=False)
+    fs.write_csv(shortlist, shortlist_path)
     rprint(f"[green]✓ Shortlist:[/green] {shortlist_path} ({len(shortlist)} companies)")
 
     # Explainability output
@@ -356,7 +361,7 @@ def run_stage3(
     )
     explain_df = shortlist[list(STAGE3_EXPLAIN_COLUMNS)]
     explain_path = out_dir / "stage3_explain.csv"
-    explain_df.to_csv(explain_path, index=False)
+    fs.write_csv(explain_df, explain_path)
     rprint(f"[green]✓ Explainability:[/green] {explain_path}")
 
     return {"scored": scored_path, "shortlist": shortlist_path, "explain": explain_path}

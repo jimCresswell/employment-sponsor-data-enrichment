@@ -55,6 +55,8 @@ uv run uk-sponsor stage2
 uv run uk-sponsor stage3
 ```
 
+`uv run <command>` executes tools inside the project environment (similar to `npx` or `pnpm exec`).
+
 ### Geographic Filtering
 
 Filter the final shortlist by region or postcode:
@@ -76,15 +78,15 @@ uv run uk-sponsor stage3 --threshold 0.40
 uv run uk-sponsor run-all --region London --threshold 0.50
 ```
 
-## Architecture (for TypeScript developers)
+## Architecture
 
 ### Project Structure
 
 ```
 src/uk_sponsor_pipeline/
-├── cli.py              # Typer CLI (like Commander.js)
-├── config.py           # PipelineConfig dataclass (like a typed config object)
-├── protocols.py        # Protocol definitions (like TypeScript interfaces)
+├── cli.py              # Typer CLI entry point
+├── config.py           # Pipeline configuration
+├── protocols.py        # Interface-style contracts
 ├── infrastructure.py   # Concrete implementations (DI pattern)
 ├── normalization.py    # Org name processing utilities
 ├── schemas.py          # Column contracts per stage
@@ -95,25 +97,14 @@ src/uk_sponsor_pipeline/
     └── stage3_scoring.py
 
 tests/
-├── conftest.py         # Pytest fixtures (like beforeEach + factories)
+├── conftest.py         # Pytest fixtures and fakes
 ├── test_normalization.py
 └── test_stage3.py
 ```
 
-### Key Patterns
-
-| Python Pattern | TypeScript Equivalent |
-|----------------|----------------------|
-| `Protocol` class | `interface` |
-| `@dataclass` | `class` with typed properties |
-| `Optional[T]` | `T \| undefined` |
-| `dict[str, Any]` | `Record<string, unknown>` |
-| `list[str]` | `string[]` |
-| Type hints | Same purpose as TS types |
-
 ### Dependency Injection
 
-We use Python's `Protocol` (similar to TS interfaces) for testability:
+Dependency injection keeps I/O and external services swappable for tests:
 
 ```python
 # protocols.py - defines the interface
@@ -133,6 +124,8 @@ class FakeHttpClient:
 
 ### Running Tests
 
+Note: The test suite blocks all real network access. Use fakes/mocks for HTTP.
+
 ```bash
 # All tests
 uv run test
@@ -146,11 +139,11 @@ uv run test tests/test_normalization.py
 # Specific test class
 uv run test tests/test_stage3.py::TestScoreFromSic
 
-# With coverage
+# With coverage (fails if below 85%)
 uv run coverage
 ```
 
-### Developer Scripts (uv-backed)
+### Project Scripts (uv-backed)
 
 ```bash
 # Lint
@@ -196,6 +189,22 @@ Companies are scored on multiple features:
 | `data/processed/stage3_scored.csv` | All companies with scores |
 | `data/processed/stage3_shortlist_tech.csv` | Filtered shortlist |
 | `data/processed/stage3_explain.csv` | Score breakdown for shortlist |
+
+## Contributing
+
+```bash
+uv sync --extra dev
+uv run format
+uv run typecheck
+uv run lint
+uv run test
+uv run coverage
+```
+
+Notes:
+- Tests block all real network access; use fakes in `tests/conftest.py`.
+- Keep behaviour and docs in sync with the CLI and pipeline outputs.
+- No compatibility layers; delete replaced code paths.
 
 ## Configuration
 

@@ -41,6 +41,7 @@ def coverage() -> None:
             "pytest",
             "--cov=uk_sponsor_pipeline",
             "--cov-report=term-missing",
+            "--cov-fail-under=85",
             *sys.argv[1:],
         ]
     )

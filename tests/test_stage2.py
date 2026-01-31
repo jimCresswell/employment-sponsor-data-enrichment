@@ -69,7 +69,6 @@ class TestCachedHttpClientAuth:
             cache=cache,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
-            sleep_seconds=0,  # No delay in tests
         )
 
         # Make a request
@@ -103,7 +102,6 @@ class TestHttpClientWithErrors:
             cache=cache,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
-            sleep_seconds=0,
         )
 
         # Should raise AuthenticationError, not HTTPError
@@ -132,7 +130,6 @@ class TestHttpClientWithErrors:
             cache=cache,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
-            sleep_seconds=0,
         )
 
         # Should raise AuthenticationError, not HTTPError

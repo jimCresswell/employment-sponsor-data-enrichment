@@ -6,6 +6,7 @@ All tests are network-isolated - socket connections are blocked by default.
 from __future__ import annotations
 
 import socket
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -37,9 +38,7 @@ def block_network_access(monkeypatch):
     network connections. Tests that need HTTP should use FakeHttpClient
     or MagicMock.
 
-    If you need E2E tests with real network access, mark them with:
-        @pytest.mark.e2e
-    and run them separately with: pytest -m e2e
+    All tests must remain fully isolated from real network access.
     """
     monkeypatch.setattr(socket.socket, "connect", _blocked_socket_connect)
     yield
@@ -82,6 +81,7 @@ class InMemoryFileSystem:
     """In-memory filesystem for testing."""
 
     _files: dict[str, Any] = field(default_factory=dict)
+    _mtimes: dict[str, float] = field(default_factory=dict)
 
     def read_csv(self, path: Path) -> pd.DataFrame:
         key = str(path)
@@ -93,7 +93,9 @@ class InMemoryFileSystem:
         raise TypeError(f"Expected DataFrame at {path}")
 
     def write_csv(self, df: pd.DataFrame, path: Path) -> None:
-        self._files[str(path)] = df.copy()
+        key = str(path)
+        self._files[key] = df.copy()
+        self._mtimes[key] = time.time()
 
     def read_json(self, path: Path) -> dict[str, Any]:
         key = str(path)
@@ -102,7 +104,9 @@ class InMemoryFileSystem:
         return self._files[key]
 
     def write_json(self, data: dict[str, Any], path: Path) -> None:
-        self._files[str(path)] = data
+        key = str(path)
+        self._files[key] = data
+        self._mtimes[key] = time.time()
 
     def read_text(self, path: Path) -> str:
         key = str(path)
@@ -111,7 +115,9 @@ class InMemoryFileSystem:
         return self._files[key]
 
     def write_text(self, content: str, path: Path) -> None:
-        self._files[str(path)] = content
+        key = str(path)
+        self._files[key] = content
+        self._mtimes[key] = time.time()
 
     def read_bytes(self, path: Path) -> bytes:
         key = str(path)
@@ -123,7 +129,9 @@ class InMemoryFileSystem:
         raise TypeError(f"Expected bytes at {path}")
 
     def write_bytes(self, content: bytes, path: Path) -> None:
-        self._files[str(path)] = content
+        key = str(path)
+        self._files[key] = content
+        self._mtimes[key] = time.time()
 
     def exists(self, path: Path) -> bool:
         return str(path) in self._files
@@ -143,6 +151,9 @@ class InMemoryFileSystem:
                 if fnmatch.fnmatch(relative, pattern):
                     matches.append(Path(key))
         return sorted(matches)
+
+    def mtime(self, path: Path) -> float:
+        return self._mtimes.get(str(path), 0.0)
 
 
 @pytest.fixture

@@ -53,20 +53,6 @@ class DiskCache:
 
 
 @dataclass
-class NullCache:
-    """No-op cache implementation (disables caching)."""
-
-    def get(self, key: str) -> dict[str, Any] | None:
-        return None
-
-    def set(self, key: str, value: dict[str, Any]) -> None:
-        return None
-
-    def has(self, key: str) -> bool:
-        return False
-
-
-@dataclass
 class RateLimiter:
     """Rate limiter with minimum delay between requests.
 
@@ -255,7 +241,6 @@ class CachedHttpClient:
     cache: Cache
     rate_limiter: RateLimiter
     circuit_breaker: CircuitBreaker = field(default_factory=CircuitBreaker)
-    sleep_seconds: float = 0.2
     retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
     timeout_seconds: float = 30.0
 
@@ -385,3 +370,6 @@ class LocalFileSystem:
 
     def list_files(self, path: Path, pattern: str = "*") -> list[Path]:
         return sorted(path.glob(pattern))
+
+    def mtime(self, path: Path) -> float:
+        return path.stat().st_mtime

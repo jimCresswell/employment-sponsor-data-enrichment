@@ -27,9 +27,16 @@ from tqdm import tqdm
 
 from ..config import PipelineConfig
 from ..exceptions import AuthenticationError, CircuitBreakerOpen, RateLimitError
-from ..infrastructure import CachedHttpClient, CircuitBreaker, DiskCache, RateLimiter, RetryPolicy
+from ..infrastructure import (
+    CachedHttpClient,
+    CircuitBreaker,
+    DiskCache,
+    LocalFileSystem,
+    RateLimiter,
+    RetryPolicy,
+)
 from ..normalization import generate_query_variants, normalize_org_name
-from ..protocols import HttpClient
+from ..protocols import FileSystem, HttpClient
 from ..schemas import (
     STAGE1_OUTPUT_COLUMNS,
     STAGE2_CANDIDATES_COLUMNS,
@@ -180,6 +187,7 @@ def run_stage2(
     config: PipelineConfig | None = None,
     http_client: HttpClient | None = None,
     resume: bool = True,
+    fs: FileSystem | None = None,
 ) -> dict[str, Path]:
     """Stage 2: Enrich Stage 1 orgs with Companies House search + profile.
 
@@ -190,6 +198,7 @@ def run_stage2(
         config: Pipeline configuration (loads from env if None).
         http_client: HTTP client (creates default if None).
         resume: If True, skip already-processed organizations.
+        fs: Optional filesystem for testing.
 
     Returns:
         Dict with paths to enriched, unmatched, and candidates files.
@@ -205,10 +214,11 @@ def run_stage2(
     if not config.ch_api_key:
         raise RuntimeError("Missing CH_API_KEY. Set it in .env or environment variables.")
 
+    fs = fs or LocalFileSystem()
     stage1_path = Path(stage1_path)
     out_dir = Path(out_dir)
     cache_dir = Path(cache_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    fs.mkdir(out_dir, parents=True)
 
     # Output paths
     out_enriched = out_dir / "stage2_enriched_companies_house.csv"
@@ -216,7 +226,7 @@ def run_stage2(
     out_candidates = out_dir / "stage2_candidates_top3.csv"
 
     # Load input
-    df = pd.read_csv(stage1_path, dtype=str).fillna("")
+    df = fs.read_csv(stage1_path).fillna("")
     validate_columns(list(df.columns), frozenset(STAGE1_OUTPUT_COLUMNS), "Stage 1 output")
 
     # Load existing results for resumability
@@ -225,21 +235,21 @@ def run_stage2(
     existing_unmatched: list[dict[str, Any]] = []
     existing_candidates: list[dict[str, Any]] = []
 
-    if resume and out_enriched.exists():
-        existing_df = pd.read_csv(out_enriched, dtype=str).fillna("")
+    if resume and fs.exists(out_enriched):
+        existing_df = fs.read_csv(out_enriched).fillna("")
         already_processed.update(existing_df["Organisation Name"].tolist())
         existing_enriched = cast(list[dict[str, Any]], existing_df.to_dict("records"))
         rprint(f"[cyan]Resuming:[/cyan] {len(already_processed)} orgs already processed")
 
-    if resume and out_unmatched.exists():
-        existing_unmatched_df = pd.read_csv(out_unmatched, dtype=str).fillna("")
+    if resume and fs.exists(out_unmatched):
+        existing_unmatched_df = fs.read_csv(out_unmatched).fillna("")
         already_processed.update(existing_unmatched_df["Organisation Name"].tolist())
         existing_unmatched = cast(list[dict[str, Any]], existing_unmatched_df.to_dict("records"))
 
-    if resume and out_candidates.exists():
+    if resume and fs.exists(out_candidates):
         existing_candidates = cast(
             list[dict[str, Any]],
-            pd.read_csv(out_candidates, dtype=str).fillna("").to_dict("records"),
+            fs.read_csv(out_candidates).fillna("").to_dict("records"),
         )
 
     # Set up HTTP client with circuit breaker
@@ -265,7 +275,6 @@ def run_stage2(
             cache=cache,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
-            sleep_seconds=config.ch_sleep_seconds,
             retry_policy=retry_policy,
             timeout_seconds=config.ch_timeout_seconds,
         )
@@ -432,9 +441,9 @@ def run_stage2(
         "Stage 2 candidates output",
     )
 
-    enriched_df.to_csv(out_enriched, index=False)
-    unmatched_df.to_csv(out_unmatched, index=False)
-    candidates_df.to_csv(out_candidates, index=False)
+    fs.write_csv(enriched_df, out_enriched)
+    fs.write_csv(unmatched_df, out_unmatched)
+    fs.write_csv(candidates_df, out_candidates)
 
     rprint(f"[green]✓ Enriched:[/green] {len(enriched)} matched, {len(unmatched)} unmatched")
 

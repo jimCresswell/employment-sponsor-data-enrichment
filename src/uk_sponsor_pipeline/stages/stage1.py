@@ -8,7 +8,6 @@ Improvements over original:
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +17,7 @@ import pandas as pd
 from rich import print as rprint
 
 from ..normalization import normalize_org_name
+from ..infrastructure import LocalFileSystem
 from ..protocols import FileSystem
 from ..schemas import RAW_REQUIRED_COLUMNS, STAGE1_OUTPUT_COLUMNS, validate_columns
 
@@ -88,21 +88,25 @@ def run_stage1(
     Returns:
         Stage1Result with paths and counts.
     """
+    fs = fs or LocalFileSystem()
     raw_dir = Path(raw_dir)
     out_path = Path(out_path)
     reports_dir = Path(reports_dir)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    reports_dir.mkdir(parents=True, exist_ok=True)
+    fs.mkdir(out_path.parent, parents=True)
+    fs.mkdir(reports_dir, parents=True)
 
     # Find most recent CSV
-    candidates = sorted(raw_dir.glob("*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if fs.exists(raw_dir) and raw_dir.suffix.lower() == ".csv":
+        candidates = [raw_dir]
+    else:
+        candidates = fs.list_files(raw_dir, "*.csv")
     if not candidates:
         raise RuntimeError(f"No raw CSV found in {raw_dir}. Run `uk-sponsor download` first.")
 
-    in_path = candidates[0]
+    in_path = max(candidates, key=fs.mtime)
     rprint(f"[cyan]Reading:[/cyan] {in_path}")
 
-    df = pd.read_csv(in_path, dtype=str).fillna("")
+    df = fs.read_csv(in_path).fillna("")
     df.columns = [c.strip() for c in df.columns]
 
     # Validate schema
@@ -176,7 +180,7 @@ def run_stage1(
     agg = agg[cols]
     validate_columns(list(agg.columns), frozenset(STAGE1_OUTPUT_COLUMNS), "Stage 1 output")
 
-    agg.to_csv(out_path, index=False)
+    fs.write_csv(agg, out_path)
     rprint(f"[green]✓ Output:[/green] {out_path} ({len(agg):,} unique organizations)")
 
     # Calculate stats
@@ -212,7 +216,7 @@ def run_stage1(
         "top_counties": dict(stats.top_counties),
         "processed_at_utc": stats.processed_at_utc,
     }
-    stats_path.write_text(json.dumps(stats_dict, indent=2), encoding="utf-8")
+    fs.write_json(stats_dict, stats_path)
     rprint(f"[green]✓ Stats:[/green] {stats_path}")
 
     return Stage1Result(

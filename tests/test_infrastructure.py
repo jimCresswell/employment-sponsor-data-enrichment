@@ -7,6 +7,8 @@ Tests cover:
 """
 
 import time
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -25,6 +27,7 @@ from uk_sponsor_pipeline.infrastructure import (
     RetryPolicy,
     _is_auth_error,
     _is_rate_limit_error,
+    _parse_retry_after,
 )
 
 
@@ -179,6 +182,32 @@ class TestIsRateLimitError:
         assert _is_rate_limit_error(error) is False
 
 
+class TestParseRetryAfter:
+    """Tests for Retry-After parsing."""
+
+    def test_numeric_seconds(self):
+        assert _parse_retry_after({"Retry-After": "12"}) == 12
+
+    def test_http_date(self):
+        future = datetime.now(UTC) + timedelta(seconds=30)
+        header = format_datetime(future)
+        value = _parse_retry_after({"Retry-After": header})
+        assert value is not None
+        assert 0 <= value <= 30
+
+    def test_invalid_header_returns_none(self):
+        assert _parse_retry_after({"Retry-After": "not-a-date"}) is None
+
+
+class TestRetryPolicy:
+    """Tests for RetryPolicy backoff behavior."""
+
+    def test_retry_after_overrides_backoff(self):
+        policy = RetryPolicy(max_retries=1, backoff_factor=0.1, jitter_seconds=0)
+        delay = policy.compute_backoff(attempt=0, retry_after=5)
+        assert delay >= 5
+
+
 class TestCachedHttpClient:
     """Tests for CachedHttpClient error handling."""
 
@@ -199,7 +228,6 @@ class TestCachedHttpClient:
             cache=cache,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
-            sleep_seconds=0,
             retry_policy=retry_policy,
         )
 
@@ -263,7 +291,6 @@ class TestCachedHttpClient:
             cache=cache,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
-            sleep_seconds=0,
             retry_policy=RetryPolicy(max_retries=0, backoff_factor=0, jitter_seconds=0),
         )
 
@@ -299,7 +326,6 @@ class TestCachedHttpClient:
             cache=cache,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
-            sleep_seconds=0,
             retry_policy=RetryPolicy(max_retries=0, backoff_factor=0, jitter_seconds=0),
         )
 
@@ -326,7 +352,6 @@ class TestCachedHttpClient:
             cache=cache,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
-            sleep_seconds=0,
             retry_policy=RetryPolicy(max_retries=0, backoff_factor=0, jitter_seconds=0),
         )
 
@@ -372,7 +397,6 @@ class TestCachedHttpClient:
             cache=cache,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
-            sleep_seconds=0,
             retry_policy=retry_policy,
         )
 
@@ -405,7 +429,6 @@ class TestCachedHttpClient:
             cache=cache,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
-            sleep_seconds=0,
             retry_policy=retry_policy,
         )
 
@@ -435,7 +458,6 @@ class TestCachedHttpClient:
             cache=cache,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
-            sleep_seconds=0,
             retry_policy=retry_policy,
         )
 

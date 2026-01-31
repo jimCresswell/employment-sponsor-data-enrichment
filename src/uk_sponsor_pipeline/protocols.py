@@ -97,3 +97,7 @@ class FileSystem(Protocol):
     def list_files(self, path: Path, pattern: str = "*") -> list[Path]:
         """List files matching pattern in directory."""
         ...
+
+    def mtime(self, path: Path) -> float:
+        """Return modification time for a path."""
+        ...
