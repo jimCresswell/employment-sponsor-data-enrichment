@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if command -v uv >/dev/null 2>&1; then
+  uv --version
+  exit 0
+fi
+
+if command -v brew >/dev/null 2>&1; then
+  brew install uv
+else
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+fi
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "uv installed but not on PATH. Try one of the following:" >&2
+  echo "  export PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:$PATH\"" >&2
+  exit 1
+fi
+
+uv --version

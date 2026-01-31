@@ -1,7 +1,5 @@
 """Tests for name normalization utilities."""
 
-import pytest
-
 from uk_sponsor_pipeline.normalization import (
     extract_bracketed_names,
     extract_trading_name,

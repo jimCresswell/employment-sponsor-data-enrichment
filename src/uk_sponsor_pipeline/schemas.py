@@ -7,13 +7,15 @@ and clear documentation of data contracts.
 from __future__ import annotations
 
 # Raw sponsor register CSV (downloaded from GOV.UK)
-RAW_REQUIRED_COLUMNS = frozenset([
-    "Organisation Name",
-    "Town/City",
-    "County",
-    "Type & Rating",
-    "Route",
-])
+RAW_REQUIRED_COLUMNS = frozenset(
+    [
+        "Organisation Name",
+        "Town/City",
+        "County",
+        "Type & Rating",
+        "Route",
+    ]
+)
 
 # Stage 1 output: filtered and aggregated sponsors
 STAGE1_OUTPUT_COLUMNS = (
@@ -69,6 +71,7 @@ STAGE2_CANDIDATES_COLUMNS = (
     "score_locality_bonus",
     "score_region_bonus",
     "score_status_bonus",
+    "query_used",
 )
 
 # Stage 3 output: scored for tech-likelihood
@@ -86,6 +89,8 @@ STAGE3_SCORED_COLUMNS = (
 STAGE3_EXPLAIN_COLUMNS = (
     "Organisation Name",
     "ch_company_number",
+    "ch_company_name",
+    "ch_sic_codes",
     "sic_tech_score",
     "is_active_score",
     "company_age_score",
@@ -108,12 +113,12 @@ STAGE4_COLUMNS = (
 
 def validate_columns(df_columns: list[str], required: frozenset[str], stage_name: str) -> None:
     """Validate that DataFrame has required columns.
-    
+
     Args:
         df_columns: List of column names from DataFrame.
         required: Set of required column names.
         stage_name: Name of stage for error messages.
-    
+
     Raises:
         ValueError: If required columns are missing.
     """

@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 @dataclass(frozen=True)
 class PipelineConfig:
     """Immutable configuration object for all pipeline stages.
-    
+
     Load from environment with `PipelineConfig.from_env()` or construct directly for testing.
     """
 
@@ -22,6 +22,13 @@ class PipelineConfig:
     ch_min_match_score: float = 0.72
     ch_search_limit: int = 10
     ch_max_rpm: int = 600  # Companies House rate limit
+    ch_timeout_seconds: float = 30.0
+    ch_max_retries: int = 3
+    ch_backoff_factor: float = 0.5
+    ch_backoff_max_seconds: float = 60.0
+    ch_backoff_jitter_seconds: float = 0.1
+    ch_circuit_breaker_threshold: int = 5
+    ch_circuit_breaker_timeout_seconds: float = 60.0
 
     # Stage 3 scoring
     tech_score_threshold: float = 0.55
@@ -33,10 +40,10 @@ class PipelineConfig:
     @classmethod
     def from_env(cls, dotenv_path: str | None = None) -> Self:
         """Load configuration from environment variables.
-        
+
         Args:
             dotenv_path: Optional path to .env file. If None, uses default .env discovery.
-        
+
         Returns:
             PipelineConfig instance populated from environment.
         """
@@ -48,6 +55,15 @@ class PipelineConfig:
             ch_min_match_score=float(os.getenv("CH_MIN_MATCH_SCORE", "0.72")),
             ch_search_limit=int(os.getenv("CH_SEARCH_LIMIT", "10")),
             ch_max_rpm=int(os.getenv("CH_MAX_RPM", "600")),
+            ch_timeout_seconds=float(os.getenv("CH_TIMEOUT_SECONDS", "30")),
+            ch_max_retries=int(os.getenv("CH_MAX_RETRIES", "3")),
+            ch_backoff_factor=float(os.getenv("CH_BACKOFF_FACTOR", "0.5")),
+            ch_backoff_max_seconds=float(os.getenv("CH_BACKOFF_MAX_SECONDS", "60")),
+            ch_backoff_jitter_seconds=float(os.getenv("CH_BACKOFF_JITTER_SECONDS", "0.1")),
+            ch_circuit_breaker_threshold=int(os.getenv("CH_CIRCUIT_BREAKER_THRESHOLD", "5")),
+            ch_circuit_breaker_timeout_seconds=float(
+                os.getenv("CH_CIRCUIT_BREAKER_TIMEOUT_SECONDS", "60")
+            ),
             tech_score_threshold=float(os.getenv("TECH_SCORE_THRESHOLD", "0.55")),
             geo_filter_regions=_parse_list(os.getenv("GEO_FILTER_REGIONS", "")),
             geo_filter_postcodes=_parse_list(os.getenv("GEO_FILTER_POSTCODES", "")),
@@ -67,9 +83,15 @@ class PipelineConfig:
             ch_min_match_score=self.ch_min_match_score,
             ch_search_limit=self.ch_search_limit,
             ch_max_rpm=self.ch_max_rpm,
-            tech_score_threshold=tech_score_threshold if tech_score_threshold is not None else self.tech_score_threshold,
-            geo_filter_regions=geo_filter_regions if geo_filter_regions is not None else self.geo_filter_regions,
-            geo_filter_postcodes=geo_filter_postcodes if geo_filter_postcodes is not None else self.geo_filter_postcodes,
+            tech_score_threshold=tech_score_threshold
+            if tech_score_threshold is not None
+            else self.tech_score_threshold,
+            geo_filter_regions=geo_filter_regions
+            if geo_filter_regions is not None
+            else self.geo_filter_regions,
+            geo_filter_postcodes=geo_filter_postcodes
+            if geo_filter_postcodes is not None
+            else self.geo_filter_postcodes,
         )
 
 

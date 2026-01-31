@@ -101,20 +101,20 @@ Enable custom scoring plugins:
 | `Optional[T]` | `T \| undefined` |
 | `dict[str, Any]` | `Record<string, unknown>` |
 | `pytest fixtures` | Jest `beforeEach` + factory functions |
-| `pip install -e ".[dev]"` | `npm install --dev` |
+| `uv sync --extra dev` | `npm install --dev` |
 
 ### Running Specific Tests
 
 ```bash
 # All tests
-pytest tests/
+uv run test
 
 # Specific file
-pytest tests/test_normalization.py -v
+uv run test tests/test_normalization.py -v
 
 # Specific test class
-pytest tests/test_stage3.py::TestScoreFromSic -v
+uv run test tests/test_stage3.py::TestScoreFromSic -v
 
 # With coverage
-pytest tests/ --cov=uk_sponsor_pipeline
+uv run coverage
 ```

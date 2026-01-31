@@ -400,7 +400,7 @@ tests/fixtures/
 
 ```bash
 # Run all tests with coverage
-pytest --cov=uk_sponsor_pipeline --cov-report=term-missing
+uv run coverage
 
 # Type checking
 mypy src/

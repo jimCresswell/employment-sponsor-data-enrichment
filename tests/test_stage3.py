@@ -1,15 +1,18 @@
 """Tests for Stage 3 scoring."""
 
-import pytest
+import pandas as pd
 
+from uk_sponsor_pipeline.config import PipelineConfig
+from uk_sponsor_pipeline.schemas import STAGE2_ENRICHED_COLUMNS
 from uk_sponsor_pipeline.stages.stage3_scoring import (
     ScoringFeatures,
     _parse_sic_list,
-    _score_from_sic,
     _score_company_age,
     _score_company_type,
+    _score_from_sic,
     _score_name_keywords,
     calculate_features,
+    run_stage3,
 )
 
 
@@ -153,3 +156,90 @@ class TestScoringFeatures:
     def test_bucket_unlikely(self):
         features = ScoringFeatures(0.0, 0.10, 0.05, 0.05, -0.05)
         assert features.bucket == "unlikely"
+
+
+def _make_stage2_row(**overrides):
+    row = {col: "" for col in STAGE2_ENRICHED_COLUMNS}
+    row.update(
+        {
+            "Organisation Name": "Acme Ltd",
+            "org_name_normalized": "acme",
+            "has_multiple_towns": "False",
+            "has_multiple_counties": "False",
+            "Town/City": "London",
+            "County": "Greater London",
+            "Type & Rating": "A rating",
+            "Route": "Skilled Worker",
+            "raw_name_variants": "Acme Ltd",
+            "match_status": "matched",
+            "match_score": "2",
+            "match_confidence": "medium",
+            "match_query_used": "Acme Ltd",
+            "ch_company_number": "12345678",
+            "ch_company_name": "ACME LTD",
+            "ch_company_status": "active",
+            "ch_company_type": "ltd",
+            "ch_date_of_creation": "2015-01-01",
+            "ch_sic_codes": "62020",
+            "ch_address_locality": "London",
+            "ch_address_region": "Greater London",
+            "ch_address_postcode": "EC1A 1BB",
+        }
+    )
+    row.update(overrides)
+    return row
+
+
+def test_stage3_geographic_filter(tmp_path):
+    rows = [
+        _make_stage2_row(
+            **{
+                "Organisation Name": "London Tech",
+                "ch_address_region": "Greater London",
+                "ch_address_locality": "London",
+                "ch_address_postcode": "EC1A 1BB",
+            }
+        ),
+        _make_stage2_row(
+            **{
+                "Organisation Name": "Manchester Tech",
+                "ch_address_region": "Greater Manchester",
+                "ch_address_locality": "Manchester",
+                "ch_address_postcode": "M1 1AA",
+            }
+        ),
+    ]
+    df = pd.DataFrame(rows)
+    stage2_path = tmp_path / "stage2.csv"
+    df.to_csv(stage2_path, index=False)
+
+    config = PipelineConfig(geo_filter_regions=("London",))
+    outs = run_stage3(stage2_path=stage2_path, out_dir=tmp_path, config=config)
+
+    shortlist_df = pd.read_csv(outs["shortlist"], dtype=str).fillna("")
+    assert shortlist_df["Organisation Name"].tolist() == ["London Tech"]
+
+
+def test_stage3_sorting_uses_numeric_match_score(tmp_path):
+    rows = [
+        _make_stage2_row(
+            **{
+                "Organisation Name": "LowMatch",
+                "match_score": "2",
+            }
+        ),
+        _make_stage2_row(
+            **{
+                "Organisation Name": "HighMatch",
+                "match_score": "10",
+            }
+        ),
+    ]
+    df = pd.DataFrame(rows)
+    stage2_path = tmp_path / "stage2.csv"
+    df.to_csv(stage2_path, index=False)
+
+    outs = run_stage3(stage2_path=stage2_path, out_dir=tmp_path, config=PipelineConfig())
+    scored_df = pd.read_csv(outs["scored"], dtype=str).fillna("")
+
+    assert scored_df.loc[0, "Organisation Name"] == "HighMatch"

@@ -10,10 +10,9 @@ Improvements over original:
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
@@ -21,6 +20,7 @@ import requests
 from bs4 import BeautifulSoup
 from rich import print as rprint
 
+from ..infrastructure import LocalFileSystem
 from ..protocols import FileSystem
 from ..schemas import RAW_REQUIRED_COLUMNS
 
@@ -64,6 +64,8 @@ def _find_best_csv_link(soup: BeautifulSoup) -> str | None:
 
     for a in soup.select("a[href]"):
         href = a.get("href", "")
+        if not isinstance(href, str):
+            continue
         if not href.lower().endswith(".csv"):
             continue
 
@@ -135,14 +137,15 @@ def download_latest(
     """
     data_dir = Path(data_dir)
     reports_dir = Path(reports_dir)
-    data_dir.mkdir(parents=True, exist_ok=True)
-    reports_dir.mkdir(parents=True, exist_ok=True)
+    fs = fs or LocalFileSystem()
+    fs.mkdir(data_dir, parents=True)
+    fs.mkdir(reports_dir, parents=True)
 
     session = session or requests.Session()
 
     # Determine asset URL
-    if url_override:
-        asset_url = url_override
+    asset_url: str | None = url_override
+    if asset_url:
         rprint(f"[cyan]Using override URL:[/cyan] {asset_url}")
     else:
         rprint(f"[cyan]Fetching GOV.UK page:[/cyan] {GOVUK_PAGE}")
@@ -150,11 +153,13 @@ def download_latest(
         soup = BeautifulSoup(html, "lxml")
 
         asset_url = _find_best_csv_link(soup)
-        if not asset_url:
+        if asset_url is None:
             raise RuntimeError(
                 "Could not find a CSV link on the GOV.UK sponsor register page.\n"
                 "The page structure may have changed. Use --url to specify the direct CSV URL."
             )
+
+    assert asset_url is not None
 
     # Download the CSV
     filename = _safe_filename_from_url(asset_url)
@@ -165,13 +170,13 @@ def download_latest(
     r.raise_for_status()
 
     content = r.content
-    out_path.write_bytes(content)
+    fs.write_bytes(content, out_path)
 
     # Calculate hash and validate schema
     sha256_hash = _calculate_sha256(content)
     schema_valid = _validate_csv_schema(content)
 
-    downloaded_at = datetime.now(timezone.utc).isoformat()
+    downloaded_at = datetime.now(UTC).isoformat()
 
     # Write manifest
     manifest = {
@@ -183,9 +188,7 @@ def download_latest(
         "sha256_hash": sha256_hash,
         "schema_valid": schema_valid,
     }
-    (reports_dir / "download_manifest.json").write_text(
-        json.dumps(manifest, indent=2), encoding="utf-8"
-    )
+    fs.write_json(manifest, reports_dir / "download_manifest.json")
 
     result = DownloadResult(
         output_path=out_path,

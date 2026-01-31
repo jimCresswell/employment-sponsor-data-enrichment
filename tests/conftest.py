@@ -13,7 +13,6 @@ from typing import Any
 import pandas as pd
 import pytest
 
-
 # =============================================================================
 # Network Isolation - Block all socket connections in tests
 # =============================================================================
@@ -114,6 +113,18 @@ class InMemoryFileSystem:
     def write_text(self, content: str, path: Path) -> None:
         self._files[str(path)] = content
 
+    def read_bytes(self, path: Path) -> bytes:
+        key = str(path)
+        if key not in self._files:
+            raise FileNotFoundError(f"No such file: {path}")
+        data = self._files[key]
+        if isinstance(data, bytes):
+            return data
+        raise TypeError(f"Expected bytes at {path}")
+
+    def write_bytes(self, content: bytes, path: Path) -> None:
+        self._files[str(path)] = content
+
     def exists(self, path: Path) -> bool:
         return str(path) in self._files
 
@@ -155,19 +166,33 @@ def in_memory_fs() -> InMemoryFileSystem:
 @pytest.fixture
 def sample_raw_csv() -> pd.DataFrame:
     """Sample raw sponsor register data for testing."""
-    return pd.DataFrame({
-        "Organisation Name": [
-            "ACME Software Ltd",
-            "ACME SOFTWARE LIMITED",  # Duplicate with different casing
-            "Tech Corp T/A Digital Solutions",
-            "City Hospital NHS Trust",
-            "Bob's Construction Ltd",
-        ],
-        "Town/City": ["London", "London", "Manchester", "Birmingham", "Leeds"],
-        "County": ["Greater London", "Greater London", "Greater Manchester", "West Midlands", "West Yorkshire"],
-        "Type & Rating": ["A rating", "A rating", "A rating", "A rating", "A rating"],
-        "Route": ["Skilled Worker", "Skilled Worker", "Skilled Worker", "Skilled Worker", "Skilled Worker"],
-    })
+    return pd.DataFrame(
+        {
+            "Organisation Name": [
+                "ACME Software Ltd",
+                "ACME SOFTWARE LIMITED",  # Duplicate with different casing
+                "Tech Corp T/A Digital Solutions",
+                "City Hospital NHS Trust",
+                "Bob's Construction Ltd",
+            ],
+            "Town/City": ["London", "London", "Manchester", "Birmingham", "Leeds"],
+            "County": [
+                "Greater London",
+                "Greater London",
+                "Greater Manchester",
+                "West Midlands",
+                "West Yorkshire",
+            ],
+            "Type & Rating": ["A rating", "A rating", "A rating", "A rating", "A rating"],
+            "Route": [
+                "Skilled Worker",
+                "Skilled Worker",
+                "Skilled Worker",
+                "Skilled Worker",
+                "Skilled Worker",
+            ],
+        }
+    )
 
 
 @pytest.fixture

@@ -19,14 +19,14 @@ class HttpClient(Protocol):
 
     def get_json(self, url: str, cache_key: str | None = None) -> dict[str, Any]:
         """Fetch JSON from URL, optionally using cache.
-        
+
         Args:
             url: The URL to fetch.
             cache_key: Optional cache key. If provided and cached, return cached value.
-        
+
         Returns:
             Parsed JSON response as dict.
-        
+
         Raises:
             RequestError: On network or HTTP errors.
         """
@@ -54,11 +54,11 @@ class Cache(Protocol):
 class FileSystem(Protocol):
     """Abstract filesystem for reading/writing pipeline data."""
 
-    def read_csv(self, path: Path) -> "pd.DataFrame":
+    def read_csv(self, path: Path) -> pd.DataFrame:
         """Read CSV file into DataFrame."""
         ...
 
-    def write_csv(self, df: "pd.DataFrame", path: Path) -> None:
+    def write_csv(self, df: pd.DataFrame, path: Path) -> None:
         """Write DataFrame to CSV file."""
         ...
 
@@ -76,6 +76,14 @@ class FileSystem(Protocol):
 
     def write_text(self, content: str, path: Path) -> None:
         """Write text file."""
+        ...
+
+    def read_bytes(self, path: Path) -> bytes:
+        """Read binary file."""
+        ...
+
+    def write_bytes(self, content: bytes, path: Path) -> None:
+        """Write binary file."""
         ...
 
     def exists(self, path: Path) -> bool:

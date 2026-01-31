@@ -11,7 +11,7 @@ Commands:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Annotated
 
 import typer
 from rich import print as rprint
@@ -27,21 +27,30 @@ app = typer.Typer(
     help="UK sponsor register pipeline: download → filter → enrich → score → shortlist",
 )
 
+DEFAULT_RAW_DIR = Path("data/raw")
+DEFAULT_STAGE1_OUT = Path("data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv")
+DEFAULT_PROCESSED_DIR = Path("data/processed")
+DEFAULT_STAGE2_IN = Path("data/processed/stage2_enriched_companies_house.csv")
+
 
 @app.command()
 def download(
-    url: Optional[str] = typer.Option(
-        None,
-        "--url",
-        "-u",
-        help="Direct CSV URL (bypasses GOV.UK page scraping)",
-    ),
-    data_dir: Path = typer.Option(
-        Path("data/raw"),
-        "--data-dir",
-        "-d",
-        help="Directory to save downloaded CSV",
-    ),
+    url: Annotated[
+        str | None,
+        typer.Option(
+            "--url",
+            "-u",
+            help="Direct CSV URL (bypasses GOV.UK page scraping)",
+        ),
+    ] = None,
+    data_dir: Annotated[
+        Path,
+        typer.Option(
+            "--data-dir",
+            "-d",
+            help="Directory to save downloaded CSV",
+        ),
+    ] = DEFAULT_RAW_DIR,
 ) -> None:
     """Download the latest sponsor register CSV from GOV.UK."""
     result: DownloadResult = download_latest(url_override=url, data_dir=data_dir)
@@ -52,43 +61,55 @@ def download(
 
 @app.command()
 def stage1(
-    raw_dir: Path = typer.Option(
-        Path("data/raw"),
-        "--raw-dir",
-        help="Directory containing raw CSV files",
-    ),
-    out_path: Path = typer.Option(
-        Path("data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv"),
-        "--output",
-        "-o",
-        help="Output path for filtered/aggregated CSV",
-    ),
+    raw_dir: Annotated[
+        Path,
+        typer.Option(
+            "--raw-dir",
+            help="Directory containing raw CSV files",
+        ),
+    ] = DEFAULT_RAW_DIR,
+    out_path: Annotated[
+        Path,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Output path for filtered/aggregated CSV",
+        ),
+    ] = DEFAULT_STAGE1_OUT,
 ) -> None:
     """Stage 1: Filter to Skilled Worker + A-rated and aggregate by organization."""
     result: Stage1Result = run_stage1(raw_dir=raw_dir, out_path=out_path)
     rprint(f"[green]✓ Stage 1 complete:[/green] {result.output_path}")
-    rprint(f"  {result.total_raw_rows:,} raw → {result.filtered_rows:,} filtered → {result.unique_orgs:,} unique orgs")
+    rprint(
+        f"  {result.total_raw_rows:,} raw → {result.filtered_rows:,} filtered → {result.unique_orgs:,} unique orgs"
+    )
 
 
 @app.command()
 def stage2(
-    stage1_path: Path = typer.Option(
-        Path("data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv"),
-        "--input",
-        "-i",
-        help="Path to Stage 1 output CSV",
-    ),
-    out_dir: Path = typer.Option(
-        Path("data/processed"),
-        "--output-dir",
-        "-o",
-        help="Directory for output files",
-    ),
-    resume: bool = typer.Option(
-        True,
-        "--resume/--no-resume",
-        help="Resume from previous run (skip already-processed orgs)",
-    ),
+    stage1_path: Annotated[
+        Path,
+        typer.Option(
+            "--input",
+            "-i",
+            help="Path to Stage 1 output CSV",
+        ),
+    ] = DEFAULT_STAGE1_OUT,
+    out_dir: Annotated[
+        Path,
+        typer.Option(
+            "--output-dir",
+            "-o",
+            help="Directory for output files",
+        ),
+    ] = DEFAULT_PROCESSED_DIR,
+    resume: Annotated[
+        bool,
+        typer.Option(
+            "--resume/--no-resume",
+            help="Resume from previous run (skip already-processed orgs)",
+        ),
+    ] = True,
 ) -> None:
     """Stage 2: Enrich Stage 1 output using Companies House API."""
     outs = run_stage2(stage1_path=stage1_path, out_dir=out_dir, resume=resume)
@@ -99,54 +120,60 @@ def stage2(
 
 @app.command()
 def stage3(
-    stage2_path: Path = typer.Option(
-        Path("data/processed/stage2_enriched_companies_house.csv"),
-        "--input",
-        "-i",
-        help="Path to Stage 2 enriched CSV",
-    ),
-    out_dir: Path = typer.Option(
-        Path("data/processed"),
-        "--output-dir",
-        "-o",
-        help="Directory for output files",
-    ),
-    threshold: Optional[float] = typer.Option(
-        None,
-        "--threshold",
-        "-t",
-        help="Override tech score threshold (default: 0.55)",
-    ),
-    region: Optional[list[str]] = typer.Option(
-        None,
-        "--region",
-        "-r",
-        help="Filter by region (repeatable, e.g. --region London --region Manchester)",
-    ),
-    postcode_prefix: Optional[list[str]] = typer.Option(
-        None,
-        "--postcode-prefix",
-        "-p",
-        help="Filter by postcode prefix (repeatable, e.g. --postcode-prefix EC --postcode-prefix SW)",
-    ),
+    stage2_path: Annotated[
+        Path,
+        typer.Option(
+            "--input",
+            "-i",
+            help="Path to Stage 2 enriched CSV",
+        ),
+    ] = DEFAULT_STAGE2_IN,
+    out_dir: Annotated[
+        Path,
+        typer.Option(
+            "--output-dir",
+            "-o",
+            help="Directory for output files",
+        ),
+    ] = DEFAULT_PROCESSED_DIR,
+    threshold: Annotated[
+        float | None,
+        typer.Option(
+            "--threshold",
+            "-t",
+            help="Override tech score threshold (default: 0.55)",
+        ),
+    ] = None,
+    region: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--region",
+            "-r",
+            help="Filter by region (repeatable, e.g. --region London --region Manchester)",
+        ),
+    ] = None,
+    postcode_prefix: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--postcode-prefix",
+            "-p",
+            help="Filter by postcode prefix (repeatable, e.g. --postcode-prefix EC --postcode-prefix SW)",
+        ),
+    ] = None,
 ) -> None:
     """Stage 3: Score for tech-likelihood and produce shortlist.
-    
+
     Supports geographic filtering with --region and --postcode-prefix options.
     """
     # Load base config and apply CLI overrides
     config = PipelineConfig.from_env()
-    
-    overrides = {}
-    if threshold is not None:
-        overrides["tech_score_threshold"] = threshold
-    if region:
-        overrides["geo_filter_regions"] = tuple(region)
-    if postcode_prefix:
-        overrides["geo_filter_postcodes"] = tuple(postcode_prefix)
-    
-    if overrides:
-        config = config.with_overrides(**overrides)
+
+    if threshold is not None or region or postcode_prefix:
+        config = config.with_overrides(
+            tech_score_threshold=threshold,
+            geo_filter_regions=tuple(region) if region else None,
+            geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
+        )
 
     outs = run_stage3(stage2_path=stage2_path, out_dir=out_dir, config=config)
     rprint("[green]✓ Stage 3 complete:[/green]")
@@ -156,32 +183,40 @@ def stage3(
 
 @app.command(name="run-all")
 def run_all(
-    region: Optional[list[str]] = typer.Option(
-        None,
-        "--region",
-        "-r",
-        help="Filter final shortlist by region (repeatable)",
-    ),
-    postcode_prefix: Optional[list[str]] = typer.Option(
-        None,
-        "--postcode-prefix",
-        "-p",
-        help="Filter final shortlist by postcode prefix (repeatable)",
-    ),
-    threshold: Optional[float] = typer.Option(
-        None,
-        "--threshold",
-        "-t",
-        help="Override tech score threshold for Stage 3",
-    ),
-    skip_download: bool = typer.Option(
-        False,
-        "--skip-download",
-        help="Skip download if raw CSV already exists",
-    ),
+    region: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--region",
+            "-r",
+            help="Filter final shortlist by region (repeatable)",
+        ),
+    ] = None,
+    postcode_prefix: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--postcode-prefix",
+            "-p",
+            help="Filter final shortlist by postcode prefix (repeatable)",
+        ),
+    ] = None,
+    threshold: Annotated[
+        float | None,
+        typer.Option(
+            "--threshold",
+            "-t",
+            help="Override tech score threshold for Stage 3",
+        ),
+    ] = None,
+    skip_download: Annotated[
+        bool,
+        typer.Option(
+            "--skip-download",
+            help="Skip download if raw CSV already exists",
+        ),
+    ] = False,
 ) -> None:
     """Run all pipeline stages sequentially.
-    
+
     Executes: download → stage1 → stage2 → stage3
     Geographic filters apply to the final Stage 3 shortlist.
     """
@@ -205,21 +240,17 @@ def run_all(
 
     # Stage 3
     rprint("\n[bold cyan]═══ Stage 3: Tech Scoring & Shortlist ═══[/bold cyan]")
-    
+
     config = PipelineConfig.from_env()
-    overrides = {}
-    if threshold is not None:
-        overrides["tech_score_threshold"] = threshold
-    if region:
-        overrides["geo_filter_regions"] = tuple(region)
-    if postcode_prefix:
-        overrides["geo_filter_postcodes"] = tuple(postcode_prefix)
-    
-    if overrides:
-        config = config.with_overrides(**overrides)
+    if threshold is not None or region or postcode_prefix:
+        config = config.with_overrides(
+            tech_score_threshold=threshold,
+            geo_filter_regions=tuple(region) if region else None,
+            geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
+        )
 
     stage3_outs = run_stage3(config=config)
-    
+
     rprint("\n[bold green]═══ Pipeline Complete ═══[/bold green]")
     rprint(f"Final shortlist: {stage3_outs['shortlist']}")
     rprint(f"Explainability: {stage3_outs['explain']}")

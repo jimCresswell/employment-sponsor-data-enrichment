@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +19,7 @@ from rich import print as rprint
 
 from ..normalization import normalize_org_name
 from ..protocols import FileSystem
-from ..schemas import RAW_REQUIRED_COLUMNS, validate_columns
+from ..schemas import RAW_REQUIRED_COLUMNS, STAGE1_OUTPUT_COLUMNS, validate_columns
 
 
 @dataclass
@@ -64,6 +64,11 @@ def _arr_to_str(a: Any) -> str:
     if not out:
         return ""
     return out[0] if len(out) == 1 else " | ".join(out)
+
+
+def _unique_list(values: pd.Series) -> list[str]:
+    """Return unique values as a list of strings."""
+    return [str(v) for v in values.unique()]
 
 
 def run_stage1(
@@ -118,7 +123,9 @@ def run_stage1(
 
     # Filter: Skilled Worker + A-rated
     mask = skilled_worker_mask & a_rated_mask
-    filtered = df.loc[mask, ["Organisation Name", "Town/City", "County", "Type & Rating", "Route"]].copy()
+    filtered = df.loc[
+        mask, ["Organisation Name", "Town/City", "County", "Type & Rating", "Route"]
+    ].copy()
     filtered_rows = len(filtered)
 
     rprint(f"[cyan]Filtered:[/cyan] {filtered_rows:,} rows (Skilled Worker + A-rated)")
@@ -131,20 +138,21 @@ def run_stage1(
     unique_normalized = filtered["org_name_normalized"].nunique()
 
     # Aggregate by normalized name, preserving raw name variants
-    agg = (
-        filtered.groupby("org_name_normalized", sort=True, as_index=False)
-        .agg({
-            "Organisation Name": lambda x: list(x.unique()),  # All raw variants
+    agg = filtered.groupby("org_name_normalized", sort=True, as_index=False).agg(
+        {
+            "Organisation Name": _unique_list,  # All raw variants
             "Town/City": "unique",
             "County": "unique",
             "Type & Rating": "unique",
             "Route": "unique",
-        })
+        }
     )
 
     # Process aggregated columns
     agg["raw_name_variants"] = agg["Organisation Name"].apply(lambda x: " | ".join(sorted(set(x))))
-    agg["Organisation Name"] = agg["Organisation Name"].apply(lambda x: x[0] if x else "")  # Primary name
+    agg["Organisation Name"] = agg["Organisation Name"].apply(
+        lambda x: x[0] if x else ""
+    )  # Primary name
 
     for col in ["Town/City", "County", "Type & Rating", "Route"]:
         agg[col] = agg[col].apply(_arr_to_str)
@@ -166,6 +174,7 @@ def run_stage1(
         "raw_name_variants",
     ]
     agg = agg[cols]
+    validate_columns(list(agg.columns), frozenset(STAGE1_OUTPUT_COLUMNS), "Stage 1 output")
 
     agg.to_csv(out_path, index=False)
     rprint(f"[green]✓ Output:[/green] {out_path} ({len(agg):,} unique organizations)")
@@ -185,7 +194,7 @@ def run_stage1(
         duplicates_merged=unique_raw - unique_normalized,
         top_towns=[(str(k), int(v)) for k, v in town_counts.items()],
         top_counties=[(str(k), int(v)) for k, v in county_counts.items()],
-        processed_at_utc=datetime.now(timezone.utc).isoformat(),
+        processed_at_utc=datetime.now(UTC).isoformat(),
     )
 
     # Write stats

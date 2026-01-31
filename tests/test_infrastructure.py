@@ -22,6 +22,7 @@ from uk_sponsor_pipeline.infrastructure import (
     CircuitBreaker,
     DiskCache,
     RateLimiter,
+    RetryPolicy,
     _is_auth_error,
     _is_rate_limit_error,
 )
@@ -87,6 +88,23 @@ class TestCircuitBreaker:
         cb.reset()
         assert cb.is_open is False
         assert cb.consecutive_failures == 0
+
+    def test_half_open_allows_probe_after_timeout(self):
+        """Half-open allows a probe after cooldown."""
+        cb = CircuitBreaker(threshold=1, recovery_timeout_seconds=0)
+        cb.record_failure()
+        cb.check()  # Should allow probe
+        assert cb.state == "half_open"
+        cb.record_success()
+        assert cb.state == "closed"
+
+    def test_half_open_blocks_multiple_probes(self):
+        """Half-open blocks extra probes beyond limit."""
+        cb = CircuitBreaker(threshold=1, recovery_timeout_seconds=0, half_open_max_calls=1)
+        cb.record_failure()
+        cb.check()  # First probe
+        with pytest.raises(CircuitBreakerOpen):
+            cb.check()
 
 
 class TestRateLimiter:
@@ -164,7 +182,7 @@ class TestIsRateLimitError:
 class TestCachedHttpClient:
     """Tests for CachedHttpClient error handling."""
 
-    def _make_client(self, session=None, cache=None) -> CachedHttpClient:
+    def _make_client(self, session=None, cache=None, retry_policy=None) -> CachedHttpClient:
         """Create a CachedHttpClient with mocks."""
         if session is None:
             session = MagicMock(spec=requests.Session)
@@ -173,12 +191,16 @@ class TestCachedHttpClient:
             cache.get.return_value = None  # Cache miss by default
         rate_limiter = RateLimiter(max_rpm=600, min_delay_seconds=0)
         circuit_breaker = CircuitBreaker(threshold=3)
+        retry_policy = retry_policy or RetryPolicy(
+            max_retries=0, backoff_factor=0, jitter_seconds=0
+        )
         return CachedHttpClient(
             session=session,
             cache=cache,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
             sleep_seconds=0,
+            retry_policy=retry_policy,
         )
 
     def test_returns_cached_response(self):
@@ -242,6 +264,7 @@ class TestCachedHttpClient:
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
             sleep_seconds=0,
+            retry_policy=RetryPolicy(max_retries=0, backoff_factor=0, jitter_seconds=0),
         )
 
         # First 401
@@ -277,6 +300,7 @@ class TestCachedHttpClient:
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
             sleep_seconds=0,
+            retry_policy=RetryPolicy(max_retries=0, backoff_factor=0, jitter_seconds=0),
         )
 
         with pytest.raises(requests.HTTPError):
@@ -303,6 +327,7 @@ class TestCachedHttpClient:
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,
             sleep_seconds=0,
+            retry_policy=RetryPolicy(max_retries=0, backoff_factor=0, jitter_seconds=0),
         )
 
         client.get_json("https://example.com", None)
@@ -324,6 +349,101 @@ class TestCachedHttpClient:
         client.get_json("https://example.com", "my_cache_key")
 
         cache.set.assert_called_once_with("my_cache_key", {"data": "test"})
+
+    def test_retries_on_429_then_success(self):
+        """Retries on 429 and succeeds on next attempt."""
+        session = MagicMock(spec=requests.Session)
+        resp1 = MagicMock()
+        resp1.status_code = 429
+        resp1.headers = {"Retry-After": "5"}
+        resp2 = MagicMock()
+        resp2.status_code = 200
+        resp2.json.return_value = {"ok": True}
+        session.get.side_effect = [resp1, resp2]
+
+        cache = MagicMock()
+        cache.get.return_value = None
+        rate_limiter = RateLimiter(max_rpm=600, min_delay_seconds=0)
+        circuit_breaker = CircuitBreaker(threshold=3)
+        retry_policy = RetryPolicy(max_retries=1, backoff_factor=0, jitter_seconds=0)
+
+        client = CachedHttpClient(
+            session=session,
+            cache=cache,
+            rate_limiter=rate_limiter,
+            circuit_breaker=circuit_breaker,
+            sleep_seconds=0,
+            retry_policy=retry_policy,
+        )
+
+        with patch("uk_sponsor_pipeline.infrastructure.time.sleep") as sleep_mock:
+            result = client.get_json("https://example.com", None)
+
+        assert result == {"ok": True}
+        assert session.get.call_count == 2
+        sleep_mock.assert_called()
+
+    def test_rate_limit_error_after_retries_exhausted(self):
+        """Raises RateLimitError after exhausting retries for 429."""
+        session = MagicMock(spec=requests.Session)
+        resp1 = MagicMock()
+        resp1.status_code = 429
+        resp1.headers = {"Retry-After": "3"}
+        resp2 = MagicMock()
+        resp2.status_code = 429
+        resp2.headers = {"Retry-After": "3"}
+        session.get.side_effect = [resp1, resp2]
+
+        cache = MagicMock()
+        cache.get.return_value = None
+        rate_limiter = RateLimiter(max_rpm=600, min_delay_seconds=0)
+        circuit_breaker = CircuitBreaker(threshold=3)
+        retry_policy = RetryPolicy(max_retries=1, backoff_factor=0, jitter_seconds=0)
+
+        client = CachedHttpClient(
+            session=session,
+            cache=cache,
+            rate_limiter=rate_limiter,
+            circuit_breaker=circuit_breaker,
+            sleep_seconds=0,
+            retry_policy=retry_policy,
+        )
+
+        with patch("uk_sponsor_pipeline.infrastructure.time.sleep"):
+            with pytest.raises(RateLimitError) as exc_info:
+                client.get_json("https://example.com", None)
+
+        assert exc_info.value.retry_after == 3
+        assert session.get.call_count == 2
+
+    def test_retries_on_timeout_then_success(self):
+        """Retries on timeout exception and succeeds."""
+        session = MagicMock(spec=requests.Session)
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"ok": True}
+        session.get.side_effect = [requests.Timeout("timeout"), resp]
+
+        cache = MagicMock()
+        cache.get.return_value = None
+        rate_limiter = RateLimiter(max_rpm=600, min_delay_seconds=0)
+        circuit_breaker = CircuitBreaker(threshold=3)
+        retry_policy = RetryPolicy(max_retries=1, backoff_factor=0, jitter_seconds=0)
+
+        client = CachedHttpClient(
+            session=session,
+            cache=cache,
+            rate_limiter=rate_limiter,
+            circuit_breaker=circuit_breaker,
+            sleep_seconds=0,
+            retry_policy=retry_policy,
+        )
+
+        with patch("uk_sponsor_pipeline.infrastructure.time.sleep"):
+            result = client.get_json("https://example.com", None)
+
+        assert result == {"ok": True}
+        assert session.get.call_count == 2
 
 
 class TestDiskCache:

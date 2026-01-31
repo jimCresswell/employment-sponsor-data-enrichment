@@ -16,7 +16,8 @@ import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+from urllib.parse import quote
 
 import pandas as pd
 import requests
@@ -26,9 +27,16 @@ from tqdm import tqdm
 
 from ..config import PipelineConfig
 from ..exceptions import AuthenticationError, CircuitBreakerOpen, RateLimitError
-from ..infrastructure import CachedHttpClient, CircuitBreaker, DiskCache, RateLimiter
+from ..infrastructure import CachedHttpClient, CircuitBreaker, DiskCache, RateLimiter, RetryPolicy
 from ..normalization import generate_query_variants, normalize_org_name
 from ..protocols import HttpClient
+from ..schemas import (
+    STAGE1_OUTPUT_COLUMNS,
+    STAGE2_CANDIDATES_COLUMNS,
+    STAGE2_ENRICHED_COLUMNS,
+    STAGE2_UNMATCHED_COLUMNS,
+    validate_columns,
+)
 
 CH_BASE = "https://api.company-information.service.gov.uk"
 
@@ -104,7 +112,7 @@ def _simple_similarity(a: str, b: str) -> float:
 
 
 def _score_candidates(
-    org_name: str, town: str, county: str, items: list[dict], query_used: str
+    org_name: str, town: str, county: str, items: list[dict[str, Any]], query_used: str
 ) -> list[CandidateMatch]:
     """Score candidate companies from search results."""
     org_norm = normalize_org_name(org_name)
@@ -153,8 +161,16 @@ def _score_candidates(
 
 def _auth_header(api_key: str) -> dict[str, str]:
     """Create HTTP Basic Auth header for Companies House API."""
-    token = base64.b64encode(f"{api_key}:".encode("utf-8")).decode("ascii")
+    token = base64.b64encode(f"{api_key}:".encode()).decode("ascii")
     return {"Authorization": f"Basic {token}"}
+
+
+def _coerce_output_columns(df: pd.DataFrame, columns: tuple[str, ...]) -> pd.DataFrame:
+    """Ensure output DataFrame has all required columns and correct order."""
+    for col in columns:
+        if col not in df.columns:
+            df[col] = ""
+    return df[list(columns)]
 
 
 def run_stage2(
@@ -201,10 +217,7 @@ def run_stage2(
 
     # Load input
     df = pd.read_csv(stage1_path, dtype=str).fillna("")
-    required_cols = ["Organisation Name", "Town/City", "County"]
-    for col in required_cols:
-        if col not in df.columns:
-            raise RuntimeError(f"Stage 1 missing required column: {col}")
+    validate_columns(list(df.columns), frozenset(STAGE1_OUTPUT_COLUMNS), "Stage 1 output")
 
     # Load existing results for resumability
     already_processed: set[str] = set()
@@ -215,35 +228,61 @@ def run_stage2(
     if resume and out_enriched.exists():
         existing_df = pd.read_csv(out_enriched, dtype=str).fillna("")
         already_processed.update(existing_df["Organisation Name"].tolist())
-        existing_enriched = existing_df.to_dict("records")
+        existing_enriched = cast(list[dict[str, Any]], existing_df.to_dict("records"))
         rprint(f"[cyan]Resuming:[/cyan] {len(already_processed)} orgs already processed")
 
     if resume and out_unmatched.exists():
         existing_unmatched_df = pd.read_csv(out_unmatched, dtype=str).fillna("")
         already_processed.update(existing_unmatched_df["Organisation Name"].tolist())
-        existing_unmatched = existing_unmatched_df.to_dict("records")
+        existing_unmatched = cast(list[dict[str, Any]], existing_unmatched_df.to_dict("records"))
 
     if resume and out_candidates.exists():
-        existing_candidates = pd.read_csv(out_candidates, dtype=str).fillna("").to_dict("records")
+        existing_candidates = cast(
+            list[dict[str, Any]],
+            pd.read_csv(out_candidates, dtype=str).fillna("").to_dict("records"),
+        )
 
     # Set up HTTP client with circuit breaker
     if http_client is None:
         session = requests.Session()
         session.headers.update(_auth_header(config.ch_api_key))
         cache = DiskCache(cache_dir)
-        rate_limiter = RateLimiter(max_rpm=config.ch_max_rpm, min_delay_seconds=config.ch_sleep_seconds)
-        circuit_breaker = CircuitBreaker(threshold=5)  # Stop after 5 consecutive failures
-        http_client = CachedHttpClient(session, cache, rate_limiter, circuit_breaker, config.ch_sleep_seconds)
+        rate_limiter = RateLimiter(
+            max_rpm=config.ch_max_rpm, min_delay_seconds=config.ch_sleep_seconds
+        )
+        circuit_breaker = CircuitBreaker(
+            threshold=config.ch_circuit_breaker_threshold,
+            recovery_timeout_seconds=config.ch_circuit_breaker_timeout_seconds,
+        )
+        retry_policy = RetryPolicy(
+            max_retries=config.ch_max_retries,
+            backoff_factor=config.ch_backoff_factor,
+            max_backoff_seconds=config.ch_backoff_max_seconds,
+            jitter_seconds=config.ch_backoff_jitter_seconds,
+        )
+        http_client = CachedHttpClient(
+            session=session,
+            cache=cache,
+            rate_limiter=rate_limiter,
+            circuit_breaker=circuit_breaker,
+            sleep_seconds=config.ch_sleep_seconds,
+            retry_policy=retry_policy,
+            timeout_seconds=config.ch_timeout_seconds,
+        )
 
     # Process organizations
     enriched: list[dict[str, Any]] = list(existing_enriched)
     unmatched: list[dict[str, Any]] = list(existing_unmatched)
     candidates: list[dict[str, Any]] = list(existing_candidates)
 
-    to_process = [row for _, row in df.iterrows() if row["Organisation Name"] not in already_processed]
+    to_process = [
+        row for _, row in df.iterrows() if row["Organisation Name"] not in already_processed
+    ]
     rprint(f"[cyan]Processing:[/cyan] {len(to_process)} organizations")
 
-    for _, row in tqdm(enumerate(to_process), total=len(to_process), desc="Companies House enrichment"):
+    for _, row in tqdm(
+        enumerate(to_process), total=len(to_process), desc="Companies House enrichment"
+    ):
         row = to_process[_]
         org = row["Organisation Name"]
         town = row.get("Town/City", "")
@@ -259,7 +298,7 @@ def run_stage2(
 
         # Try each query variant
         for query in query_variants:
-            search_url = f"{CH_BASE}/search/companies?q={requests.utils.quote(query)}&items_per_page={config.ch_search_limit}"
+            search_url = f"{CH_BASE}/search/companies?q={quote(query)}&items_per_page={config.ch_search_limit}"
             cache_key = _cache_key("search", query, str(config.ch_search_limit))
 
             try:
@@ -285,37 +324,47 @@ def run_stage2(
                 best_match = scored[0]
                 break
 
+        # Sort candidates by score for stable top-N reporting
+        if all_candidates:
+            all_candidates.sort(key=lambda x: x.score.total, reverse=True)
+
         # If no high-confidence match, take the best overall
         if not best_match and all_candidates:
-            all_candidates.sort(key=lambda x: x.score.total, reverse=True)
             best_match = all_candidates[0]
 
         # Record top 3 candidates for audit
         for rank, cand in enumerate(all_candidates[:3], start=1):
-            candidates.append({
-                "Organisation Name": org,
-                "rank": rank,
-                "candidate_company_number": cand.company_number,
-                "candidate_title": cand.title,
-                "candidate_status": cand.status,
-                "candidate_locality": cand.locality,
-                "candidate_region": cand.region,
-                "candidate_postcode": cand.postcode,
-                "candidate_score": round(cand.score.total, 4),
-                "score_name_similarity": round(cand.score.name_similarity, 4),
-                "score_locality_bonus": round(cand.score.locality_bonus, 4),
-                "score_region_bonus": round(cand.score.region_bonus, 4),
-                "score_status_bonus": round(cand.score.status_bonus, 4),
-                "query_used": cand.query_used,
-            })
+            candidates.append(
+                {
+                    "Organisation Name": org,
+                    "rank": rank,
+                    "candidate_company_number": cand.company_number,
+                    "candidate_title": cand.title,
+                    "candidate_status": cand.status,
+                    "candidate_locality": cand.locality,
+                    "candidate_region": cand.region,
+                    "candidate_postcode": cand.postcode,
+                    "candidate_score": round(cand.score.total, 4),
+                    "score_name_similarity": round(cand.score.name_similarity, 4),
+                    "score_locality_bonus": round(cand.score.locality_bonus, 4),
+                    "score_region_bonus": round(cand.score.region_bonus, 4),
+                    "score_status_bonus": round(cand.score.status_bonus, 4),
+                    "query_used": cand.query_used,
+                }
+            )
 
         # Check if match is good enough
-        if not best_match or best_match.score.total < config.ch_min_match_score or not best_match.company_number:
+        if (
+            not best_match
+            or best_match.score.total < config.ch_min_match_score
+            or not best_match.company_number
+        ):
             r = dict(row)
             r["match_status"] = "unmatched"
             r["best_candidate_score"] = round(best_match.score.total, 4) if best_match else ""
             r["best_candidate_title"] = best_match.title if best_match else ""
             r["best_candidate_company_number"] = best_match.company_number if best_match else ""
+            r["match_error"] = ""
             unmatched.append(r)
             continue
 
@@ -343,31 +392,49 @@ def run_stage2(
         ro = profile.get("registered_office_address") or {}
 
         out = dict(row)
-        out.update({
-            "match_status": "matched",
-            "match_score": round(best_match.score.total, 4),
-            "match_confidence": best_match.score.confidence_band,
-            "match_query_used": best_match.query_used,
-            "score_name_similarity": round(best_match.score.name_similarity, 4),
-            "score_locality_bonus": round(best_match.score.locality_bonus, 4),
-            "score_region_bonus": round(best_match.score.region_bonus, 4),
-            "score_status_bonus": round(best_match.score.status_bonus, 4),
-            "ch_company_number": best_match.company_number,
-            "ch_company_name": profile.get("company_name") or best_match.title,
-            "ch_company_status": profile.get("company_status") or best_match.status,
-            "ch_company_type": profile.get("type") or "",
-            "ch_date_of_creation": profile.get("date_of_creation") or "",
-            "ch_sic_codes": ";".join(sic) if isinstance(sic, list) else str(sic),
-            "ch_address_locality": ro.get("locality") or best_match.locality,
-            "ch_address_region": ro.get("region") or best_match.region,
-            "ch_address_postcode": ro.get("postal_code") or best_match.postcode,
-        })
+        out.update(
+            {
+                "match_status": "matched",
+                "match_score": round(best_match.score.total, 4),
+                "match_confidence": best_match.score.confidence_band,
+                "match_query_used": best_match.query_used,
+                "score_name_similarity": round(best_match.score.name_similarity, 4),
+                "score_locality_bonus": round(best_match.score.locality_bonus, 4),
+                "score_region_bonus": round(best_match.score.region_bonus, 4),
+                "score_status_bonus": round(best_match.score.status_bonus, 4),
+                "ch_company_number": best_match.company_number,
+                "ch_company_name": profile.get("company_name") or best_match.title,
+                "ch_company_status": profile.get("company_status") or best_match.status,
+                "ch_company_type": profile.get("type") or "",
+                "ch_date_of_creation": profile.get("date_of_creation") or "",
+                "ch_sic_codes": ";".join(sic) if isinstance(sic, list) else str(sic),
+                "ch_address_locality": ro.get("locality") or best_match.locality,
+                "ch_address_region": ro.get("region") or best_match.region,
+                "ch_address_postcode": ro.get("postal_code") or best_match.postcode,
+            }
+        )
         enriched.append(out)
 
-    # Write outputs
-    pd.DataFrame(enriched).to_csv(out_enriched, index=False)
-    pd.DataFrame(unmatched).to_csv(out_unmatched, index=False)
-    pd.DataFrame(candidates).to_csv(out_candidates, index=False)
+    # Write outputs (ensure schema + column order)
+    enriched_df = _coerce_output_columns(pd.DataFrame(enriched), STAGE2_ENRICHED_COLUMNS)
+    unmatched_df = _coerce_output_columns(pd.DataFrame(unmatched), STAGE2_UNMATCHED_COLUMNS)
+    candidates_df = _coerce_output_columns(pd.DataFrame(candidates), STAGE2_CANDIDATES_COLUMNS)
+
+    validate_columns(
+        list(enriched_df.columns), frozenset(STAGE2_ENRICHED_COLUMNS), "Stage 2 enriched output"
+    )
+    validate_columns(
+        list(unmatched_df.columns), frozenset(STAGE2_UNMATCHED_COLUMNS), "Stage 2 unmatched output"
+    )
+    validate_columns(
+        list(candidates_df.columns),
+        frozenset(STAGE2_CANDIDATES_COLUMNS),
+        "Stage 2 candidates output",
+    )
+
+    enriched_df.to_csv(out_enriched, index=False)
+    unmatched_df.to_csv(out_unmatched, index=False)
+    candidates_df.to_csv(out_candidates, index=False)
 
     rprint(f"[green]✓ Enriched:[/green] {len(enriched)} matched, {len(unmatched)} unmatched")
 

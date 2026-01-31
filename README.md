@@ -21,6 +21,7 @@ GOV.UK Sponsor Register → Filter → Enrich → Score → Shortlist
 ### Prerequisites
 
 - Python 3.11+
+- [uv](https://github.com/astral-sh/uv) (fast Python package manager)
 - Companies House API key ([register free](https://developer.company-information.service.gov.uk/))
 
 ### Installation
@@ -29,12 +30,12 @@ GOV.UK Sponsor Register → Filter → Enrich → Score → Shortlist
 # Clone and enter directory
 cd uk-sponsor-tech-hiring-pipeline
 
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+# Install uv (if needed)
+./scripts/install-uv
 
-# Install with dev dependencies
-pip install -e ".[dev]"
+# Create and sync a uv environment
+uv venv
+uv sync --extra dev
 
 # Copy env template and add your API key
 cp .env.example .env
@@ -45,13 +46,13 @@ cp .env.example .env
 
 ```bash
 # All stages in sequence
-uk-sponsor run-all
+uv run uk-sponsor run-all
 
 # Or run each stage individually:
-uk-sponsor download
-uk-sponsor stage1
-uk-sponsor stage2
-uk-sponsor stage3
+uv run uk-sponsor download
+uv run uk-sponsor stage1
+uv run uk-sponsor stage2
+uv run uk-sponsor stage3
 ```
 
 ### Geographic Filtering
@@ -60,19 +61,19 @@ Filter the final shortlist by region or postcode:
 
 ```bash
 # Filter to London companies only
-uk-sponsor stage3 --region London
+uv run uk-sponsor stage3 --region London
 
 # Multiple regions
-uk-sponsor stage3 --region London --region Manchester --region Bristol
+uv run uk-sponsor stage3 --region London --region Manchester --region Bristol
 
 # Postcode prefix filtering
-uk-sponsor stage3 --postcode-prefix EC --postcode-prefix SW
+uv run uk-sponsor stage3 --postcode-prefix EC --postcode-prefix SW
 
 # Adjust score threshold (default: 0.55)
-uk-sponsor stage3 --threshold 0.40
+uv run uk-sponsor stage3 --threshold 0.40
 
 # Full pipeline with filters
-uk-sponsor run-all --region London --threshold 0.50
+uv run uk-sponsor run-all --region London --threshold 0.50
 ```
 
 ## Architecture (for TypeScript developers)
@@ -133,20 +134,36 @@ class FakeHttpClient:
 ### Running Tests
 
 ```bash
-# All tests (46 currently)
-pytest tests/
+# All tests
+uv run test
 
 # Verbose output
-pytest tests/ -v
+uv run test -v
 
 # Specific test file
-pytest tests/test_normalization.py
+uv run test tests/test_normalization.py
 
 # Specific test class
-pytest tests/test_stage3.py::TestScoreFromSic
+uv run test tests/test_stage3.py::TestScoreFromSic
 
 # With coverage
-pytest tests/ --cov=uk_sponsor_pipeline
+uv run coverage
+```
+
+### Developer Scripts (uv-backed)
+
+```bash
+# Lint
+uv run lint
+
+# Format
+uv run format
+
+# Format check (CI style)
+uv run format-check
+
+# Type check
+uv run typecheck
 ```
 
 ## Scoring Model (Stage 3)
@@ -188,6 +205,13 @@ Set in `.env` or environment variables:
 CH_API_KEY=your_companies_house_api_key
 CH_SLEEP_SECONDS=0.5          # Delay between API calls
 CH_MAX_RPM=500                # Rate limit (requests per minute)
+CH_TIMEOUT_SECONDS=30         # HTTP timeout in seconds
+CH_MAX_RETRIES=3              # Retry attempts for transient errors
+CH_BACKOFF_FACTOR=0.5         # Exponential backoff factor
+CH_BACKOFF_MAX_SECONDS=60     # Max backoff delay
+CH_BACKOFF_JITTER_SECONDS=0.1 # Random jitter added to backoff
+CH_CIRCUIT_BREAKER_THRESHOLD=5  # Failures before opening breaker
+CH_CIRCUIT_BREAKER_TIMEOUT_SECONDS=60  # Seconds before half-open probe
 CH_MIN_MATCH_SCORE=0.72       # Minimum score to accept a match
 CH_SEARCH_LIMIT=5             # Candidates per search
 TECH_SCORE_THRESHOLD=0.55     # Minimum score for shortlist

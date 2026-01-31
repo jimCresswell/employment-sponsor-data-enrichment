@@ -12,16 +12,21 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 from dotenv import load_dotenv
 from rich import print as rprint
 
 from ..config import PipelineConfig
-
+from ..schemas import (
+    STAGE2_ENRICHED_COLUMNS,
+    STAGE3_EXPLAIN_COLUMNS,
+    STAGE3_SCORED_COLUMNS,
+    validate_columns,
+)
 
 # SIC code mappings for tech signals (prefix → score)
 TECH_SIC_PREFIXES = {
@@ -55,17 +60,45 @@ NEGATIVE_SIC_PREFIXES = {
 }
 
 # Name keywords that suggest tech company
-TECH_KEYWORDS = frozenset({
-    "software", "digital", "tech", "technology", "data", "ai", "cloud",
-    "cyber", "app", "platform", "saas", "fintech", "healthtech", "edtech",
-    "devops", "analytics", "machine", "learning", "automation",
-})
+TECH_KEYWORDS = frozenset(
+    {
+        "software",
+        "digital",
+        "tech",
+        "technology",
+        "data",
+        "ai",
+        "cloud",
+        "cyber",
+        "app",
+        "platform",
+        "saas",
+        "fintech",
+        "healthtech",
+        "edtech",
+        "devops",
+        "analytics",
+        "machine",
+        "learning",
+        "automation",
+    }
+)
 
 # Name keywords that suggest non-tech
-NEGATIVE_KEYWORDS = frozenset({
-    "care", "nursing", "recruitment", "staffing", "construction",
-    "cleaning", "security", "catering", "restaurant", "hotel",
-})
+NEGATIVE_KEYWORDS = frozenset(
+    {
+        "care",
+        "nursing",
+        "recruitment",
+        "staffing",
+        "construction",
+        "cleaning",
+        "security",
+        "catering",
+        "restaurant",
+        "hotel",
+    }
+)
 
 # Company types and their weights
 COMPANY_TYPE_WEIGHTS = {
@@ -84,11 +117,11 @@ COMPANY_TYPE_WEIGHTS = {
 class ScoringFeatures:
     """Feature breakdown for tech-likelihood scoring."""
 
-    sic_tech_score: float       # 0.0–0.5 from SIC codes
-    is_active_score: float      # 0.0 or 0.10
-    company_age_score: float    # 0.0–0.15 based on years since creation
-    company_type_score: float   # 0.0–0.10 based on company type
-    name_keyword_score: float   # -0.10 to 0.15 based on name keywords
+    sic_tech_score: float  # 0.0–0.5 from SIC codes
+    is_active_score: float  # 0.0 or 0.10
+    company_age_score: float  # 0.0–0.15 based on years since creation
+    company_type_score: float  # 0.0–0.10 based on company type
+    name_keyword_score: float  # -0.10 to 0.15 based on name keywords
 
     @property
     def total(self) -> float:
@@ -225,10 +258,7 @@ def _matches_geographic_filter(
 
     # Check region filter
     if regions:
-        region_match = any(
-            r.lower() in region or r.lower() in locality
-            for r in regions
-        )
+        region_match = any(r.lower() in region or r.lower() in locality for r in regions)
         if region_match:
             return True
 
@@ -264,16 +294,19 @@ def run_stage3(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     df = pd.read_csv(stage2_path, dtype=str).fillna("")
+    validate_columns(
+        list(df.columns), frozenset(STAGE2_ENRICHED_COLUMNS), "Stage 2 enriched output"
+    )
 
-    if "ch_sic_codes" not in df.columns:
-        raise RuntimeError("Stage 2 output missing ch_sic_codes; run stage2 first.")
+    # Ensure match_score is numeric for correct sorting
+    df["match_score"] = pd.to_numeric(df["match_score"], errors="coerce").fillna(0.0)
 
     rprint(f"[cyan]Scoring:[/cyan] {len(df)} companies")
 
     # Calculate features for each row
     features_list: list[ScoringFeatures] = []
     for _, row in df.iterrows():
-        features_list.append(calculate_features(row.to_dict()))
+        features_list.append(calculate_features(cast(dict[str, Any], row.to_dict())))
 
     # Add feature columns to DataFrame
     df["sic_tech_score"] = [f.sic_tech_score for f in features_list]
@@ -284,8 +317,10 @@ def run_stage3(
     df["role_fit_score"] = [f.total for f in features_list]
     df["role_fit_bucket"] = [f.bucket for f in features_list]
 
-    # Sort by score
+    # Sort by score (numeric match_score ensures stable tie-breaking)
     df = df.sort_values(["role_fit_score", "match_score"], ascending=[False, False])
+
+    validate_columns(list(df.columns), frozenset(STAGE3_SCORED_COLUMNS), "Stage 3 scored output")
 
     # Full scored output
     scored_path = out_dir / "stage3_scored.csv"
@@ -316,20 +351,10 @@ def run_stage3(
     rprint(f"[green]✓ Shortlist:[/green] {shortlist_path} ({len(shortlist)} companies)")
 
     # Explainability output
-    explain_cols = [
-        "Organisation Name",
-        "ch_company_number",
-        "ch_company_name",
-        "ch_sic_codes",
-        "sic_tech_score",
-        "is_active_score",
-        "company_age_score",
-        "company_type_score",
-        "name_keyword_score",
-        "role_fit_score",
-        "role_fit_bucket",
-    ]
-    explain_df = shortlist[[c for c in explain_cols if c in shortlist.columns]]
+    validate_columns(
+        list(shortlist.columns), frozenset(STAGE3_EXPLAIN_COLUMNS), "Stage 3 shortlist"
+    )
+    explain_df = shortlist[list(STAGE3_EXPLAIN_COLUMNS)]
     explain_path = out_dir / "stage3_explain.csv"
     explain_df.to_csv(explain_path, index=False)
     rprint(f"[green]✓ Explainability:[/green] {explain_path}")

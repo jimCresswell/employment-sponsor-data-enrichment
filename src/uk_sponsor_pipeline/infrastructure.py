@@ -8,16 +8,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import requests
 
 from .exceptions import AuthenticationError, CircuitBreakerOpen, RateLimitError
-from .protocols import Cache, FileSystem, HttpClient
+from .protocols import Cache
 
 
 @dataclass
@@ -37,7 +41,7 @@ class DiskCache:
     def get(self, key: str) -> dict[str, Any] | None:
         p = self._path(key)
         if p.exists():
-            return json.loads(p.read_text(encoding="utf-8"))
+            return cast(dict[str, Any], json.loads(p.read_text(encoding="utf-8")))
         return None
 
     def set(self, key: str, value: dict[str, Any]) -> None:
@@ -46,6 +50,20 @@ class DiskCache:
 
     def has(self, key: str) -> bool:
         return self._path(key).exists()
+
+
+@dataclass
+class NullCache:
+    """No-op cache implementation (disables caching)."""
+
+    def get(self, key: str) -> dict[str, Any] | None:
+        return None
+
+    def set(self, key: str, value: dict[str, Any]) -> None:
+        return None
+
+    def has(self, key: str) -> bool:
+        return False
 
 
 @dataclass
@@ -58,20 +76,23 @@ class RateLimiter:
     max_rpm: int = 600
     min_delay_seconds: float = 0.2
     requests_this_minute: int = field(default=0, init=False)
-    minute_start: float = field(default_factory=time.time, init=False)
+    minute_start: float = field(default_factory=time.monotonic, init=False)
     last_request_time: float = field(default=0.0, init=False)
 
     def wait_if_needed(self) -> None:
         """Block if we've exceeded the rate limit or need inter-request delay."""
-        now = time.time()
+        now = time.monotonic()
 
         # Always enforce minimum delay between requests
         time_since_last = now - self.last_request_time
         if time_since_last < self.min_delay_seconds:
             time.sleep(self.min_delay_seconds - time_since_last)
-            now = time.time()
+            now = time.monotonic()
 
         # Check per-minute limit
+        if self.max_rpm <= 0:
+            self.last_request_time = now
+            return
         if now - self.minute_start >= 60:
             # Reset for new minute
             self.requests_this_minute = 0
@@ -81,10 +102,10 @@ class RateLimiter:
             sleep_time = 60 - (now - self.minute_start) + 0.1
             time.sleep(sleep_time)
             self.requests_this_minute = 0
-            self.minute_start = time.time()
+            self.minute_start = time.monotonic()
 
         self.requests_this_minute += 1
-        self.last_request_time = time.time()
+        self.last_request_time = time.monotonic()
 
 
 @dataclass
@@ -95,28 +116,68 @@ class CircuitBreaker:
     """
 
     threshold: int = 5
+    recovery_timeout_seconds: float = 60.0
+    half_open_max_calls: int = 1
     consecutive_failures: int = field(default=0, init=False)
-    is_open: bool = field(default=False, init=False)
+    state: str = field(default="closed", init=False)  # closed | open | half_open
+    opened_at: float | None = field(default=None, init=False)
+    open_until: float | None = field(default=None, init=False)
+    half_open_calls: int = field(default=0, init=False)
+
+    @property
+    def is_open(self) -> bool:
+        return self.state == "open"
 
     def record_success(self) -> None:
         """Record a successful request - resets failure count."""
         self.consecutive_failures = 0
+        self.state = "closed"
+        self.opened_at = None
+        self.open_until = None
+        self.half_open_calls = 0
 
     def record_failure(self) -> None:
         """Record a failed request - may open circuit."""
+        now = time.monotonic()
+        if self.state == "half_open":
+            # Fail fast in half-open state
+            self.consecutive_failures += 1
+            self._open(now)
+            return
+
         self.consecutive_failures += 1
         if self.consecutive_failures >= self.threshold:
-            self.is_open = True
+            self._open(now)
 
     def check(self) -> None:
         """Check if circuit is open - raises if so."""
-        if self.is_open:
-            raise CircuitBreakerOpen(self.consecutive_failures, self.threshold)
+        if self.state == "open":
+            now = time.monotonic()
+            if self.open_until is not None and now >= self.open_until:
+                # Allow a limited probe attempt
+                self.state = "half_open"
+                self.half_open_calls = 0
+            else:
+                raise CircuitBreakerOpen(self.consecutive_failures, self.threshold)
+
+        if self.state == "half_open":
+            if self.half_open_calls >= self.half_open_max_calls:
+                raise CircuitBreakerOpen(self.consecutive_failures, self.threshold)
+            self.half_open_calls += 1
 
     def reset(self) -> None:
         """Manually reset the circuit breaker."""
         self.consecutive_failures = 0
-        self.is_open = False
+        self.state = "closed"
+        self.opened_at = None
+        self.open_until = None
+        self.half_open_calls = 0
+
+    def _open(self, now: float) -> None:
+        self.state = "open"
+        self.opened_at = now
+        self.open_until = now + self.recovery_timeout_seconds
+        self.half_open_calls = 0
 
 
 def _is_auth_error(error: Exception) -> bool:
@@ -137,6 +198,47 @@ def _is_rate_limit_error(error: Exception) -> bool:
     return "429" in error_str or "rate limit" in error_str or "too many requests" in error_str
 
 
+def _parse_retry_after(headers: Mapping[str, str] | None) -> int | None:
+    """Parse Retry-After header into seconds, if available."""
+    if not headers:
+        return None
+    value = headers.get("Retry-After")
+    if not value:
+        return None
+    value = value.strip()
+    if value.isdigit():
+        return int(value)
+    try:
+        dt = parsedate_to_datetime(value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        delta = (dt - datetime.now(UTC)).total_seconds()
+        return max(0, int(delta))
+    except Exception:
+        return None
+
+
+@dataclass
+class RetryPolicy:
+    """Retry policy for transient failures."""
+
+    max_retries: int = 3
+    backoff_factor: float = 0.5
+    max_backoff_seconds: float = 60.0
+    jitter_seconds: float = 0.1
+    retry_statuses: tuple[int, ...] = (429, 500, 502, 503, 504)
+    retry_exceptions: tuple[type[Exception], ...] = (requests.Timeout, requests.ConnectionError)
+
+    def compute_backoff(self, attempt: int, retry_after: int | None = None) -> float:
+        """Compute backoff delay with optional Retry-After override."""
+        base = min(self.max_backoff_seconds, self.backoff_factor * (2**attempt))
+        if retry_after is not None:
+            base = max(base, float(retry_after))
+        if self.jitter_seconds > 0:
+            base += random.uniform(0.0, self.jitter_seconds)
+        return float(base)
+
+
 @dataclass
 class CachedHttpClient:
     """HTTP client with caching, rate limiting, and circuit breaker.
@@ -144,6 +246,7 @@ class CachedHttpClient:
     Provides robust error handling:
     - 401 errors raise AuthenticationError immediately (fatal)
     - 429 errors trigger backoff and retry
+    - Transient errors retry with exponential backoff
     - Other errors are recorded by circuit breaker
     - All requests respect rate limiting, including failures
     """
@@ -153,6 +256,8 @@ class CachedHttpClient:
     rate_limiter: RateLimiter
     circuit_breaker: CircuitBreaker = field(default_factory=CircuitBreaker)
     sleep_seconds: float = 0.2
+    retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
+    timeout_seconds: float = 30.0
 
     def get_json(self, url: str, cache_key: str | None = None) -> dict[str, Any]:
         """Fetch JSON from URL with caching and rate limiting.
@@ -163,27 +268,39 @@ class CachedHttpClient:
             RateLimitError: If rate limit exceeded and backoff fails
             requests.HTTPError: For other HTTP errors
         """
-        # Check circuit breaker BEFORE making any request
-        self.circuit_breaker.check()
-
         # Check cache first
         if cache_key:
             cached = self.cache.get(cache_key)
             if cached is not None:
                 return cached
 
-        # Rate limit BEFORE making request
-        self.rate_limiter.wait_if_needed()
+        attempt = 0
+        while True:
+            # Check circuit breaker BEFORE making any request
+            self.circuit_breaker.check()
 
-        try:
-            r = self.session.get(url, timeout=30)
+            # Rate limit BEFORE making request
+            self.rate_limiter.wait_if_needed()
+
+            try:
+                r = self.session.get(url, timeout=self.timeout_seconds)
+            except self.retry_policy.retry_exceptions:
+                if attempt < self.retry_policy.max_retries:
+                    delay = self.retry_policy.compute_backoff(attempt)
+                    time.sleep(delay)
+                    attempt += 1
+                    continue
+                self.circuit_breaker.record_failure()
+                raise
+            except Exception:
+                self.circuit_breaker.record_failure()
+                raise
 
             # Check for auth errors BEFORE raise_for_status
             if r.status_code == 401:
                 self.circuit_breaker.record_failure()
                 raise AuthenticationError("Companies House API returned 401 Unauthorized")
 
-            # Check for 403 Forbidden - indicates IP ban or blocked access
             if r.status_code == 403:
                 self.circuit_breaker.record_failure()
                 raise AuthenticationError(
@@ -191,27 +308,32 @@ class CachedHttpClient:
                     "Your IP may be temporarily blocked due to excessive requests."
                 )
 
-            # Check for rate limit errors - backoff and retry once
-            if r.status_code == 429:
-                retry_after = int(r.headers.get("Retry-After", 60))
-                time.sleep(min(retry_after, 120))  # Cap at 2 minutes
-                self.rate_limiter.wait_if_needed()
-
-                r = self.session.get(url, timeout=30)
-                if r.status_code == 401:
-                    self.circuit_breaker.record_failure()
-                    raise AuthenticationError("Companies House API returned 401 Unauthorized")
-                if r.status_code == 403:
-                    self.circuit_breaker.record_failure()
-                    raise AuthenticationError(
-                        "Companies House API returned 403 Forbidden after retry."
-                    )
+            if r.status_code in self.retry_policy.retry_statuses:
+                retry_after = _parse_retry_after(getattr(r, "headers", None))
+                if attempt < self.retry_policy.max_retries:
+                    delay = self.retry_policy.compute_backoff(attempt, retry_after)
+                    time.sleep(delay)
+                    attempt += 1
+                    continue
+                self.circuit_breaker.record_failure()
                 if r.status_code == 429:
-                    self.circuit_breaker.record_failure()
-                    raise RateLimitError(retry_after)
+                    raise RateLimitError(retry_after or 60)
+                r.raise_for_status()
 
-            r.raise_for_status()
-            data = r.json()
+            try:
+                r.raise_for_status()
+            except requests.HTTPError as e:
+                if _is_auth_error(e):
+                    self.circuit_breaker.record_failure()
+                    raise AuthenticationError(f"HTTP error indicates auth failure: {e}") from e
+                self.circuit_breaker.record_failure()
+                raise
+
+            try:
+                data = cast(dict[str, Any], r.json())
+            except Exception:
+                self.circuit_breaker.record_failure()
+                raise
 
             # Record success
             self.circuit_breaker.record_success()
@@ -221,29 +343,6 @@ class CachedHttpClient:
                 self.cache.set(cache_key, data)
 
             return data
-
-        except AuthenticationError:
-            # Re-raise auth errors - they're fatal
-            raise
-        except CircuitBreakerOpen:
-            # Re-raise circuit breaker - it's fatal
-            raise
-        except RateLimitError:
-            # Re-raise rate limit errors after recording
-            self.circuit_breaker.record_failure()
-            raise
-        except requests.HTTPError as e:
-            # Check if it's really an auth error
-            if _is_auth_error(e):
-                self.circuit_breaker.record_failure()
-                raise AuthenticationError(f"HTTP error indicates auth failure: {e}") from e
-            # Record failure and re-raise
-            self.circuit_breaker.record_failure()
-            raise
-        except Exception as e:
-            # Record all other failures
-            self.circuit_breaker.record_failure()
-            raise
 
 
 @dataclass
@@ -258,7 +357,7 @@ class LocalFileSystem:
         df.to_csv(path, index=False)
 
     def read_json(self, path: Path) -> dict[str, Any]:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
 
     def write_json(self, data: dict[str, Any], path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -270,6 +369,13 @@ class LocalFileSystem:
     def write_text(self, content: str, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+
+    def read_bytes(self, path: Path) -> bytes:
+        return path.read_bytes()
+
+    def write_bytes(self, content: bytes, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
 
     def exists(self, path: Path) -> bool:
         return path.exists()
