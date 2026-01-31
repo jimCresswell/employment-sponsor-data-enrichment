@@ -1,0 +1,35 @@
+[project]
+name = "uk-sponsor-tech-hiring-pipeline"
+version = "0.1.0"
+description = "Pipeline to download UK licensed sponsor register, clean/filter, enrich with Companies House, and produce tech-hiring shortlists."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pandas>=2.2",
+  "requests>=2.31",
+  "beautifulsoup4>=4.12",
+  "lxml>=5.2",
+  "typer>=0.12",
+  "rich>=13.7",
+  "pydantic>=2.7",
+  "python-dotenv>=1.0",
+  "tqdm>=4.66",
+]
+
+[project.scripts]
+uk-sponsor = "uk_sponsor_pipeline.cli:app"
+
+[tool.uv]
+# If you use uv: `uv sync` will install deps from this file.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
