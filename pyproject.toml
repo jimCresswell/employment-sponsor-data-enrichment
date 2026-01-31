@@ -16,6 +16,18 @@ dependencies = [
   "tqdm>=4.66",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=4.1",
+  "mypy>=1.8",
+  "ruff>=0.3",
+  "pandas-stubs>=2.2",
+  "types-requests>=2.31",
+  "types-beautifulsoup4>=4.12",
+  "types-tqdm>=4.66",
+]
+
 [project.scripts]
 uk-sponsor = "uk_sponsor_pipeline.cli:app"
 
@@ -33,3 +45,15 @@ quote-style = "double"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-v --tb=short"
+markers = [
+    "e2e: End-to-end tests that require network access (run with: pytest -m e2e)",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+

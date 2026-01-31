@@ -1,0 +1,2 @@
+[console_scripts]
+uk-sponsor = uk_sponsor_pipeline.cli:app

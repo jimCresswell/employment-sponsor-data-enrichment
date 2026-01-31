@@ -1,96 +1,207 @@
-# UK Sponsor → Tech Hiring Pipeline (Python 3)
+# UK Sponsor → Tech Hiring Pipeline
 
-A practical, auditable pipeline to:
+A data pipeline that transforms the UK Home Office sponsor register into a shortlist of tech companies likely to hire senior engineers who need visa sponsorship.
 
-1. **Download** the latest UK Home Office *Register of licensed sponsors: workers* (CSV)
-2. **Stage 1**: filter to **Skilled Worker** + **A-rated** and aggregate to unique organisations
-3. **Stage 2**: **enrich** organisations using **Companies House** search + company profile
-4. **Stage 3**: derive a **tech-likelihood score** using SIC codes + a simple heuristic model
-5. Output **shortlists** suitable for recruiting a senior engineer who needs sponsorship
+## Pipeline Overview
 
-## Why this repo exists
+```
+GOV.UK Sponsor Register → Filter → Enrich → Score → Shortlist
+       (CSV)             Stage1   Stage2  Stage3   (CSV)
+```
 
-The sponsor register is the best “eligibility filter” available, but it’s noisy for tech hiring.
-This pipeline turns it into a structured dataset you can search, slice, and shortlist.
+| Stage | Input | Output | What it does |
+|-------|-------|--------|--------------|
+| download | GOV.UK page | `data/raw/*.csv` | Scrapes page, downloads CSV, validates schema |
+| stage1 | Raw CSV | `data/interim/stage1_*.csv` | Filters Skilled Worker + A-rated, aggregates by org |
+| stage2 | Stage1 CSV | `data/processed/stage2_*.csv` | Enriches via Companies House API |
+| stage3 | Stage2 CSV | `data/processed/stage3_*.csv` | Scores for tech-likelihood, outputs shortlist |
 
-## Quick start (uv recommended)
+## Quick Start
 
-Install uv (once): https://docs.astral.sh/uv/
+### Prerequisites
+
+- Python 3.11+
+- Companies House API key ([register free](https://developer.company-information.service.gov.uk/))
+
+### Installation
 
 ```bash
+# Clone and enter directory
 cd uk-sponsor-tech-hiring-pipeline
-uv sync
-```
 
-Alternatively, with pip:
+# Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
+# Install with dev dependencies
+pip install -e ".[dev]"
 
-## Run the full pipeline
-
-### 1) Download latest sponsor register
-
-```bash
-uk-sponsor download
-```
-
-This writes to `data/raw/` and also records a manifest in `reports/`.
-
-### 2) Stage 1: Skilled Worker + A-rated + aggregate
-
-```bash
-uk-sponsor stage1
-```
-
-Output: `data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv`
-
-### 3) Stage 2: Companies House enrichment
-
-Set your Companies House API key:
-
-```bash
+# Copy env template and add your API key
 cp .env.example .env
-# edit .env and set CH_API_KEY=...
+# Edit .env: set CH_API_KEY=your_key_here
 ```
 
-Run enrichment:
+### Run the Full Pipeline
 
 ```bash
+# All stages in sequence
+uk-sponsor run-all
+
+# Or run each stage individually:
+uk-sponsor download
+uk-sponsor stage1
 uk-sponsor stage2
-```
-
-Outputs:
-- `data/processed/stage2_enriched_companies_house.csv`
-- `data/processed/stage2_unmatched.csv`
-- `data/processed/stage2_candidates_top3.csv`
-- cached API responses in `data/cache/companies_house/`
-
-### 4) Stage 3: Tech-likelihood scoring + shortlist
-
-```bash
 uk-sponsor stage3
 ```
 
-Outputs:
-- `data/processed/stage3_scored.csv`
-- `data/processed/stage3_shortlist_tech.csv` (default threshold + exclusions)
+### Geographic Filtering
 
-## Notes / design choices
+Filter the final shortlist by region or postcode:
 
-- **Auditable matching**: Stage 2 saves the top 3 search candidates per org with scores.
-- **Caching**: Stage 2 caches all responses, so reruns are cheap + rate-limit friendly.
-- **Deterministic stages**: Each stage reads explicit inputs and writes explicit outputs.
-- **Heuristic model** (Stage 3): intentionally simple; you can swap in a classifier later.
+```bash
+# Filter to London companies only
+uk-sponsor stage3 --region London
 
-## Data sources
+# Multiple regions
+uk-sponsor stage3 --region London --region Manchester --region Bristol
 
-- GOV.UK guidance page for the sponsor register is scraped to find the latest CSV asset.
-- Companies House Public Data API is used for enrichment.
+# Postcode prefix filtering
+uk-sponsor stage3 --postcode-prefix EC --postcode-prefix SW
+
+# Adjust score threshold (default: 0.55)
+uk-sponsor stage3 --threshold 0.40
+
+# Full pipeline with filters
+uk-sponsor run-all --region London --threshold 0.50
+```
+
+## Architecture (for TypeScript developers)
+
+### Project Structure
+
+```
+src/uk_sponsor_pipeline/
+├── cli.py              # Typer CLI (like Commander.js)
+├── config.py           # PipelineConfig dataclass (like a typed config object)
+├── protocols.py        # Protocol definitions (like TypeScript interfaces)
+├── infrastructure.py   # Concrete implementations (DI pattern)
+├── normalization.py    # Org name processing utilities
+├── schemas.py          # Column contracts per stage
+└── stages/
+    ├── download.py
+    ├── stage1.py
+    ├── stage2_companies_house.py
+    └── stage3_scoring.py
+
+tests/
+├── conftest.py         # Pytest fixtures (like beforeEach + factories)
+├── test_normalization.py
+└── test_stage3.py
+```
+
+### Key Patterns
+
+| Python Pattern | TypeScript Equivalent |
+|----------------|----------------------|
+| `Protocol` class | `interface` |
+| `@dataclass` | `class` with typed properties |
+| `Optional[T]` | `T \| undefined` |
+| `dict[str, Any]` | `Record<string, unknown>` |
+| `list[str]` | `string[]` |
+| Type hints | Same purpose as TS types |
+
+### Dependency Injection
+
+We use Python's `Protocol` (similar to TS interfaces) for testability:
+
+```python
+# protocols.py - defines the interface
+class HttpClient(Protocol):
+    def get_json(self, url: str, cache_key: str) -> dict[str, Any]: ...
+
+# infrastructure.py - production implementation
+class CachedHttpClient:
+    def get_json(self, url: str, cache_key: str) -> dict[str, Any]:
+        # Real HTTP + caching logic
+
+# conftest.py - test implementation
+class FakeHttpClient:
+    def get_json(self, url: str, cache_key: str) -> dict[str, Any]:
+        return self.responses.get(cache_key, {})
+```
+
+### Running Tests
+
+```bash
+# All tests (46 currently)
+pytest tests/
+
+# Verbose output
+pytest tests/ -v
+
+# Specific test file
+pytest tests/test_normalization.py
+
+# Specific test class
+pytest tests/test_stage3.py::TestScoreFromSic
+
+# With coverage
+pytest tests/ --cov=uk_sponsor_pipeline
+```
+
+## Scoring Model (Stage 3)
+
+Companies are scored on multiple features:
+
+| Feature | Weight Range | Source |
+|---------|-------------|--------|
+| SIC tech codes | 0.0–0.50 | Companies House profile |
+| Active status | 0.0 or 0.10 | Companies House profile |
+| Company age | 0.0–0.15 | Date of creation |
+| Company type | 0.0–0.10 | Ltd, PLC, LLP, etc. |
+| Name keywords | -0.10 to 0.15 | "software", "digital" vs "care", "recruitment" |
+
+**Role-fit buckets:**
+
+- **strong** (≥0.55): High probability tech company
+- **possible** (≥0.35): Worth investigating
+- **unlikely** (<0.35): Probably not tech
+
+## Output Files
+
+| File | Description |
+|------|-------------|
+| `reports/download_manifest.json` | Download metadata with SHA256 hash |
+| `reports/stage1_stats.json` | Filtering statistics |
+| `data/processed/stage2_enriched_companies_house.csv` | Matched companies with CH data |
+| `data/processed/stage2_unmatched.csv` | Orgs that couldn't be matched |
+| `data/processed/stage2_candidates_top3.csv` | Audit trail: top 3 match candidates per org |
+| `data/processed/stage3_scored.csv` | All companies with scores |
+| `data/processed/stage3_shortlist_tech.csv` | Filtered shortlist |
+| `data/processed/stage3_explain.csv` | Score breakdown for shortlist |
+
+## Configuration
+
+Set in `.env` or environment variables:
+
+```bash
+CH_API_KEY=your_companies_house_api_key
+CH_SLEEP_SECONDS=0.5          # Delay between API calls
+CH_MAX_RPM=500                # Rate limit (requests per minute)
+CH_MIN_MATCH_SCORE=0.72       # Minimum score to accept a match
+CH_SEARCH_LIMIT=5             # Candidates per search
+TECH_SCORE_THRESHOLD=0.55     # Minimum score for shortlist
+GEO_FILTER_REGIONS=           # Comma-separated region filter
+GEO_FILTER_POSTCODES=         # Comma-separated postcode prefix filter
+```
+
+## Data Sources
+
+- **Sponsor Register**: [GOV.UK Register of Licensed Sponsors](https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers)
+- **Companies House**: [Public Data API](https://developer.company-information.service.gov.uk/)
 
 ## Security
 
-Do not commit `.env`. Rotate API keys if shared.
+- Never commit `.env` (it's in `.gitignore`)
+- Rotate your Companies House API key if shared
+- Cache contains API response data—treat as sensitive
