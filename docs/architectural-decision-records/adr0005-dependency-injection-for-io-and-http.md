@@ -12,10 +12,10 @@ Stages depend on file I/O and HTTP calls. Direct dependencies would make testing
 
 ## Decision
 
-Use protocol-style interfaces (`protocols.py`) and concrete implementations (`infrastructure.py`). Stages accept injected dependencies (file system, HTTP client, cache, rate limiter, circuit breaker) to keep I/O replaceable.
+Use protocol-style interfaces (`protocols.py`) and concrete implementations (`infrastructure/`). Stages accept injected dependencies (file system, HTTP client, cache, rate limiter, circuit breaker) to keep I/O replaceable.
 
 ## Consequences
 
-- Tests can use in-memory files and fake HTTP clients.
+- Tests can use in-memory files and fake HTTP clients from `tests/fakes/`.
 - Production uses concrete implementations without changing stage logic.
 - Integration boundaries are explicit and easier to refactor.

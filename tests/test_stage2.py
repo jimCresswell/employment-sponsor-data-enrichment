@@ -237,10 +237,19 @@ class TestStage2CandidateOrdering:
             ],
         ]
 
-        def fake_score_candidates(org, town, county, items, query_used):
+        def fake_score_candidates(
+            *,
+            org_norm,
+            town_norm,
+            county_norm,
+            items,
+            query_used,
+            similarity_fn,
+            normalize_fn,
+        ):
             return scores.pop(0)
 
-        monkeypatch.setattr(s2, "_score_candidates", fake_score_candidates)
+        monkeypatch.setattr(s2, "score_candidates", fake_score_candidates)
 
         out_dir = tmp_path / "out"
         run_stage2(
@@ -306,12 +315,21 @@ class TestStage2Resume:
 
         monkeypatch.setattr(s2, "generate_query_variants", lambda org: [org])
 
-        def fake_score_candidates(org, town, county, items, query_used):
+        def fake_score_candidates(
+            *,
+            org_norm,
+            town_norm,
+            county_norm,
+            items,
+            query_used,
+            similarity_fn,
+            normalize_fn,
+        ):
             score = s2.MatchScore(0.5, 0.5, 0.0, 0.0, 0.0)
             return [
                 s2.CandidateMatch(
                     company_number="00000001",
-                    title=f"{org} Ltd",
+                    title=f"{org_norm} Ltd",
                     status="active",
                     locality="",
                     region="",
@@ -321,7 +339,7 @@ class TestStage2Resume:
                 )
             ]
 
-        monkeypatch.setattr(s2, "_score_candidates", fake_score_candidates)
+        monkeypatch.setattr(s2, "score_candidates", fake_score_candidates)
 
         run_stage2(
             stage1_path=stage1_path,
@@ -419,12 +437,21 @@ class TestStage2Resume:
         fake_http_client.responses = {"search/companies": {"items": []}}
         monkeypatch.setattr(s2, "generate_query_variants", lambda org: [org])
 
-        def fake_score_candidates(org, town, county, items, query_used):
+        def fake_score_candidates(
+            *,
+            org_norm,
+            town_norm,
+            county_norm,
+            items,
+            query_used,
+            similarity_fn,
+            normalize_fn,
+        ):
             score = s2.MatchScore(0.5, 0.5, 0.0, 0.0, 0.0)
             return [
                 s2.CandidateMatch(
                     company_number="00000001",
-                    title=f"{org} Ltd",
+                    title=f"{org_norm} Ltd",
                     status="active",
                     locality="",
                     region="",
@@ -434,7 +461,7 @@ class TestStage2Resume:
                 )
             ]
 
-        monkeypatch.setattr(s2, "_score_candidates", fake_score_candidates)
+        monkeypatch.setattr(s2, "score_candidates", fake_score_candidates)
 
         run_stage2(
             stage1_path=stage1_path,

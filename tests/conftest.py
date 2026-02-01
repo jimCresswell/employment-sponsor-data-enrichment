@@ -6,13 +6,12 @@ All tests are network-isolated - socket connections are blocked by default.
 from __future__ import annotations
 
 import socket
-import time
-from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import pytest
+
+from tests.fakes import FakeHttpClient, InMemoryCache, InMemoryFileSystem
 
 # =============================================================================
 # Network Isolation - Block all socket connections in tests
@@ -42,127 +41,6 @@ def block_network_access(monkeypatch):
     """
     monkeypatch.setattr(socket.socket, "connect", _blocked_socket_connect)
     yield
-
-
-@dataclass
-class InMemoryCache:
-    """In-memory cache for testing."""
-
-    _store: dict[str, dict[str, Any]] = field(default_factory=dict)
-
-    def get(self, key: str) -> dict[str, Any] | None:
-        return self._store.get(key)
-
-    def set(self, key: str, value: dict[str, Any]) -> None:
-        self._store[key] = value
-
-    def has(self, key: str) -> bool:
-        return key in self._store
-
-
-@dataclass
-class FakeHttpClient:
-    """Fake HTTP client that returns canned responses."""
-
-    responses: dict[str, dict[str, Any]] = field(default_factory=dict)
-    calls: list[str] = field(default_factory=list)
-
-    def get_json(self, url: str, cache_key: str | None = None) -> dict[str, Any]:
-        self.calls.append(url)
-        # Match by URL prefix for flexibility
-        for pattern, response in self.responses.items():
-            if pattern in url:
-                return response
-        raise ValueError(f"No canned response for URL: {url}")
-
-
-@dataclass
-class InMemoryFileSystem:
-    """In-memory filesystem for testing."""
-
-    _files: dict[str, Any] = field(default_factory=dict)
-    _mtimes: dict[str, float] = field(default_factory=dict)
-
-    def read_csv(self, path: Path) -> pd.DataFrame:
-        key = str(path)
-        if key not in self._files:
-            raise FileNotFoundError(f"No such file: {path}")
-        data = self._files[key]
-        if isinstance(data, pd.DataFrame):
-            return data
-        raise TypeError(f"Expected DataFrame at {path}")
-
-    def write_csv(self, df: pd.DataFrame, path: Path) -> None:
-        key = str(path)
-        self._files[key] = df.copy()
-        self._mtimes[key] = time.time()
-
-    def append_csv(self, df: pd.DataFrame, path: Path) -> None:
-        key = str(path)
-        if key in self._files:
-            existing = self.read_csv(path)
-            combined = pd.concat([existing, df], ignore_index=True)
-            self.write_csv(combined, path)
-        else:
-            self.write_csv(df, path)
-
-    def read_json(self, path: Path) -> dict[str, Any]:
-        key = str(path)
-        if key not in self._files:
-            raise FileNotFoundError(f"No such file: {path}")
-        return self._files[key]
-
-    def write_json(self, data: dict[str, Any], path: Path) -> None:
-        key = str(path)
-        self._files[key] = data
-        self._mtimes[key] = time.time()
-
-    def read_text(self, path: Path) -> str:
-        key = str(path)
-        if key not in self._files:
-            raise FileNotFoundError(f"No such file: {path}")
-        return self._files[key]
-
-    def write_text(self, content: str, path: Path) -> None:
-        key = str(path)
-        self._files[key] = content
-        self._mtimes[key] = time.time()
-
-    def read_bytes(self, path: Path) -> bytes:
-        key = str(path)
-        if key not in self._files:
-            raise FileNotFoundError(f"No such file: {path}")
-        data = self._files[key]
-        if isinstance(data, bytes):
-            return data
-        raise TypeError(f"Expected bytes at {path}")
-
-    def write_bytes(self, content: bytes, path: Path) -> None:
-        key = str(path)
-        self._files[key] = content
-        self._mtimes[key] = time.time()
-
-    def exists(self, path: Path) -> bool:
-        return str(path) in self._files
-
-    def mkdir(self, path: Path, parents: bool = True) -> None:
-        # No-op for in-memory filesystem
-        pass
-
-    def list_files(self, path: Path, pattern: str = "*") -> list[Path]:
-        import fnmatch
-
-        prefix = str(path)
-        matches = []
-        for key in self._files:
-            if key.startswith(prefix):
-                relative = key[len(prefix) :].lstrip("/")
-                if fnmatch.fnmatch(relative, pattern):
-                    matches.append(Path(key))
-        return sorted(matches)
-
-    def mtime(self, path: Path) -> float:
-        return self._mtimes.get(str(path), 0.0)
 
 
 @pytest.fixture

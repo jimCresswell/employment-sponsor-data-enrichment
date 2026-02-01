@@ -402,7 +402,7 @@ class TestCachedHttpClient:
             retry_policy=retry_policy,
         )
 
-        with patch("uk_sponsor_pipeline.infrastructure.time.sleep") as sleep_mock:
+        with patch("uk_sponsor_pipeline.infrastructure.http.time.sleep") as sleep_mock:
             result = client.get_json("https://example.com", None)
 
         assert result == {"ok": True}
@@ -434,7 +434,7 @@ class TestCachedHttpClient:
             retry_policy=retry_policy,
         )
 
-        with patch("uk_sponsor_pipeline.infrastructure.time.sleep"):
+        with patch("uk_sponsor_pipeline.infrastructure.http.time.sleep"):
             with pytest.raises(RateLimitError) as exc_info:
                 client.get_json("https://example.com", None)
 
@@ -463,7 +463,7 @@ class TestCachedHttpClient:
             retry_policy=retry_policy,
         )
 
-        with patch("uk_sponsor_pipeline.infrastructure.time.sleep"):
+        with patch("uk_sponsor_pipeline.infrastructure.http.time.sleep"):
             result = client.get_json("https://example.com", None)
 
         assert result == {"ok": True}

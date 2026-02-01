@@ -88,6 +88,7 @@ def test_check_runs_quality_gates_in_order(monkeypatch):
         ["ruff", "format", "src", "tests"],
         ["mypy", "src"],
         ["ruff", "check", "src", "tests"],
+        ["lint-imports"],
         ["pytest"],
         [
             "pytest",

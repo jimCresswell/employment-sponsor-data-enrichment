@@ -12,11 +12,9 @@ Improvements over original:
 from __future__ import annotations
 
 import hashlib
-import logging
 import math
 import re
 import time
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -28,6 +26,15 @@ from requests.auth import HTTPBasicAuth
 from tqdm import tqdm
 
 from ..config import PipelineConfig
+from ..domain.companies_house import (
+    CandidateMatch,
+    MatchScore,
+    build_candidate_row,
+    build_enriched_row,
+    build_profile_error_row,
+    build_unmatched_row,
+    score_candidates,
+)
 from ..exceptions import AuthenticationError, CircuitBreakerOpen, RateLimitError
 from ..infrastructure import (
     CachedHttpClient,
@@ -38,6 +45,7 @@ from ..infrastructure import (
     RetryPolicy,
 )
 from ..normalization import generate_query_variants, normalize_org_name
+from ..observability import get_logger
 from ..protocols import FileSystem, HttpClient
 from ..schemas import (
     STAGE1_OUTPUT_COLUMNS,
@@ -46,60 +54,25 @@ from ..schemas import (
     STAGE2_UNMATCHED_COLUMNS,
     validate_columns,
 )
+from ..types import (
+    BatchRange,
+    CompanyProfile,
+    SearchItem,
+    Stage1Row,
+    Stage2CandidateRow,
+    Stage2EnrichedRow,
+    Stage2ResumeReport,
+    Stage2UnmatchedRow,
+)
 
 CH_BASE = "https://api.company-information.service.gov.uk"
 STAGE2_CHECKPOINT_COLUMNS = ("Organisation Name",)
 
-
-def _get_logger() -> logging.Logger:
-    logger = logging.getLogger("uk_sponsor_pipeline.stage2")
-    if not logger.handlers:
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            fmt="%(asctime)s %(levelname)s %(name)s: %(message)s",
-            datefmt="%Y-%m-%dT%H:%M:%S%z",
-        )
-        formatter.converter = time.gmtime
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
-        logger.propagate = False
-    return logger
-
-
-@dataclass
-class MatchScore:
-    """Transparent match scoring with component breakdown."""
-
-    total: float
-    name_similarity: float
-    locality_bonus: float
-    region_bonus: float
-    status_bonus: float
-
-    @property
-    def confidence_band(self) -> str:
-        """Classify match confidence."""
-        if self.total >= 0.85:
-            return "high"
-        elif self.total >= 0.72:
-            return "medium"
-        else:
-            return "low"
-
-
-@dataclass
-class CandidateMatch:
-    """A candidate company match from Companies House."""
-
-    company_number: str
-    title: str
-    status: str
-    locality: str
-    region: str
-    postcode: str
-    score: MatchScore
-    query_used: str
+__all__ = [
+    "CandidateMatch",
+    "MatchScore",
+    "run_stage2",
+]
 
 
 def _normalize_for_cache(s: str) -> str:
@@ -137,54 +110,6 @@ def _simple_similarity(a: str, b: str) -> float:
     return 0.6 * jacc + 0.4 * char_overlap
 
 
-def _score_candidates(
-    org_name: str, town: str, county: str, items: list[dict[str, Any]], query_used: str
-) -> list[CandidateMatch]:
-    """Score candidate companies from search results."""
-    org_norm = normalize_org_name(org_name)
-    town_norm = normalize_org_name(town)
-    county_norm = normalize_org_name(county)
-
-    out: list[CandidateMatch] = []
-    for it in items:
-        title = it.get("title") or ""
-        number = it.get("company_number") or ""
-        status = it.get("company_status") or ""
-        addr = it.get("address") or {}
-        loc = addr.get("locality") or ""
-        region = addr.get("region") or ""
-        postcode = addr.get("postal_code") or ""
-
-        name_sim = _simple_similarity(org_norm, title)
-
-        locality_bonus = 0.0
-        if town_norm and (
-            town_norm in normalize_org_name(loc) or town_norm in normalize_org_name(region)
-        ):
-            locality_bonus = 0.08
-
-        region_bonus = 0.0
-        if county_norm and county_norm in normalize_org_name(region):
-            region_bonus = 0.05
-
-        status_bonus = 0.05 if (status or "").lower() == "active" else 0.0
-
-        total = min(1.0, name_sim + locality_bonus + region_bonus + status_bonus)
-
-        score = MatchScore(
-            total=total,
-            name_similarity=name_sim,
-            locality_bonus=locality_bonus,
-            region_bonus=region_bonus,
-            status_bonus=status_bonus,
-        )
-
-        out.append(CandidateMatch(number, title, status, loc, region, postcode, score, query_used))
-
-    out.sort(key=lambda x: x.score.total, reverse=True)
-    return out
-
-
 def _basic_auth(api_key: str) -> HTTPBasicAuth:
     """Create HTTP Basic Auth credentials for Companies House API."""
     return HTTPBasicAuth(api_key, "")
@@ -204,6 +129,59 @@ def _append_csv(fs: FileSystem, df: pd.DataFrame, path: Path, columns: tuple[str
     coerced = _coerce_output_columns(df, columns)
     validate_columns(list(coerced.columns), frozenset(columns), "Stage 2 output")
     fs.append_csv(coerced, path)
+
+
+def _coerce_search_items(raw: dict[str, Any]) -> list[SearchItem]:
+    items = raw.get("items") or []
+    if not isinstance(items, list):
+        raise RuntimeError("Companies House search response items must be a list.")
+    coerced: list[SearchItem] = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise RuntimeError("Companies House search response item must be an object.")
+        address = item.get("address") or {}
+        if not isinstance(address, dict):
+            address = {}
+        coerced.append(
+            {
+                "title": str(item.get("title") or ""),
+                "company_number": str(item.get("company_number") or ""),
+                "company_status": str(item.get("company_status") or ""),
+                "address": {
+                    "locality": str(address.get("locality") or ""),
+                    "region": str(address.get("region") or ""),
+                    "postal_code": str(address.get("postal_code") or ""),
+                },
+            }
+        )
+    return coerced
+
+
+def _coerce_profile(raw: dict[str, Any]) -> CompanyProfile:
+    if not isinstance(raw, dict):
+        raise RuntimeError("Companies House profile response must be an object.")
+    ro = raw.get("registered_office_address") or {}
+    if not isinstance(ro, dict):
+        ro = {}
+    sic_raw = raw.get("sic_codes") or []
+    if isinstance(sic_raw, list):
+        sic_codes = [str(code) for code in sic_raw if code]
+    elif isinstance(sic_raw, str):
+        sic_codes = [part.strip() for part in sic_raw.replace(",", ";").split(";") if part.strip()]
+    else:
+        sic_codes = []
+    return {
+        "company_name": str(raw.get("company_name") or ""),
+        "company_status": str(raw.get("company_status") or ""),
+        "type": str(raw.get("type") or ""),
+        "date_of_creation": str(raw.get("date_of_creation") or ""),
+        "sic_codes": sic_codes,
+        "registered_office_address": {
+            "locality": str(ro.get("locality") or ""),
+            "region": str(ro.get("region") or ""),
+            "postal_code": str(ro.get("postal_code") or ""),
+        },
+    }
 
 
 def _build_resume_report(
@@ -228,14 +206,18 @@ def _build_resume_report(
     run_finished_at_utc: datetime,
     run_duration_seconds: float,
     error_message: str | None = None,
-) -> dict[str, Any]:
-    batch_range = None
+) -> Stage2ResumeReport:
+    batch_range: BatchRange | None = None
     if selected_batches:
-        batch_range = {"start": batch_start, "end": batch_start + selected_batches - 1}
+        batch_range = cast(
+            BatchRange, {"start": batch_start, "end": batch_start + selected_batches - 1}
+        )
 
-    overall_batch_range = None
+    overall_batch_range: BatchRange | None = None
     if overall_batch_start is not None and overall_batch_end is not None:
-        overall_batch_range = {"start": overall_batch_start, "end": overall_batch_end}
+        overall_batch_range = cast(
+            BatchRange, {"start": overall_batch_start, "end": overall_batch_end}
+        )
 
     resume_command = (
         f"uv run uk-sponsor stage2 --input {stage1_path} --output-dir {out_dir} --resume"
@@ -324,7 +306,7 @@ def run_stage2(
     out_resume_report = out_dir / "stage2_resume_report.json"
 
     # Load input
-    logger = _get_logger()
+    logger = get_logger("uk_sponsor_pipeline.stage2")
     run_started_at_utc = datetime.now(UTC)
     run_started_perf = time.perf_counter()
 
@@ -386,7 +368,7 @@ def run_stage2(
         )
 
     # Process organizations in batches
-    rows = cast(list[dict[str, Any]], df.to_dict(orient="records"))
+    rows = cast(list[Stage1Row], df.to_dict(orient="records"))
     to_process_all = [
         (idx, row)
         for idx, row in enumerate(rows)
@@ -426,9 +408,9 @@ def run_stage2(
         total_batches_overall,
     )
 
-    batch_enriched: list[dict[str, Any]] = []
-    batch_unmatched: list[dict[str, Any]] = []
-    batch_candidates: list[dict[str, Any]] = []
+    batch_enriched: list[Stage2EnrichedRow] = []
+    batch_unmatched: list[Stage2UnmatchedRow] = []
+    batch_candidates: list[Stage2CandidateRow] = []
     batch_processed: list[str] = []
     processed_in_run = 0
 
@@ -467,6 +449,9 @@ def run_stage2(
             org = row["Organisation Name"]
             town = row.get("Town/City", "")
             county = row.get("County", "")
+            org_norm = normalize_org_name(org)
+            town_norm = normalize_org_name(town)
+            county_norm = normalize_org_name(county)
 
             # Generate query variants
             query_variants = generate_query_variants(org)
@@ -494,8 +479,16 @@ def run_stage2(
                         f"Companies House search failed for query '{query}': {e}"
                     ) from e
 
-                items = search.get("items") or []
-                scored = _score_candidates(org, town, county, items, query)
+                items = _coerce_search_items(search)
+                scored = score_candidates(
+                    org_norm=org_norm,
+                    town_norm=town_norm,
+                    county_norm=county_norm,
+                    items=items,
+                    query_used=query,
+                    similarity_fn=_simple_similarity,
+                    normalize_fn=normalize_org_name,
+                )
                 all_candidates.extend(scored)
 
                 # Stop early if we found a high-confidence match
@@ -513,24 +506,7 @@ def run_stage2(
 
             # Record top 3 candidates for audit
             for rank, cand in enumerate(all_candidates[:3], start=1):
-                batch_candidates.append(
-                    {
-                        "Organisation Name": org,
-                        "rank": rank,
-                        "candidate_company_number": cand.company_number,
-                        "candidate_title": cand.title,
-                        "candidate_status": cand.status,
-                        "candidate_locality": cand.locality,
-                        "candidate_region": cand.region,
-                        "candidate_postcode": cand.postcode,
-                        "candidate_score": round(cand.score.total, 4),
-                        "score_name_similarity": round(cand.score.name_similarity, 4),
-                        "score_locality_bonus": round(cand.score.locality_bonus, 4),
-                        "score_region_bonus": round(cand.score.region_bonus, 4),
-                        "score_status_bonus": round(cand.score.status_bonus, 4),
-                        "query_used": cand.query_used,
-                    }
-                )
+                batch_candidates.append(build_candidate_row(org=org, cand=cand, rank=rank))
 
             # Check if match is good enough
             if (
@@ -538,13 +514,7 @@ def run_stage2(
                 or best_match.score.total < config.ch_min_match_score
                 or not best_match.company_number
             ):
-                r = dict(row)
-                r["match_status"] = "unmatched"
-                r["best_candidate_score"] = round(best_match.score.total, 4) if best_match else ""
-                r["best_candidate_title"] = best_match.title if best_match else ""
-                r["best_candidate_company_number"] = best_match.company_number if best_match else ""
-                r["match_error"] = ""
-                batch_unmatched.append(r)
+                batch_unmatched.append(build_unmatched_row(row=row, best_match=best_match))
                 mark_processed(org)
                 if len(batch_processed) >= batch_size_value:
                     flush_batch()
@@ -555,50 +525,23 @@ def run_stage2(
             profile_key = _cache_key("profile", best_match.company_number)
 
             try:
-                profile = http_client.get_json(profile_url, profile_key)
+                raw_profile = http_client.get_json(profile_url, profile_key)
             except (AuthenticationError, CircuitBreakerOpen, RateLimitError):
                 flush_batch()
                 raise
             except Exception as e:
-                r = dict(row)
-                r["match_status"] = "profile_error"
-                r["best_candidate_score"] = round(best_match.score.total, 4)
-                r["best_candidate_title"] = best_match.title
-                r["best_candidate_company_number"] = best_match.company_number
-                r["match_error"] = str(e)
-                batch_unmatched.append(r)
+                batch_unmatched.append(
+                    build_profile_error_row(row=row, best_match=best_match, error=e)
+                )
                 mark_processed(org)
                 if len(batch_processed) >= batch_size_value:
                     flush_batch()
                 continue
 
-            # Extract profile data
-            sic = profile.get("sic_codes") or []
-            ro = profile.get("registered_office_address") or {}
-
-            out = dict(row)
-            out.update(
-                {
-                    "match_status": "matched",
-                    "match_score": round(best_match.score.total, 4),
-                    "match_confidence": best_match.score.confidence_band,
-                    "match_query_used": best_match.query_used,
-                    "score_name_similarity": round(best_match.score.name_similarity, 4),
-                    "score_locality_bonus": round(best_match.score.locality_bonus, 4),
-                    "score_region_bonus": round(best_match.score.region_bonus, 4),
-                    "score_status_bonus": round(best_match.score.status_bonus, 4),
-                    "ch_company_number": best_match.company_number,
-                    "ch_company_name": profile.get("company_name") or best_match.title,
-                    "ch_company_status": profile.get("company_status") or best_match.status,
-                    "ch_company_type": profile.get("type") or "",
-                    "ch_date_of_creation": profile.get("date_of_creation") or "",
-                    "ch_sic_codes": ";".join(sic) if isinstance(sic, list) else str(sic),
-                    "ch_address_locality": ro.get("locality") or best_match.locality,
-                    "ch_address_region": ro.get("region") or best_match.region,
-                    "ch_address_postcode": ro.get("postal_code") or best_match.postcode,
-                }
+            profile = _coerce_profile(raw_profile)
+            batch_enriched.append(
+                build_enriched_row(row=row, best_match=best_match, profile=profile)
             )
-            batch_enriched.append(out)
             mark_processed(org)
             if len(batch_processed) >= batch_size_value:
                 flush_batch()
@@ -687,6 +630,6 @@ def run_stage2(
             run_duration_seconds=run_duration_seconds,
             error_message=error_message,
         )
-        fs.write_json(report, out_resume_report)
+        fs.write_json(cast(dict[str, Any], report), out_resume_report)
 
     return {"enriched": out_enriched, "unmatched": out_unmatched, "candidates": out_candidates}

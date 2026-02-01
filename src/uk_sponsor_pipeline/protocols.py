@@ -105,3 +105,42 @@ class FileSystem(Protocol):
     def mtime(self, path: Path) -> float:
         """Return modification time for a path."""
         ...
+
+
+@runtime_checkable
+class RateLimiter(Protocol):
+    """Abstract rate limiter for outbound requests."""
+
+    def wait_if_needed(self) -> None:
+        """Block until a request is allowed."""
+        ...
+
+
+@runtime_checkable
+class CircuitBreaker(Protocol):
+    """Abstract circuit breaker for outbound requests."""
+
+    def check(self) -> None:
+        """Raise if the circuit is open."""
+        ...
+
+    def record_success(self) -> None:
+        """Record a successful request."""
+        ...
+
+    def record_failure(self) -> None:
+        """Record a failed request."""
+        ...
+
+
+@runtime_checkable
+class RetryPolicy(Protocol):
+    """Abstract retry policy for transient failures."""
+
+    max_retries: int
+    retry_statuses: tuple[int, ...]
+    retry_exceptions: tuple[type[Exception], ...]
+
+    def compute_backoff(self, attempt: int, retry_after: int | None = None) -> float:
+        """Return a delay for the next retry attempt."""
+        ...

@@ -16,6 +16,7 @@ The pipeline uses staged CSV outputs for auditability and resumability. However,
 - Treat “stages” as conceptual labels for outputs, not architectural boundaries.
 - Move orchestration and step ownership into an application pipeline (use‑case layer).
 - Share infrastructure and observability across all steps via dependency injection.
+- Use a shared logger factory in `uk_sponsor_pipeline.observability.logging` for consistent UTC timestamps.
 - Read configuration once at the CLI entry point and pass it through.
 - If `stages/` remains, it must be a thin delegate layer that forwards to application steps.
 

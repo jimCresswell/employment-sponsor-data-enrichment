@@ -3,7 +3,7 @@ name = "uk-sponsor-tech-hiring-pipeline"
 version = "0.1.0"
 description = "Pipeline to download UK licensed sponsor register, clean/filter, enrich with Companies House, and produce tech-hiring shortlists."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
   "pandas>=2.2",
   "requests>=2.31",
@@ -21,6 +21,7 @@ dev = [
   "pytest-cov>=4.1",
   "mypy>=1.8",
   "ruff>=0.3",
+  "import-linter>=2.0",
   "pre-commit>=3.7",
   "pandas-stubs>=2.2",
   "types-requests>=2.31",
@@ -57,8 +58,35 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+select = ["E", "F", "I", "B", "UP", "ANN"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/uk_sponsor_pipeline/protocols.py" = ["ANN401"]
+"src/uk_sponsor_pipeline/infrastructure/*.py" = ["ANN401"]
+"src/uk_sponsor_pipeline/stages/stage2_companies_house.py" = ["ANN401"]
+"tests/**/*.py" = ["ANN"]
+
+[tool.importlinter]
+root_package = "uk_sponsor_pipeline"
+
+[[tool.importlinter.contracts]]
+name = "Domain must not import infrastructure"
+type = "forbidden"
+source_modules = ["uk_sponsor_pipeline.domain"]
+forbidden_modules = ["uk_sponsor_pipeline.infrastructure"]
+
+[[tool.importlinter.contracts]]
+name = "Domain must not import CLI or stages"
+type = "forbidden"
+source_modules = ["uk_sponsor_pipeline.domain"]
+forbidden_modules = ["uk_sponsor_pipeline.cli", "uk_sponsor_pipeline.stages"]
+
+[[tool.importlinter.contracts]]
+name = "Infrastructure must not import domain or types"
+type = "forbidden"
+source_modules = ["uk_sponsor_pipeline.infrastructure"]
+forbidden_modules = ["uk_sponsor_pipeline.domain", "uk_sponsor_pipeline.types"]
 
 [tool.ruff.format]
 quote-style = "double"

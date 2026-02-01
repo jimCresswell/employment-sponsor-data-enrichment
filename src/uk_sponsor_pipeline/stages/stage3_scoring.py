@@ -14,13 +14,13 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import pandas as pd
-from rich import print as rprint
 
 from ..config import PipelineConfig
 from ..infrastructure import LocalFileSystem
+from ..observability import get_logger
 from ..protocols import FileSystem
 from ..schemas import (
     STAGE2_ENRICHED_COLUMNS,
@@ -28,6 +28,7 @@ from ..schemas import (
     STAGE3_SCORED_COLUMNS,
     validate_columns,
 )
+from ..types import Stage2EnrichedRow
 
 # SIC code mappings for tech signals (prefix → score)
 TECH_SIC_PREFIXES = {
@@ -227,13 +228,13 @@ def _score_name_keywords(name: str) -> float:
     return score
 
 
-def calculate_features(row: dict[str, Any]) -> ScoringFeatures:
+def calculate_features(row: Stage2EnrichedRow) -> ScoringFeatures:
     """Calculate all scoring features for a company row."""
-    sics = _parse_sic_list(row.get("ch_sic_codes", ""))
-    status = (row.get("ch_company_status", "") or "").lower()
-    date_of_creation = row.get("ch_date_of_creation", "")
-    company_type = row.get("ch_company_type", "")
-    company_name = row.get("ch_company_name", "") or row.get("Organisation Name", "")
+    sics = _parse_sic_list(row["ch_sic_codes"])
+    status = row["ch_company_status"].lower()
+    date_of_creation = row["ch_date_of_creation"]
+    company_type = row["ch_company_type"]
+    company_name = row["ch_company_name"] or row["Organisation Name"]
 
     return ScoringFeatures(
         sic_tech_score=_score_from_sic(sics),
@@ -245,7 +246,7 @@ def calculate_features(row: dict[str, Any]) -> ScoringFeatures:
 
 
 def _matches_geographic_filter(
-    row: dict[str, Any],
+    row: Stage2EnrichedRow,
     regions: tuple[str, ...],
     postcodes: tuple[str, ...],
 ) -> bool:
@@ -253,9 +254,9 @@ def _matches_geographic_filter(
     if not regions and not postcodes:
         return True  # No filter = all pass
 
-    region = (row.get("ch_address_region", "") or "").lower()
-    locality = (row.get("ch_address_locality", "") or "").lower()
-    postcode = (row.get("ch_address_postcode", "") or "").upper()
+    region = row["ch_address_region"].lower()
+    locality = row["ch_address_locality"].lower()
+    postcode = row["ch_address_postcode"].upper()
 
     # Check region filter
     if regions:
@@ -296,6 +297,7 @@ def run_stage3(
         )
 
     fs = fs or LocalFileSystem()
+    logger = get_logger("uk_sponsor_pipeline.stage3")
     stage2_path = Path(stage2_path)
     out_dir = Path(out_dir)
     fs.mkdir(out_dir, parents=True)
@@ -308,12 +310,12 @@ def run_stage3(
     # Ensure match_score is numeric for correct sorting
     df["match_score"] = pd.to_numeric(df["match_score"], errors="coerce").fillna(0.0)
 
-    rprint(f"[cyan]Scoring:[/cyan] {len(df)} companies")
+    logger.info("Scoring: %s companies", len(df))
 
     # Calculate features for each row
     features_list: list[ScoringFeatures] = []
     for _, row in df.iterrows():
-        features_list.append(calculate_features(cast(dict[str, Any], row.to_dict())))
+        features_list.append(calculate_features(cast(Stage2EnrichedRow, row.to_dict())))
 
     # Add feature columns to DataFrame
     df["sic_tech_score"] = [f.sic_tech_score for f in features_list]
@@ -332,7 +334,7 @@ def run_stage3(
     # Full scored output
     scored_path = out_dir / "stage3_scored.csv"
     fs.write_csv(df, scored_path)
-    rprint(f"[green]✓ Scored:[/green] {scored_path}")
+    logger.info("Scored: %s", scored_path)
 
     # Apply filters for shortlist
     shortlist = df[
@@ -351,11 +353,11 @@ def run_stage3(
             axis=1,
         )
         shortlist = shortlist[geo_mask]
-        rprint(f"[cyan]Geographic filter:[/cyan] {geo_mask.sum()} companies match")
+        logger.info("Geographic filter: %s companies match", int(geo_mask.sum()))
 
     shortlist_path = out_dir / "stage3_shortlist_tech.csv"
     fs.write_csv(shortlist, shortlist_path)
-    rprint(f"[green]✓ Shortlist:[/green] {shortlist_path} ({len(shortlist)} companies)")
+    logger.info("Shortlist: %s (%s companies)", shortlist_path, len(shortlist))
 
     # Explainability output
     validate_columns(
@@ -364,6 +366,6 @@ def run_stage3(
     explain_df = shortlist[list(STAGE3_EXPLAIN_COLUMNS)]
     explain_path = out_dir / "stage3_explain.csv"
     fs.write_csv(explain_df, explain_path)
-    rprint(f"[green]✓ Explainability:[/green] {explain_path}")
+    logger.info("Explainability: %s", explain_path)
 
     return {"scored": scored_path, "shortlist": shortlist_path, "explain": explain_path}

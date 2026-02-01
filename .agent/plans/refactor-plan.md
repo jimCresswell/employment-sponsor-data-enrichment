@@ -22,9 +22,12 @@ This plan is the authoritative entry point for the refactor. It captures the key
 - Stages are **artefact boundaries only**. Architecture is application‑owned orchestration with shared infrastructure (ADR 0012). ADR 0003 is superseded.
 - Configuration is read once at the CLI entry point and passed through. Stage entry points require `PipelineConfig`.
 - Stage 2 fails fast on auth/rate‑limit/circuit‑breaker and unexpected HTTP errors; resumable artefacts are written before exit.
-- All linting runs via `uv run lint` (ruff + import‑linter once wired); no separate lint entry points.
+- All linting runs via `uv run lint` (ruff + import‑linter); no separate lint entry points.
 - British spelling throughout docs; code identifiers use British spelling unless constrained by external names.
 - Test doubles will live in `tests/fakes/`; `conftest.py` provides fixtures only.
+- `Any` is allowed only at IO boundaries; external data is validated into strict `TypedDict`/dataclass shapes immediately after ingestion (ADR 0013).
+- Ruff `ANN` (incl. `ANN401`) is enabled; per-file ignores are limited to IO boundary modules and tests.
+- Import-linter contracts are enforced in `uv run lint`/`uv run check`.
 
 ### Changes already applied in the repo
 
@@ -32,12 +35,20 @@ This plan is the authoritative entry point for the refactor. It captures the key
 - Stage 2 search errors are fail‑fast with clear messages; resume artefacts are still written.
 - New tests cover config preservation and fail‑fast behaviour (`tests/test_config.py`, Stage 2/3 tests).
 - ADR 0012 added; ADR 0003 marked superseded; README updated with architecture direction and config pass‑through guidance.
+- Phase 0 complete: characterisation tests added under `tests/characterisation/` with a local README.
+- Phase 1 complete: shared logger factory in `src/uk_sponsor_pipeline/observability/logging.py`; Stage 1–3 logging standardised; README and ADR 0012 updated.
+- Phase 2 complete: infrastructure split into `src/uk_sponsor_pipeline/infrastructure/`; resilience protocols added to `protocols.py`; test fakes moved to `tests/fakes/`; README and ADR 0005 updated.
+- Phase 3 complete: Companies House candidate scoring and mapping extracted to `src/uk_sponsor_pipeline/domain/companies_house.py` with new domain tests; Stage 2 now delegates to the domain module; README updated with domain structure.
+- Strict typing added: `src/uk_sponsor_pipeline/types.py` defines internal `TypedDict` contracts; Stage 2 coerces/validates Companies House payloads at IO boundaries; Stage 3 consumes typed rows.
+- ADR 0013 added (Strict Internal Typing After IO Boundaries).
+- Import-linter wired into `uv run lint`/`uv run check` with contracts that block domain→infrastructure/CLI/stages and infrastructure→domain/types.
 
 ### Resumption checklist (fresh session)
 
 - Read `.agent/directives/AGENT.md` and `.agent/directives/rules.md`.
-- Run the full gates (`uv run check`) before starting Phase 0.
+- Run the full gates (`uv run check`) before starting Phase 0 or any new phase.
 - Confirm ADR 0012 is present and ADR 0003 is marked superseded.
+- Confirm characterisation tests live under `tests/characterisation/` and are marked as temporary scaffolding.
 - Use this plan as the single source of truth; update it if the repo state diverges.
 
 ## Scope
@@ -164,6 +175,7 @@ If `stages/` remains, each function must be a pure delegate to the application s
   - Tests capture current behaviour.
   - No production code changes.
 - Gates: `format → typecheck → lint → test → coverage`.
+ - Status: ✅ Completed.
 
 ### Phase 1 — Observability Extraction
 
@@ -174,6 +186,7 @@ If `stages/` remains, each function must be a pure delegate to the application s
   - No functional behaviour changes.
   - Docs updated (module docstrings + README/ADR references).
 - Gates: `format → typecheck → lint → test → coverage`.
+ - Status: ✅ Completed.
 
 ### Phase 2 — Infrastructure Split
 
@@ -194,6 +207,7 @@ If `stages/` remains, each function must be a pure delegate to the application s
   - Test fakes separated into `tests/fakes/`.
   - Docs updated (module docstrings + README/ADR references, including testing guidance for `tests/fakes/`).
 - Gates: `format → typecheck → lint → test → coverage`.
+- Status: ✅ Completed.
 
 ### Phase 3 — Domain Extraction (Companies House)
 
@@ -205,6 +219,7 @@ If `stages/` remains, each function must be a pure delegate to the application s
   - Domain code has no infra imports.
   - Docs updated (module docstrings + README/ADR references).
 - Gates: `format → typecheck → lint → test → coverage`.
+ - Status: ✅ Completed.
 
 ### Phase 4 — Domain Extraction (Identity + Stage 1)
 

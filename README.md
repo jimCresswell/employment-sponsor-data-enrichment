@@ -106,6 +106,8 @@ uv run uk-sponsor run-all --region London --threshold 0.50
 
 The long‑term direction is an application‑owned pipeline: orchestration and step ownership live in an application layer, domain logic is pure and infrastructure is shared and injected. Staged CSVs remain as artefact boundaries for audit and resume, while `stages/` (if retained) becomes a thin delegate layer only.
 
+Observability is standardised via a shared logger factory with UTC timestamps so pipeline logs remain consistent across stages.
+
 ### Project Structure
 
 ```text
@@ -113,7 +115,14 @@ src/uk_sponsor_pipeline/
 ├── cli.py              # Typer CLI entry point
 ├── config.py           # Pipeline configuration
 ├── protocols.py        # Interface-style contracts
-├── infrastructure.py   # Concrete implementations (DI pattern)
+├── infrastructure/     # Concrete implementations (DI pattern)
+│   ├── cache.py
+│   ├── filesystem.py
+│   ├── http.py
+│   └── resilience.py
+├── domain/
+│   └── companies_house.py
+├── observability/      # Shared logging helpers
 ├── normalization.py    # Org name processing utilities
 ├── schemas.py          # Column contracts per stage
 └── stages/
@@ -139,12 +148,12 @@ Dependency injection keeps I/O and external services swappable for tests:
 class HttpClient(Protocol):
     def get_json(self, url: str, cache_key: str) -> dict[str, Any]: ...
 
-# infrastructure.py - production implementation
+# infrastructure/http.py - production implementation
 class CachedHttpClient:
     def get_json(self, url: str, cache_key: str) -> dict[str, Any]:
         # Real HTTP + caching logic
 
-# conftest.py - test implementation
+# tests/fakes/http.py - test implementation
 class FakeHttpClient:
     def get_json(self, url: str, cache_key: str) -> dict[str, Any]:
         return self.responses.get(cache_key, {})
@@ -161,6 +170,8 @@ config = PipelineConfig.from_env()
 run_stage2(stage1_path="data/interim/stage1.csv", out_dir="data/processed", config=config)
 run_stage3(stage2_path="data/processed/stage2_enriched_companies_house.csv", out_dir="data/processed", config=config)
 ```
+
+Test doubles live in `tests/fakes/`; `tests/conftest.py` provides fixtures that instantiate them.
 
 ### Running Tests
 

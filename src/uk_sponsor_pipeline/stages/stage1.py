@@ -8,16 +8,16 @@ Improvements over original:
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
-from rich import print as rprint
 
 from ..infrastructure import LocalFileSystem
 from ..normalization import normalize_org_name
+from ..observability import get_logger
 from ..protocols import FileSystem
 from ..schemas import RAW_REQUIRED_COLUMNS, STAGE1_OUTPUT_COLUMNS, validate_columns
 
@@ -50,7 +50,7 @@ class Stage1Stats:
     processed_at_utc: str
 
 
-def _arr_to_str(a: Any) -> str:
+def _arr_to_str(a: Iterable[object] | str) -> str:
     """Convert array/list to pipe-separated string."""
     if isinstance(a, str):
         return a
@@ -89,6 +89,7 @@ def run_stage1(
         Stage1Result with paths and counts.
     """
     fs = fs or LocalFileSystem()
+    logger = get_logger("uk_sponsor_pipeline.stage1")
     raw_dir = Path(raw_dir)
     out_path = Path(out_path)
     reports_dir = Path(reports_dir)
@@ -104,7 +105,7 @@ def run_stage1(
         raise RuntimeError(f"No raw CSV found in {raw_dir}. Run `uk-sponsor download` first.")
 
     in_path = max(candidates, key=fs.mtime)
-    rprint(f"[cyan]Reading:[/cyan] {in_path}")
+    logger.info("Reading: %s", in_path)
 
     df = fs.read_csv(in_path).fillna("")
     df.columns = [c.strip() for c in df.columns]
@@ -132,7 +133,7 @@ def run_stage1(
     ].copy()
     filtered_rows = len(filtered)
 
-    rprint(f"[cyan]Filtered:[/cyan] {filtered_rows:,} rows (Skilled Worker + A-rated)")
+    logger.info("Filtered: %s rows (Skilled Worker + A-rated)", f"{filtered_rows:,}")
 
     # Add normalized name column
     filtered["org_name_normalized"] = filtered["Organisation Name"].apply(normalize_org_name)
@@ -181,7 +182,7 @@ def run_stage1(
     validate_columns(list(agg.columns), frozenset(STAGE1_OUTPUT_COLUMNS), "Stage 1 output")
 
     fs.write_csv(agg, out_path)
-    rprint(f"[green]✓ Output:[/green] {out_path} ({len(agg):,} unique organizations)")
+    logger.info("Output: %s (%s unique organisations)", out_path, f"{len(agg):,}")
 
     # Calculate stats
     town_counts = filtered["Town/City"].value_counts().head(10)
@@ -217,7 +218,7 @@ def run_stage1(
         "processed_at_utc": stats.processed_at_utc,
     }
     fs.write_json(stats_dict, stats_path)
-    rprint(f"[green]✓ Stats:[/green] {stats_path}")
+    logger.info("Stats: %s", stats_path)
 
     return Stage1Result(
         output_path=out_path,

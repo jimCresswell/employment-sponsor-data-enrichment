@@ -4,8 +4,9 @@ These rules are mandatory for all work in this repository. For goals and outputs
 
 ## Core
 
-- Ask first: **could it be simpler without compromising quality?**
-- No compatibility layers. Replace and delete old paths.
+- Always reflect on the question: **could it be simpler without compromising quality or functionality?**
+- No compatibility layers, no backward compatibility. Clean breaks only. Replace and delete old paths.
+- No trivial aliases, refactor instead.
 - DRY + YAGNI + KISS.
 - Keep boundaries explicit: protocols for interfaces, infrastructure for implementations.
 - Each module has a single responsibility and a narrow public API; keep helpers private.
@@ -38,7 +39,8 @@ These rules are mandatory for all work in this repository. For goals and outputs
 - Python 3.11+ with type hints.
 - Use snake_case for modules and functions.
 - Keep Ruff and Mypy clean; fix root causes instead of suppressing.
-- Avoid `Any` in core/domain code; use Protocols, dataclasses, and TypedDicts instead.
+- Avoid `Any` outside IO boundaries; validate external data into strict `TypedDict` or dataclass shapes immediately after ingestion.
+- Ruff `ANN401` must be enabled; allow per-file ignores only for explicit IO boundary modules.
 - Use British spelling in all documentation, comments, and user-facing text.
 
 ## Documentation

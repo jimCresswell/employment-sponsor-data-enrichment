@@ -8,6 +8,7 @@ reports/*.json
 .DS_Store
 .coverage
 .mypy_cache/
+.egg-info/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/

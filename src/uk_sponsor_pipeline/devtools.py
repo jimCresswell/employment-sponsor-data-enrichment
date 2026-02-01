@@ -28,6 +28,7 @@ def _emit(message: str) -> None:
 
 def lint() -> None:
     _run_or_exit(["ruff", "check", "src", "tests", *sys.argv[1:]])
+    _run_or_exit(["lint-imports"])
 
 
 def format_code() -> None:
@@ -63,6 +64,7 @@ def check() -> None:
         ("format", ["ruff", "format", "src", "tests"]),
         ("typecheck", ["mypy", "src"]),
         ("lint", ["ruff", "check", "src", "tests"]),
+        ("import-linter", ["lint-imports"]),
         ("test", ["pytest"]),
         (
             "coverage",
