@@ -12,10 +12,10 @@ The pipeline relies on external APIs. Tests must be deterministic, fast, and saf
 
 ## Decision
 
-Block real network calls in tests and use injected fakes or mocks for HTTP. Tests validate behavior through small, focused units and in-memory filesystem fixtures.
+Block real network calls in tests and use injected fakes or mocks for HTTP. Tests validate behaviour through small, focused units and in-memory filesystem fixtures.
 
 ## Consequences
 
 - Tests run reliably without external dependencies.
 - Failures are attributable to code, not network conditions.
-- HTTP behavior is validated through controlled fakes.
+- HTTP behaviour is validated through controlled fakes.

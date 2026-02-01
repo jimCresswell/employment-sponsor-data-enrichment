@@ -137,6 +137,7 @@ def stage2(
     Batching: use --batch-start/--batch-count/--batch-size.
     Resume: --resume and check data/processed/stage2_resume_report.json.
     """
+    config = PipelineConfig.from_env()
     outs = run_stage2(
         stage1_path=stage1_path,
         out_dir=out_dir,
@@ -144,6 +145,7 @@ def stage2(
         batch_start=batch_start,
         batch_count=batch_count,
         batch_size=batch_size,
+        config=config,
     )
     rprint("[green]✓ Stage 2 complete:[/green]")
     for k, v in outs.items():
@@ -265,15 +267,16 @@ def run_all(
     stage1_result = run_stage1()
     rprint(f"[green]✓ {stage1_result.unique_orgs:,} unique organizations[/green]")
 
+    config = PipelineConfig.from_env()
+
     # Stage 2
     rprint("\n[bold cyan]═══ Stage 2: Companies House Enrichment ═══[/bold cyan]")
-    stage2_outs = run_stage2()
+    stage2_outs = run_stage2(config=config)
     rprint(f"[green]✓ Enriched: {stage2_outs['enriched']}[/green]")
 
     # Stage 3
     rprint("\n[bold cyan]═══ Stage 3: Tech Scoring & Shortlist ═══[/bold cyan]")
 
-    config = PipelineConfig.from_env()
     if threshold is not None or region or postcode_prefix:
         config = config.with_overrides(
             tech_score_threshold=threshold,

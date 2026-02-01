@@ -4,7 +4,7 @@ Date: 2026-02-01
 
 ## Status
 
-Accepted
+Superseded by ADR 0012
 
 ## Context
 
@@ -12,7 +12,7 @@ The sponsor register and Companies House data must be processed in a transparent
 
 ## Decision
 
-Use a staged pipeline with CSV artifacts at each stage:
+Use a staged pipeline with CSV artefacts at each stage:
 - Download → raw CSV
 - Stage 1 → filtered + aggregated CSV
 - Stage 2 → enriched CSVs (matched, unmatched, candidates)
@@ -25,3 +25,4 @@ Artifacts are stored under `data/raw`, `data/interim`, and `data/processed`.
 - The pipeline is reproducible and auditable.
 - Intermediate data can be validated and inspected.
 - Storage is simple and tool-agnostic (CSV-based).
+- Stages are now treated as artefact boundaries, not architectural boundaries (see ADR 0012).

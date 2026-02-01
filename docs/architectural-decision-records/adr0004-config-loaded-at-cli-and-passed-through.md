@@ -18,4 +18,4 @@ Load configuration once at the CLI entry point and pass it through function call
 
 - Configuration is explicit and testable.
 - Functions remain pure and dependency-injected where possible.
-- Environment lookups are centralized and easier to audit.
+- Environment lookups are centralised and easier to audit.

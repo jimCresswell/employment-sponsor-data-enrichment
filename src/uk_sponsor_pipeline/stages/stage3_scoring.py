@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import pandas as pd
-from dotenv import load_dotenv
 from rich import print as rprint
 
 from ..config import PipelineConfig
@@ -284,14 +283,17 @@ def run_stage3(
     Args:
         stage2_path: Path to Stage 2 enriched CSV.
         out_dir: Directory for output files.
-        config: Pipeline configuration (loads from env if None).
+        config: Pipeline configuration (required; load at entry point).
         fs: Optional filesystem for testing.
 
     Returns:
         Dict with paths to scored, shortlist, and explain files.
     """
-    load_dotenv()
-    config = config or PipelineConfig.from_env()
+    if config is None:
+        raise RuntimeError(
+            "PipelineConfig is required. Load it once at the entry point with "
+            "PipelineConfig.from_env() and pass it through."
+        )
 
     fs = fs or LocalFileSystem()
     stage2_path = Path(stage2_path)

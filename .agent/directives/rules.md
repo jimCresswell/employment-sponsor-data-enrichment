@@ -41,10 +41,21 @@ These rules are mandatory for all work in this repository. For goals and outputs
 - Avoid `Any` in core/domain code; use Protocols, dataclasses, and TypedDicts instead.
 - Use British spelling in all documentation, comments, and user-facing text.
 
+## Documentation
+
+- Documentation is comprehensive, includes examples, and is created at the same time as functionality.
+- All code has inline documentation (docstrings and only the minimum necessary comments).
+- Key usage and comprehension guidance live in README(s).
+- Decisions and architecture are accurately captured in ADRs.
+- Documentation is cross-referenced, DRY, and never deferred.
+- We are building a system; humans and AI are part of it. Missing documentation is a critical engineering failure mode.
+
 ## Quality Gates
 
 - Do not disable linting, formatting, type checking, or tests.
-- Run gates in order: `format` → `typecheck` → `lint` → `test` → `coverage`.
+- Run the full gate sequence every time, in order: `format` → `typecheck` → `lint` → `test` → `coverage`.
+- Do not run partial gates; use `uv run check` or the explicit full sequence.
+- All linting runs via `uv run lint` (ruff + import-linter once wired).
 
 ## Tooling
 

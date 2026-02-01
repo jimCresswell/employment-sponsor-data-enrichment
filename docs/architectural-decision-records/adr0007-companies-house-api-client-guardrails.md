@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-Companies House API usage must respect rate limits, handle transient failures, and avoid repeated requests for the same resources. The pipeline needs predictable behavior and safe failure modes.
+Companies House API usage must respect rate limits, handle transient failures, and avoid repeated requests for the same resources. The pipeline needs predictable behaviour and safe failure modes.
 
 ## Decision
 
@@ -17,9 +17,9 @@ Wrap Companies House calls with:
 - Rate limiting and minimum delay between requests
 - Retry with exponential backoff and jitter
 - Circuit breaker to stop repeated failures
-- Fail-fast authentication errors
+- Fail-fast authentication errors and unexpected HTTP failures (resumable via checkpoints)
 
-These behaviors are centralized in the HTTP client implementation.
+These behaviours are centralised in the HTTP client implementation.
 
 ## Consequences
 

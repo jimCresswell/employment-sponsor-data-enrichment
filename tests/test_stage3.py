@@ -1,6 +1,7 @@
 """Tests for Stage 3 scoring."""
 
 import pandas as pd
+import pytest
 
 from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.schemas import STAGE2_ENRICHED_COLUMNS
@@ -243,3 +244,9 @@ def test_stage3_sorting_uses_numeric_match_score(tmp_path):
     scored_df = pd.read_csv(outs["scored"], dtype=str).fillna("")
 
     assert scored_df.loc[0, "Organisation Name"] == "HighMatch"
+
+
+def test_stage3_requires_config() -> None:
+    with pytest.raises(RuntimeError) as exc_info:
+        run_stage3()
+    assert "PipelineConfig" in str(exc_info.value)

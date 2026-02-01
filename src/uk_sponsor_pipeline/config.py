@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Self
 
 from dotenv import load_dotenv
@@ -79,21 +79,17 @@ class PipelineConfig:
         geo_filter_postcodes: tuple[str, ...] | None = None,
     ) -> Self:
         """Return a new config with specified overrides (for CLI options)."""
-        return type(self)(
-            ch_api_key=self.ch_api_key,
-            ch_sleep_seconds=self.ch_sleep_seconds,
-            ch_min_match_score=self.ch_min_match_score,
-            ch_search_limit=self.ch_search_limit,
-            ch_max_rpm=self.ch_max_rpm,
-            tech_score_threshold=tech_score_threshold
-            if tech_score_threshold is not None
-            else self.tech_score_threshold,
-            geo_filter_regions=geo_filter_regions
-            if geo_filter_regions is not None
-            else self.geo_filter_regions,
-            geo_filter_postcodes=geo_filter_postcodes
-            if geo_filter_postcodes is not None
-            else self.geo_filter_postcodes,
+        return replace(
+            self,
+            tech_score_threshold=self.tech_score_threshold
+            if tech_score_threshold is None
+            else tech_score_threshold,
+            geo_filter_regions=self.geo_filter_regions
+            if geo_filter_regions is None
+            else geo_filter_regions,
+            geo_filter_postcodes=self.geo_filter_postcodes
+            if geo_filter_postcodes is None
+            else geo_filter_postcodes,
         )
 
 

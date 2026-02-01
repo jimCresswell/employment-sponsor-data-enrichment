@@ -15,3 +15,4 @@ This directory contains the ADRs for the UK Sponsor → Tech Hiring Pipeline.
 - `adr0009-stage2-matching-and-audit-trail.md`
 - `adr0010-stage3-tech-likelihood-scoring.md`
 - `adr0011-no-dashboard-plugins-or-sqlite.md`
+- `adr0012-stages-as-artefact-boundaries.md`

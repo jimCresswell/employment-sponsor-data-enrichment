@@ -5,20 +5,73 @@
 - Read `.agent/directives/AGENT.md`, then `.agent/directives/rules.md`.
 - Ensure the current baseline is green before starting Phase 0:
   - `uv sync --extra dev`
-  - `uv run check`
+  - `uv run format`
+  - `uv run typecheck`
+  - `uv run lint`
+  - `uv run test`
+  - `uv run coverage`
+  - (Shortcut: `uv run check` runs the full sequence.)
 - Scope: changes are within `src/uk_sponsor_pipeline` and must preserve CLI behaviour.
 - Refactor constraints apply: no compatibility shims; the pipeline must be excellent at the end of each phase.
-- Public APIs must be documented in module docstrings and referenced in README(s) and ADRs.
+- Public APIs must be documented in module docstrings (with examples) and referenced in README(s) and ADRs in the same phase.
+
+## Current State and Decisions (2026-02-01)
+
+This plan is the authoritative entry point for the refactor. It captures the key decisions and changes made so far; assume no other context.
+
+- Stages are **artefact boundaries only**. Architecture is application‑owned orchestration with shared infrastructure (ADR 0012). ADR 0003 is superseded.
+- Configuration is read once at the CLI entry point and passed through. Stage entry points require `PipelineConfig`.
+- Stage 2 fails fast on auth/rate‑limit/circuit‑breaker and unexpected HTTP errors; resumable artefacts are written before exit.
+- All linting runs via `uv run lint` (ruff + import‑linter once wired); no separate lint entry points.
+- British spelling throughout docs; code identifiers use British spelling unless constrained by external names.
+- Test doubles will live in `tests/fakes/`; `conftest.py` provides fixtures only.
+
+### Changes already applied in the repo
+
+- `run_stage2` and `run_stage3` now require `PipelineConfig`; the CLI loads config once and passes it through.
+- Stage 2 search errors are fail‑fast with clear messages; resume artefacts are still written.
+- New tests cover config preservation and fail‑fast behaviour (`tests/test_config.py`, Stage 2/3 tests).
+- ADR 0012 added; ADR 0003 marked superseded; README updated with architecture direction and config pass‑through guidance.
+
+### Resumption checklist (fresh session)
+
+- Read `.agent/directives/AGENT.md` and `.agent/directives/rules.md`.
+- Run the full gates (`uv run check`) before starting Phase 0.
+- Confirm ADR 0012 is present and ADR 0003 is marked superseded.
+- Use this plan as the single source of truth; update it if the repo state diverges.
 
 ## Scope
 
-Refactor the pipeline into explicit domains, reusable infrastructure modules, and a shared observability layer while preserving behavior. TDD is mandatory; every change starts with tests. Clean breaks only: remove legacy code paths in the same phase they are replaced so there is a single source of truth.
+Refactor the pipeline into explicit domains, reusable infrastructure modules, and a shared observability layer while preserving behaviour. TDD is mandatory; every change starts with tests. Clean breaks only: remove legacy code paths in the same phase they are replaced so there is a single source of truth.
 
 ## Refactor Constraints
 
 - It is acceptable for the pipeline to be temporarily broken while a phase is in progress.
 - The pipeline must be fully working and excellent at the end of each phase.
 - No compatibility shims at any point.
+- Documentation is never deferred: inline docs, README(s), and ADRs are updated in the same phase as the code change and remain cross-referenced and DRY.
+- Stages are conceptual labels for pipeline steps and outputs, not architectural boundaries. Prefer application pipeline steps/use-cases and shared infrastructure; keep `stages/` thin or remove it once the application layer owns orchestration.
+- All standards (observability, resilience, filesystem, HTTP, error handling) are shared across the pipeline; no stage-specific infrastructure.
+- All linting (ruff + import-linter) runs via `uv run lint`; no separate lint gate.
+
+## Test Harness Constraints
+
+- Tests are network-isolated via socket blocking in `tests/conftest.py`; no real HTTP calls.
+- Characterisation and refactor tests must use `FakeHttpClient`, `InMemoryFileSystem`, or MagicMock sessions.
+- All fixtures/data used for tests must be local and deterministic.
+- Test fakes live in `tests/fakes/` (not in production code); `conftest.py` provides fixtures that instantiate them:
+
+  ```text
+  tests/
+  ├── conftest.py              # pytest fixtures only
+  ├── fakes/
+  │   ├── __init__.py          # export all fakes
+  │   ├── http.py              # FakeHttpClient
+  │   ├── filesystem.py        # InMemoryFileSystem
+  │   ├── cache.py             # InMemoryCache
+  │   └── resilience.py        # FakeRateLimiter, FakeCircuitBreaker
+  └── ...
+  ```
 
 ## Proposed Module Splits
 
@@ -33,42 +86,84 @@ Refactor the pipeline into explicit domains, reusable infrastructure modules, an
 - `src/uk_sponsor_pipeline/infrastructure/http.py`
   - `CachedHttpClient` and HTTP response handling.
 - `src/uk_sponsor_pipeline/infrastructure/cache.py`
-  - `DiskCache`, `InMemoryCache`.
+  - `DiskCache` (production only; `InMemoryCache` lives in `tests/fakes/`).
 - `src/uk_sponsor_pipeline/infrastructure/resilience.py`
   - `RateLimiter`, `RetryPolicy`, `CircuitBreaker`, backoff + jitter helpers.
 - `src/uk_sponsor_pipeline/infrastructure/filesystem.py`
-  - `LocalFileSystem`, `InMemoryFileSystem`.
+  - `LocalFileSystem` (production only; `InMemoryFileSystem` lives in `tests/fakes/`).
 - `src/uk_sponsor_pipeline/infrastructure/__init__.py`
   - Only final, canonical exports.
 
+### Protocols (DI Contracts)
+
+- `src/uk_sponsor_pipeline/protocols.py` defines abstract interfaces for all injectable dependencies and is the only place application and domain code import DI contracts:
+  - `HttpClient`, `Cache`, `FileSystem` (existing).
+  - `RateLimiter`, `CircuitBreaker`, `RetryPolicy` (add in Phase 2 for testability; `CachedHttpClient` depends on these protocols, not concrete implementations).
+
 ### Domains
 
-- `src/uk_sponsor_pipeline/domain/sponsor_register/`
+- `src/uk_sponsor_pipeline/domain/sponsor_register.py`
   - Stage 1 parsing, filtering, aggregation rules.
-- `src/uk_sponsor_pipeline/domain/organization_identity/`
-  - Normalization, query variants, similarity scoring.
-- `src/uk_sponsor_pipeline/domain/companies_house/`
-  - Candidate scoring, match selection, profile-to-row mapping.
-- `src/uk_sponsor_pipeline/domain/scoring/`
+- `src/uk_sponsor_pipeline/domain/organisation_identity.py`
+  - Move existing `normalization.py` here + extract `_simple_similarity()` from Stage 2.
+  - Contains: `NormalizedName`, `normalize_org_name()`, `generate_query_variants()`, `simple_similarity()`.
+- `src/uk_sponsor_pipeline/domain/companies_house.py`
+  - Candidate scoring (uses `simple_similarity` from `organisation_identity`), match selection, profile-to-row mapping.
+- `src/uk_sponsor_pipeline/domain/scoring.py`
   - Stage 3 feature extraction + scoring rules.
 
 ### Application
 
 - `src/uk_sponsor_pipeline/application/pipeline.py`
   - Orchestration, batching, resume/reporting.
+  - Pipeline steps are owned here (not in `stages/`).
+  - Config/env read once at the entry point; pass config and dependencies through.
+
+## Target Structure (SOLID/DI)
+
+### Application Steps (use-cases)
+
+Application owns the pipeline steps; stages (if kept) are thin wrappers only.
+
+- `download_register(...) -> DownloadResult`
+  - Wraps GOV.UK fetch + schema validation.
+- `build_sponsor_register_snapshot(...) -> Stage1Result`
+  - Filters Skilled Worker + A‑rated, aggregates by org.
+- `enrich_with_companies_house(...) -> Stage2Outputs`
+  - Search + match + profile fetch + resume reporting.
+- `score_tech_likelihood(...) -> Stage3Outputs`
+  - Feature extraction + scoring + shortlist + explainability.
+
+### Mapping from Current Modules
+
+- `stages/download.py` → `application.pipeline.download_register`
+- `stages/stage1.py` → `application.pipeline.build_sponsor_register_snapshot`
+- `stages/stage2_companies_house.py` → `application.pipeline.enrich_with_companies_house`
+- `stages/stage3_scoring.py` → `application.pipeline.score_tech_likelihood`
+
+If `stages/` remains, each function must be a pure delegate to the application step and contain no infrastructure setup beyond dependency wiring for CLI.
+
+### Shared Standards (Applied Everywhere)
+
+- Error handling: fail fast with clear, domain‑specific errors; write resumable artefacts before exiting.
+- Observability: standard logger + structured context; no ad‑hoc logging.
+- Infrastructure: single implementations of HTTP/cache/resilience/filesystem, injected via protocols.
+- Configuration: read once at the CLI entry point and pass through to all application steps.
 
 ## Phased Plan (TDD First)
 
 ### Phase 0 — Baseline Characterization
 
-- Add characterization tests for Stage 1, Stage 2, and Stage 3 outputs.
+- Add characterisation tests for Stage 1, Stage 2, and Stage 3 outputs.
+- Add characterisation tests for Stage 2 error handling (auth/rate limit/circuit breaker on search vs profile fetch) so any changes are explicit.
 - Split tests into:
-  - **Core behavior** (must remain after refactor).
+  - **Core behaviour** (must remain after refactor).
   - **Scaffolding** (temporary to guard the refactor; remove once the target module is stable).
+- Use the network-blocked test harness: no live HTTP, use fakes/in-memory FS.
 - DoD:
-  - Tests capture current behavior.
+  - Tests capture current behaviour.
   - No production code changes.
-- Gates: `format → typecheck → lint → test`.
+- Gates: `format → typecheck → lint → test → coverage`.
 
 ### Phase 1 — Observability Extraction
 
@@ -76,18 +171,29 @@ Refactor the pipeline into explicit domains, reusable infrastructure modules, an
 - TDD: unit test for logger format and usage.
 - DoD:
   - Log lines use standard UTC format.
-  - No functional behavior changes.
-- Gates after completion.
+  - No functional behaviour changes.
+  - Docs updated (module docstrings + README/ADR references).
+- Gates: `format → typecheck → lint → test → coverage`.
 
 ### Phase 2 — Infrastructure Split
 
 - Move cache/resilience/http/filesystem into new modules.
 - Update all imports and delete the old module(s) in the same phase.
-- TDD: update tests and add contract tests for resilience primitives.
+- Add protocols for resilience primitives (`RateLimiter`, `CircuitBreaker`, `RetryPolicy`) to enable DI and testability.
+- Create `tests/fakes/` directory and move test doubles from `conftest.py`:
+  - `tests/fakes/http.py` — `FakeHttpClient`
+  - `tests/fakes/filesystem.py` — `InMemoryFileSystem`
+  - `tests/fakes/cache.py` — `InMemoryCache`
+  - `tests/fakes/resilience.py` — `FakeRateLimiter`, `FakeCircuitBreaker`
+- Update `conftest.py` to import fakes and provide fixtures.
+- TDD: update tests and add contract tests for resilience primitives (protocol conformance + behaviour).
 - DoD:
   - Tests green with new module layout.
-  - No behavior changes.
-- Gates after each extraction.
+  - No behaviour changes.
+  - Resilience protocols defined and implemented.
+  - Test fakes separated into `tests/fakes/`.
+  - Docs updated (module docstrings + README/ADR references, including testing guidance for `tests/fakes/`).
+- Gates: `format → typecheck → lint → test → coverage`.
 
 ### Phase 3 — Domain Extraction (Companies House)
 
@@ -97,18 +203,22 @@ Refactor the pipeline into explicit domains, reusable infrastructure modules, an
 - DoD:
   - Stage 2 outputs unchanged.
   - Domain code has no infra imports.
-- Gates after extraction.
+  - Docs updated (module docstrings + README/ADR references).
+- Gates: `format → typecheck → lint → test → coverage`.
 
 ### Phase 4 — Domain Extraction (Identity + Stage 1)
 
-- Move normalization + query variants to `organization_identity`.
-- Move Stage 1 rules to `sponsor_register`.
+- Move `normalization.py` → `domain/organisation_identity.py` (this is mostly a move, not a rewrite).
+- Extract `_simple_similarity()` from `stage2_companies_house.py` → `domain/organisation_identity.py`.
+- Move Stage 1 rules to `domain/sponsor_register.py`.
 - Delete the old modules immediately after migration.
 - TDD: port and expand tests.
 - DoD:
   - Stage 1 outputs unchanged.
-  - Domain modules are pure.
-- Gates after each move.
+  - Domain modules are pure (no infra imports).
+  - `organisation_identity` contains all name-handling logic.
+  - Docs updated (module docstrings + README/ADR references).
+- Gates: `format → typecheck → lint → test → coverage`.
 
 ### Phase 5 — Domain Extraction (Scoring)
 
@@ -118,34 +228,63 @@ Refactor the pipeline into explicit domains, reusable infrastructure modules, an
 - DoD:
   - Stage 3 outputs unchanged.
   - No infra imports in domain code.
-- Gates after extraction.
+  - Docs updated (module docstrings + README/ADR references).
+- Gates: `format → typecheck → lint → test → coverage`.
 
 ### Phase 6 — Application Orchestration
 
 - Extract orchestration to `application/pipeline.py`.
 - Remove any legacy orchestration paths immediately after migration.
+- Eliminate or reduce `stages/` to thin wrappers (if kept, they must be pure delegates to application steps).
 - TDD: end-to-end test with in-memory FS/HTTP still passes.
 - DoD:
-  - CLI is thin, orchestration centralized.
+  - CLI is thin, orchestration centralised.
   - Resume/batching/reporting owned by application.
-- Gates after extraction.
+  - Config/env read once at the CLI entry point; stages accept config/dependencies only.
+  - Docs updated (module docstrings + README/ADR references).
+- Gates: `format → typecheck → lint → test → coverage`.
 
-### Phase 7 — Docs + ADR Updates
+### Phase 7 — Docs + ADR Audit
 
 - Add/adjust ADRs for new boundaries + observability.
-- Update README structure section.
+- Record the application‑owned pipeline decision (ADR 0012) and mark ADR 0003 as superseded.
+- Update README structure section and cross-references.
+- Rename test files to match new module structure:
+  - `test_stage2.py` → `test_domain_companies_house.py` (or mirror: `tests/domain/test_companies_house.py`)
+  - `test_infrastructure.py` → split into `test_infrastructure_http.py`, `test_infrastructure_resilience.py`, etc.
+- Add `import-linter` configuration to enforce architectural boundaries and wire it into `uv run lint` (single lint entry point):
+  - Add `import-linter` as a dev dependency.
+  - Update `uk_sponsor_pipeline.devtools:lint` to run `import-linter` after ruff.
+
+  ```ini
+  [importlinter:contract:1]
+  name = Domain must not import infrastructure
+  type = forbidden
+  source_modules = uk_sponsor_pipeline.domain
+  forbidden_modules = uk_sponsor_pipeline.infrastructure
+
+  [importlinter:contract:2]
+  name = Domain must not import application
+  type = forbidden
+  source_modules = uk_sponsor_pipeline.domain
+  forbidden_modules = uk_sponsor_pipeline.application
+  ```
+
 - DoD:
   - Docs and ADRs match code structure.
-  - Scaffolding characterization tests removed.
-- Gates: full suite including coverage.
+  - Test files renamed to match module structure.
+  - `import-linter` rules in place and passing via `uv run lint`.
+  - Scaffolding characterisation tests removed.
+- Gates: `format → typecheck → lint → test → coverage`.
 
 ## Acceptance Criteria
 
 - Domain modules are pure and contain no infrastructure imports.
 - Infrastructure is reusable across domains.
-- Observability is centralized and used by stages.
+- Observability is centralised and used by the application pipeline steps.
 - All tests are network-isolated.
-- Characterization tests prove no behavioral regressions.
+- Characterisation tests prove no behavioural regressions.
+- Fail fast with helpful errors; resumable outputs are preserved for recovery.
 - Public APIs for refactored modules are comprehensively documented in code and README(s).
 - No duplicate logic or legacy code paths remain; single source of truth per module.
 - All gates pass in order: `format → typecheck → lint → test → coverage`.
@@ -157,4 +296,4 @@ Refactor the pipeline into explicit domains, reusable infrastructure modules, an
 - CLI uses application orchestration only.
 - ADRs updated for new boundaries and observability.
 - Public APIs are documented in module docstrings and referenced in README(s).
-- Scaffolding characterization tests removed after stabilization.
+- Scaffolding characterisation tests removed after stabilisation.

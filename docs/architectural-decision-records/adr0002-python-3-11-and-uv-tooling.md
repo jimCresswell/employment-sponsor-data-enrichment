@@ -23,4 +23,4 @@ All workflow commands are executed via `uv run`.
 
 - Developers get consistent tooling and commands across machines.
 - The project avoids mixed package managers or ad-hoc scripts.
-- Tooling choices are opinionated and centralized in `pyproject.toml`.
+- Tooling choices are opinionated and centralised in `pyproject.toml`.

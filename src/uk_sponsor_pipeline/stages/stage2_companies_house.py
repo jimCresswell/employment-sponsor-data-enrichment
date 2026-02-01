@@ -24,7 +24,6 @@ from urllib.parse import quote
 
 import pandas as pd
 import requests
-from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
 from tqdm import tqdm
 
@@ -286,7 +285,7 @@ def run_stage2(
         stage1_path: Path to Stage 1 output CSV.
         out_dir: Directory for output files.
         cache_dir: Directory for API response cache.
-        config: Pipeline configuration (loads from env if None).
+        config: Pipeline configuration (required; load at entry point).
         http_client: HTTP client (creates default if None).
         resume: If True, skip already-processed organizations.
         fs: Optional filesystem for testing.
@@ -302,8 +301,11 @@ def run_stage2(
         CircuitBreakerOpen: If too many consecutive API failures.
         RuntimeError: If configuration is missing.
     """
-    load_dotenv()
-    config = config or PipelineConfig.from_env()
+    if config is None:
+        raise RuntimeError(
+            "PipelineConfig is required. Load it once at the entry point with "
+            "PipelineConfig.from_env() and pass it through."
+        )
 
     if not config.ch_api_key:
         raise RuntimeError("Missing CH_API_KEY. Set it in .env or environment variables.")
@@ -475,33 +477,31 @@ def run_stage2(
             all_candidates: list[CandidateMatch] = []
 
             # Try each query variant
-            try:
-                for query in query_variants:
-                    search_url = f"{CH_BASE}/search/companies?q={quote(query)}&items_per_page={config.ch_search_limit}"
-                    cache_key = _cache_key("search", query, str(config.ch_search_limit))
+            for query in query_variants:
+                search_url = f"{CH_BASE}/search/companies?q={quote(query)}&items_per_page={config.ch_search_limit}"
+                cache_key = _cache_key("search", query, str(config.ch_search_limit))
 
-                    try:
-                        search = http_client.get_json(search_url, cache_key)
-                    except requests.HTTPError as e:
-                        # Non-fatal HTTP error - log and try next variant
-                        logger.warning("Search error for '%s': %s", query, e)
-                        continue
-                    except Exception as e:
-                        # Other errors - log and try next variant
-                        logger.warning("Search error for '%s': %s", query, e)
-                        continue
+                try:
+                    search = http_client.get_json(search_url, cache_key)
+                except (AuthenticationError, CircuitBreakerOpen, RateLimitError):
+                    raise
+                except requests.HTTPError as e:
+                    raise RuntimeError(
+                        f"Companies House search failed for query '{query}': {e}"
+                    ) from e
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Companies House search failed for query '{query}': {e}"
+                    ) from e
 
-                    items = search.get("items") or []
-                    scored = _score_candidates(org, town, county, items, query)
-                    all_candidates.extend(scored)
+                items = search.get("items") or []
+                scored = _score_candidates(org, town, county, items, query)
+                all_candidates.extend(scored)
 
-                    # Stop early if we found a high-confidence match
-                    if scored and scored[0].score.total >= 0.85:
-                        best_match = scored[0]
-                        break
-            except (AuthenticationError, CircuitBreakerOpen, RateLimitError):
-                flush_batch()
-                raise
+                # Stop early if we found a high-confidence match
+                if scored and scored[0].score.total >= 0.85:
+                    best_match = scored[0]
+                    break
 
             # Sort candidates by score for stable top-N reporting
             if all_candidates:

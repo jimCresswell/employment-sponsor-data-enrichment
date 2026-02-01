@@ -16,6 +16,8 @@ GOV.UK Sponsor Register → Filter → Enrich → Score → Shortlist
 | stage2   | Stage1 CSV  | `data/processed/stage2_*.csv` | Enriches via Companies House API                    |
 | stage3   | Stage2 CSV  | `data/processed/stage3_*.csv` | Scores for tech-likelihood, outputs shortlist       |
 
+Stages describe artefact boundaries for audit and resume. They are not architectural boundaries; orchestration and shared standards live in the application pipeline (see `docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md`).
+
 ## Quick Start
 
 ### Prerequisites
@@ -75,6 +77,8 @@ uv run uk-sponsor stage2 --batch-size 50
 Resume data is written to `data/processed/stage2_checkpoint.csv` and
 `data/processed/stage2_resume_report.json` (includes overall batch range and timing).
 
+Stage 2 fails fast on authentication, rate limit, circuit breaker, or unexpected HTTP errors. Fix the issue and rerun with `--resume`; the resume report includes a ready‑made command.
+
 ### Geographic Filtering
 
 Filter the final shortlist by region or postcode:
@@ -98,6 +102,10 @@ uv run uk-sponsor run-all --region London --threshold 0.50
 
 ## Architecture
 
+### Architecture Direction
+
+The long‑term direction is an application‑owned pipeline: orchestration and step ownership live in an application layer, domain logic is pure and infrastructure is shared and injected. Staged CSVs remain as artefact boundaries for audit and resume, while `stages/` (if retained) becomes a thin delegate layer only.
+
 ### Project Structure
 
 ```text
@@ -120,6 +128,8 @@ tests/
 └── test_stage3.py
 ```
 
+The current `stages/` modules implement pipeline steps, but the architectural direction is to move orchestration into an application layer with shared infrastructure and keep `stages/` as thin delegates (or remove it entirely). Track this in `/.agent/plans/refactor-plan.md`.
+
 ### Dependency Injection
 
 Dependency injection keeps I/O and external services swappable for tests:
@@ -138,6 +148,18 @@ class CachedHttpClient:
 class FakeHttpClient:
     def get_json(self, url: str, cache_key: str) -> dict[str, Any]:
         return self.responses.get(cache_key, {})
+```
+
+Stage entry points require a `PipelineConfig` instance; environment variables are read once at the CLI entry point and passed through. For programmatic use:
+
+```python
+from uk_sponsor_pipeline.config import PipelineConfig
+from uk_sponsor_pipeline.stages.stage2_companies_house import run_stage2
+from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
+
+config = PipelineConfig.from_env()
+run_stage2(stage1_path="data/interim/stage1.csv", out_dir="data/processed", config=config)
+run_stage3(stage2_path="data/processed/stage2_enriched_companies_house.csv", out_dir="data/processed", config=config)
 ```
 
 ### Running Tests
@@ -179,6 +201,8 @@ uv run typecheck
 # Full quality gate run (format → typecheck → lint → test → coverage)
 uv run check
 ```
+
+`uv run lint` is the single lint entry point. It currently runs ruff; import‑linter will be added here as part of the refactor plan.
 
 ## Scoring Model (Stage 3)
 

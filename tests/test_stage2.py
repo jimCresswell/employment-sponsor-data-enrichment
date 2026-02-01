@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from uk_sponsor_pipeline.config import PipelineConfig
-from uk_sponsor_pipeline.exceptions import AuthenticationError
+from uk_sponsor_pipeline.exceptions import AuthenticationError, CircuitBreakerOpen, RateLimitError
 from uk_sponsor_pipeline.infrastructure import CachedHttpClient, CircuitBreaker, RateLimiter
 from uk_sponsor_pipeline.stages import stage2_companies_house as s2
 from uk_sponsor_pipeline.stages.stage2_companies_house import _basic_auth, run_stage2
@@ -462,3 +462,65 @@ class TestStage2Resume:
         assert report["run_started_at_utc"]
         assert report["run_finished_at_utc"]
         assert report["run_duration_seconds"] >= 0
+
+
+class TestStage2FailFast:
+    """Ensure fatal search errors stop the run and can be resumed later."""
+
+    @pytest.mark.parametrize(
+        ("exc_type", "exc_args"),
+        [
+            (AuthenticationError, ("invalid key",)),
+            (RateLimitError, (60,)),
+            (CircuitBreakerOpen, (5, 5)),
+        ],
+    )
+    def test_search_errors_fail_fast(self, in_memory_fs, exc_type, exc_args) -> None:
+        stage1_path = Path("data/interim/stage1.csv")
+        in_memory_fs.write_csv(
+            pd.DataFrame(
+                [
+                    {
+                        "Organisation Name": "Failing Co",
+                        "org_name_normalized": "failing co",
+                        "has_multiple_towns": "False",
+                        "has_multiple_counties": "False",
+                        "Town/City": "London",
+                        "County": "Greater London",
+                        "Type & Rating": "A rating",
+                        "Route": "Skilled Worker",
+                        "raw_name_variants": "Failing Co",
+                    }
+                ]
+            ),
+            stage1_path,
+        )
+
+        class FailingHttp:
+            def get_json(self, url, cache_key=None):
+                raise exc_type(*exc_args)
+
+        config = PipelineConfig(
+            ch_api_key="test-key",
+            ch_sleep_seconds=0,
+            ch_max_rpm=600,
+            ch_min_match_score=0.0,
+            ch_search_limit=1,
+        )
+
+        with pytest.raises(exc_type):
+            run_stage2(
+                stage1_path=stage1_path,
+                out_dir=Path("data/processed"),
+                cache_dir=Path("data/cache"),
+                config=config,
+                http_client=FailingHttp(),
+                resume=False,
+                fs=in_memory_fs,
+            )
+
+
+def test_stage2_requires_config() -> None:
+    with pytest.raises(RuntimeError) as exc_info:
+        run_stage2()
+    assert "PipelineConfig" in str(exc_info.value)
