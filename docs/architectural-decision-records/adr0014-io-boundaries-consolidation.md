@@ -14,10 +14,12 @@ Incoming filesystem and network IO boundaries were spread across multiple module
 
 Consolidate incoming IO boundaries into two infrastructure files:
 
-- `infrastructure/filesystem.py` for all filesystem reads (including cache reads via `DiskCache`)
-- `infrastructure/http.py` for all network reads (Companies House and GOV.UK fetches)
+- `infrastructure/io/filesystem.py` for all filesystem reads (including cache reads via `DiskCache`)
+- `infrastructure/io/http.py` for all network reads (Companies House and GOV.UK fetches)
 
 Stages must use the `FileSystem` and `HttpSession` / `HttpClient` protocols rather than calling `requests` or filesystem APIs directly.
+
+Validation helpers live in `infrastructure/io/validation.py` and are used to convert untrusted payloads into strict types at the boundary.
 
 ## Consequences
 
