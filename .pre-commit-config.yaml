@@ -5,5 +5,5 @@ repos:
         name: quality gates (format → typecheck → lint → test → coverage)
         entry: scripts/quality-gates.sh
         language: system
-        stages: [commit, push]
+        stages: [pre-commit, pre-push]
         pass_filenames: false

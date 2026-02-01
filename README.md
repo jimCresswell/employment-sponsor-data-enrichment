@@ -4,17 +4,17 @@ A data pipeline that transforms the UK Home Office sponsor register into a short
 
 ## Pipeline Overview
 
-```
+```text
 GOV.UK Sponsor Register → Filter → Enrich → Score → Shortlist
        (CSV)             Stage1   Stage2  Stage3   (CSV)
 ```
 
-| Stage | Input | Output | What it does |
-|-------|-------|--------|--------------|
-| download | GOV.UK page | `data/raw/*.csv` | Scrapes page, downloads CSV, validates schema |
-| stage1 | Raw CSV | `data/interim/stage1_*.csv` | Filters Skilled Worker + A-rated, aggregates by org |
-| stage2 | Stage1 CSV | `data/processed/stage2_*.csv` | Enriches via Companies House API |
-| stage3 | Stage2 CSV | `data/processed/stage3_*.csv` | Scores for tech-likelihood, outputs shortlist |
+| Stage    | Input       | Output                        | What it does                                        |
+| -------- | ----------- | ----------------------------- | --------------------------------------------------- |
+| download | GOV.UK page | `data/raw/*.csv`              | Scrapes page, downloads CSV, validates schema       |
+| stage1   | Raw CSV     | `data/interim/stage1_*.csv`   | Filters Skilled Worker + A-rated, aggregates by org |
+| stage2   | Stage1 CSV  | `data/processed/stage2_*.csv` | Enriches via Companies House API                    |
+| stage3   | Stage2 CSV  | `data/processed/stage3_*.csv` | Scores for tech-likelihood, outputs shortlist       |
 
 ## Quick Start
 
@@ -100,7 +100,7 @@ uv run uk-sponsor run-all --region London --threshold 0.50
 
 ### Project Structure
 
-```
+```text
 src/uk_sponsor_pipeline/
 ├── cli.py              # Typer CLI entry point
 ├── config.py           # Pipeline configuration
@@ -176,7 +176,7 @@ uv run format-check
 # Type check
 uv run typecheck
 
-# Full quality gate run (format check → typecheck → lint → test → coverage)
+# Full quality gate run (format → typecheck → lint → test → coverage)
 uv run check
 ```
 
@@ -184,13 +184,13 @@ uv run check
 
 Companies are scored on multiple features:
 
-| Feature | Weight Range | Source |
-|---------|-------------|--------|
-| SIC tech codes | 0.0–0.50 | Companies House profile |
-| Active status | 0.0 or 0.10 | Companies House profile |
-| Company age | 0.0–0.15 | Date of creation |
-| Company type | 0.0–0.10 | Ltd, PLC, LLP, etc. |
-| Name keywords | -0.10 to 0.15 | "software", "digital" vs "care", "recruitment" |
+| Feature        | Weight Range  | Source                                         |
+| -------------- | ------------- | ---------------------------------------------- |
+| SIC tech codes | 0.0–0.50      | Companies House profile                        |
+| Active status  | 0.0 or 0.10   | Companies House profile                        |
+| Company age    | 0.0–0.15      | Date of creation                               |
+| Company type   | 0.0–0.10      | Ltd, PLC, LLP, etc.                            |
+| Name keywords  | -0.10 to 0.15 | "software", "digital" vs "care", "recruitment" |
 
 **Role-fit buckets:**
 
@@ -200,18 +200,18 @@ Companies are scored on multiple features:
 
 ## Output Files
 
-| File | Description |
-|------|-------------|
-| `reports/download_manifest.json` | Download metadata with SHA256 hash |
-| `reports/stage1_stats.json` | Filtering statistics |
-| `data/processed/stage2_enriched_companies_house.csv` | Matched companies with CH data |
-| `data/processed/stage2_unmatched.csv` | Orgs that couldn't be matched |
-| `data/processed/stage2_candidates_top3.csv` | Audit trail: top 3 match candidates per org |
-| `data/processed/stage2_checkpoint.csv` | Resume checkpoint of processed orgs |
-| `data/processed/stage2_resume_report.json` | Resume report for interrupted or partial runs |
-| `data/processed/stage3_scored.csv` | All companies with scores |
-| `data/processed/stage3_shortlist_tech.csv` | Filtered shortlist |
-| `data/processed/stage3_explain.csv` | Score breakdown for shortlist |
+| File                                                 | Description                                   |
+| ---------------------------------------------------- | --------------------------------------------- |
+| `reports/download_manifest.json`                     | Download metadata with SHA256 hash            |
+| `reports/stage1_stats.json`                          | Filtering statistics                          |
+| `data/processed/stage2_enriched_companies_house.csv` | Matched companies with CH data                |
+| `data/processed/stage2_unmatched.csv`                | Orgs that couldn't be matched                 |
+| `data/processed/stage2_candidates_top3.csv`          | Audit trail: top 3 match candidates per org   |
+| `data/processed/stage2_checkpoint.csv`               | Resume checkpoint of processed orgs           |
+| `data/processed/stage2_resume_report.json`           | Resume report for interrupted or partial runs |
+| `data/processed/stage3_scored.csv`                   | All companies with scores                     |
+| `data/processed/stage3_shortlist_tech.csv`           | Filtered shortlist                            |
+| `data/processed/stage3_explain.csv`                  | Score breakdown for shortlist                 |
 
 ## Contributing
 
@@ -225,6 +225,7 @@ uv run coverage
 ```
 
 Notes:
+
 - Tests block all real network access; use fakes in `tests/conftest.py`.
 - Keep behaviour and docs in sync with the CLI and pipeline outputs.
 - No compatibility layers; delete replaced code paths.
@@ -236,6 +237,10 @@ Install pre-commit hooks to run the full quality gates on commit and push:
 ```bash
 uv run pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
+
+Notes:
+- `uv run check` runs the mutating formatter (`ruff format`) first.
+- Git hooks run `format-check` (non-mutating) before the other gates.
 
 ## Troubleshooting
 

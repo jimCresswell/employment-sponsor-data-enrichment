@@ -39,6 +39,7 @@ These rules are mandatory for all work in this repository. For goals and outputs
 - Use snake_case for modules and functions.
 - Keep Ruff and Mypy clean; fix root causes instead of suppressing.
 - Avoid `Any` in core/domain code; use Protocols, dataclasses, and TypedDicts instead.
+- Use British spelling in all documentation, comments, and user-facing text.
 
 ## Quality Gates
 
