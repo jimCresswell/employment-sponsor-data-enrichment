@@ -6,27 +6,36 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
+from tests.fakes import FakeHttpClient, InMemoryFileSystem
 from uk_sponsor_pipeline.config import PipelineConfig
+from uk_sponsor_pipeline.domain.companies_house import (
+    CandidateMatch,
+    MatchScore,
+    NormalizeFn,
+    SimilarityFn,
+)
 from uk_sponsor_pipeline.exceptions import AuthenticationError, CircuitBreakerOpen, RateLimitError
 from uk_sponsor_pipeline.infrastructure import CachedHttpClient, CircuitBreaker, RateLimiter
+from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
 from uk_sponsor_pipeline.stages import stage2_companies_house as s2
-from uk_sponsor_pipeline.stages.stage2_companies_house import _basic_auth, run_stage2
+from uk_sponsor_pipeline.stages.stage2_companies_house import basic_auth, run_stage2
+from uk_sponsor_pipeline.types import SearchItem, Stage2ResumeReport
 
 
 class TestBasicAuth:
     """Tests for API key authentication setup."""
 
-    def test_auth_header_format(self):
+    def test_auth_header_format(self) -> None:
         """Verify auth uses HTTP Basic Auth with key + blank password."""
         api_key = "test-api-key-12345"
-        auth = _basic_auth(api_key)
+        auth = basic_auth(api_key)
         assert auth.username == api_key
         assert auth.password == ""
 
-    def test_auth_header_with_real_format_key(self):
+    def test_auth_header_with_real_format_key(self) -> None:
         """Test with a key that looks like a real CH API key (UUID format)."""
         api_key = "a06e8c82-0b3b-4b1a-9c1a-1a2b3c4d5e6f"
-        auth = _basic_auth(api_key)
+        auth = basic_auth(api_key)
         assert auth.username == api_key
         assert auth.password == ""
 
@@ -34,7 +43,7 @@ class TestBasicAuth:
 class TestCachedHttpClientAuth:
     """Tests for CachedHttpClient auth header passing."""
 
-    def test_session_headers_are_used(self):
+    def test_session_headers_are_used(self) -> None:
         """Verify that session.get is invoked when using CachedHttpClient."""
         import requests
 
@@ -47,7 +56,7 @@ class TestCachedHttpClientAuth:
 
         # Add auth to session
         api_key = "test-key-123"
-        mock_session.auth = _basic_auth(api_key)
+        mock_session.auth = basic_auth(api_key)
 
         # Create cache, rate limiter, and circuit breaker
         cache = MagicMock()
@@ -74,7 +83,7 @@ class TestCachedHttpClientAuth:
 class TestHttpClientWithErrors:
     """Tests for HTTP client error handling."""
 
-    def test_401_raises_auth_error_immediately(self):
+    def test_401_raises_auth_error_immediately(self) -> None:
         """Verify that 401 errors raise AuthenticationError immediately."""
         import requests
 
@@ -102,7 +111,7 @@ class TestHttpClientWithErrors:
         # Should only make ONE request
         assert mock_session.get.call_count == 1
 
-    def test_403_raises_auth_error_immediately(self):
+    def test_403_raises_auth_error_immediately(self) -> None:
         """Verify that 403 Forbidden (IP ban) raises AuthenticationError immediately."""
         import requests
 
@@ -136,7 +145,7 @@ class TestHttpClientWithErrors:
 class TestStage2AuthIntegration:
     """Integration tests for Stage 2 authentication."""
 
-    def test_api_key_is_passed_to_session(self, tmp_path):
+    def test_api_key_is_passed_to_session(self, tmp_path: Path) -> None:
         """Verify the API key from config is correctly added to session headers."""
         # Create minimal stage1 input
         stage1_csv = tmp_path / "stage1.csv"
@@ -184,7 +193,9 @@ class TestStage2AuthIntegration:
 class TestStage2CandidateOrdering:
     """Tests for candidate ranking across multiple query variants."""
 
-    def test_candidates_sorted_across_queries(self, tmp_path, monkeypatch):
+    def test_candidates_sorted_across_queries(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         stage1_csv = tmp_path / "stage1.csv"
         stage1_csv.write_text(
             "Organisation Name,org_name_normalized,has_multiple_towns,has_multiple_counties,"
@@ -202,13 +213,16 @@ class TestStage2CandidateOrdering:
 
         class DummyHttp:
             def __init__(self) -> None:
-                self.calls = []
+                self.calls: list[str] = []
 
-            def get_json(self, url, cache_key=None):
+            def get_json(self, url: str, cache_key: str | None = None) -> dict[str, object]:
                 self.calls.append(url)
                 return {"items": []}
 
-        monkeypatch.setattr(s2, "generate_query_variants", lambda org: ["q1", "q2"])
+        def fake_variants(org: str) -> list[str]:
+            return ["q1", "q2"]
+
+        monkeypatch.setattr(s2, "generate_query_variants", fake_variants)
 
         scores = [
             [
@@ -239,14 +253,14 @@ class TestStage2CandidateOrdering:
 
         def fake_score_candidates(
             *,
-            org_norm,
-            town_norm,
-            county_norm,
-            items,
-            query_used,
-            similarity_fn,
-            normalize_fn,
-        ):
+            org_norm: str,
+            town_norm: str,
+            county_norm: str,
+            items: list[SearchItem],
+            query_used: str,
+            similarity_fn: SimilarityFn,
+            normalize_fn: NormalizeFn,
+        ) -> list[CandidateMatch]:
             return scores.pop(0)
 
         monkeypatch.setattr(s2, "score_candidates", fake_score_candidates)
@@ -262,14 +276,19 @@ class TestStage2CandidateOrdering:
         )
 
         candidates_df = pd.read_csv(out_dir / "stage2_candidates_top3.csv", dtype=str).fillna("")
-        top_score = float(candidates_df.loc[0, "candidate_score"])
+        top_score = float(str(candidates_df.loc[0, "candidate_score"]))
         assert top_score == 0.7
 
 
 class TestStage2Resume:
     """Tests for batching, incremental output, and resume logic."""
 
-    def test_resume_skips_processed_orgs(self, in_memory_fs, fake_http_client, monkeypatch):
+    def test_resume_skips_processed_orgs(
+        self,
+        in_memory_fs: InMemoryFileSystem,
+        fake_http_client: FakeHttpClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         stage1_path = Path("data/interim/stage1.csv")
         out_dir = Path("data/processed")
         cache_dir = Path("data/cache/companies_house")
@@ -313,21 +332,24 @@ class TestStage2Resume:
 
         fake_http_client.responses = {"search/companies": {"items": []}}
 
-        monkeypatch.setattr(s2, "generate_query_variants", lambda org: [org])
+        def fake_variants(org: str) -> list[str]:
+            return [org]
+
+        monkeypatch.setattr(s2, "generate_query_variants", fake_variants)
 
         def fake_score_candidates(
             *,
-            org_norm,
-            town_norm,
-            county_norm,
-            items,
-            query_used,
-            similarity_fn,
-            normalize_fn,
-        ):
-            score = s2.MatchScore(0.5, 0.5, 0.0, 0.0, 0.0)
+            org_norm: str,
+            town_norm: str,
+            county_norm: str,
+            items: list[SearchItem],
+            query_used: str,
+            similarity_fn: SimilarityFn,
+            normalize_fn: NormalizeFn,
+        ) -> list[CandidateMatch]:
+            score = MatchScore(0.5, 0.5, 0.0, 0.0, 0.0)
             return [
-                s2.CandidateMatch(
+                CandidateMatch(
                     company_number="00000001",
                     title=f"{org_norm} Ltd",
                     status="active",
@@ -363,7 +385,7 @@ class TestStage2Resume:
         class FailingHttp:
             calls = 0
 
-            def get_json(self, url, cache_key=None):
+            def get_json(self, url: str, cache_key: str | None = None) -> dict[str, object]:
                 self.calls += 1
                 raise AssertionError("Should not call HTTP client when resuming")
 
@@ -381,7 +403,12 @@ class TestStage2Resume:
 
         assert failing_http.calls == 0
 
-    def test_batch_start_and_count_select_subset(self, in_memory_fs, fake_http_client, monkeypatch):
+    def test_batch_start_and_count_select_subset(
+        self,
+        in_memory_fs: InMemoryFileSystem,
+        fake_http_client: FakeHttpClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         stage1_path = Path("data/interim/stage1.csv")
         out_dir = Path("data/processed")
         cache_dir = Path("data/cache/companies_house")
@@ -435,21 +462,25 @@ class TestStage2Resume:
         )
 
         fake_http_client.responses = {"search/companies": {"items": []}}
-        monkeypatch.setattr(s2, "generate_query_variants", lambda org: [org])
+
+        def fake_variants(org: str) -> list[str]:
+            return [org]
+
+        monkeypatch.setattr(s2, "generate_query_variants", fake_variants)
 
         def fake_score_candidates(
             *,
-            org_norm,
-            town_norm,
-            county_norm,
-            items,
-            query_used,
-            similarity_fn,
-            normalize_fn,
-        ):
-            score = s2.MatchScore(0.5, 0.5, 0.0, 0.0, 0.0)
+            org_norm: str,
+            town_norm: str,
+            county_norm: str,
+            items: list[SearchItem],
+            query_used: str,
+            similarity_fn: SimilarityFn,
+            normalize_fn: NormalizeFn,
+        ) -> list[CandidateMatch]:
+            score = MatchScore(0.5, 0.5, 0.0, 0.0, 0.0)
             return [
-                s2.CandidateMatch(
+                CandidateMatch(
                     company_number="00000001",
                     title=f"{org_norm} Ltd",
                     status="active",
@@ -477,7 +508,10 @@ class TestStage2Resume:
 
         checkpoint_df = in_memory_fs.read_csv(out_dir / "stage2_checkpoint.csv")
         unmatched_df = in_memory_fs.read_csv(out_dir / "stage2_unmatched.csv")
-        report = in_memory_fs.read_json(out_dir / "stage2_resume_report.json")
+        report = validate_as(
+            Stage2ResumeReport,
+            in_memory_fs.read_json(out_dir / "stage2_resume_report.json"),
+        )
 
         assert checkpoint_df["Organisation Name"].tolist() == ["Beta Ltd"]
         assert unmatched_df["Organisation Name"].tolist() == ["Beta Ltd"]
@@ -502,7 +536,12 @@ class TestStage2FailFast:
             (CircuitBreakerOpen, (5, 5)),
         ],
     )
-    def test_search_errors_fail_fast(self, in_memory_fs, exc_type, exc_args) -> None:
+    def test_search_errors_fail_fast(
+        self,
+        in_memory_fs: InMemoryFileSystem,
+        exc_type: type[Exception],
+        exc_args: tuple[object, ...],
+    ) -> None:
         stage1_path = Path("data/interim/stage1.csv")
         in_memory_fs.write_csv(
             pd.DataFrame(
@@ -524,7 +563,7 @@ class TestStage2FailFast:
         )
 
         class FailingHttp:
-            def get_json(self, url, cache_key=None):
+            def get_json(self, url: str, cache_key: str | None = None) -> dict[str, object]:
                 raise exc_type(*exc_args)
 
         config = PipelineConfig(

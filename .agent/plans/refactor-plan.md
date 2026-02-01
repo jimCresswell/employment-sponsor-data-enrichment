@@ -4,7 +4,7 @@
 
 - Read `.agent/directives/AGENT.md`, then `.agent/directives/rules.md`.
 - Ensure the current baseline is green before starting Phase 0:
-  - `uv sync --extra dev`
+  - `uv sync --group dev`
   - `uv run format`
   - `uv run typecheck`
   - `uv run lint`

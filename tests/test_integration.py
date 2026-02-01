@@ -4,13 +4,16 @@ from pathlib import Path
 
 import pandas as pd
 
+from tests.fakes import FakeHttpClient, InMemoryFileSystem
 from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.stages.stage1 import run_stage1
 from uk_sponsor_pipeline.stages.stage2_companies_house import run_stage2
 from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
 
 
-def test_pipeline_end_to_end_in_memory(in_memory_fs, fake_http_client):
+def test_pipeline_end_to_end_in_memory(
+    in_memory_fs: InMemoryFileSystem, fake_http_client: FakeHttpClient
+) -> None:
     raw_dir = Path("raw")
     raw_path = raw_dir / "register.csv"
     raw_df = pd.DataFrame(

@@ -5,10 +5,13 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from tests.fakes import FakeHttpClient, InMemoryFileSystem
 from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.exceptions import AuthenticationError
+from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
 from uk_sponsor_pipeline.schemas import STAGE2_CANDIDATES_COLUMNS, STAGE2_ENRICHED_COLUMNS
 from uk_sponsor_pipeline.stages.stage2_companies_house import run_stage2
+from uk_sponsor_pipeline.types import Stage2ResumeReport
 
 
 def _stage1_input_df() -> pd.DataFrame:
@@ -30,10 +33,10 @@ def _stage1_input_df() -> pd.DataFrame:
 
 
 def test_stage2_outputs_are_deterministic(
-    in_memory_fs,
-    fake_http_client,
-    sample_ch_search_response,
-    sample_ch_profile_response,
+    in_memory_fs: InMemoryFileSystem,
+    fake_http_client: FakeHttpClient,
+    sample_ch_search_response: dict[str, object],
+    sample_ch_profile_response: dict[str, object],
 ) -> None:
     stage1_path = Path("data/interim/stage1.csv")
     out_dir = Path("data/processed")
@@ -67,7 +70,10 @@ def test_stage2_outputs_are_deterministic(
 
     enriched_df = in_memory_fs.read_csv(out_dir / "stage2_enriched_companies_house.csv")
     candidates_df = in_memory_fs.read_csv(out_dir / "stage2_candidates_top3.csv")
-    report = in_memory_fs.read_json(out_dir / "stage2_resume_report.json")
+    report = validate_as(
+        Stage2ResumeReport,
+        in_memory_fs.read_json(out_dir / "stage2_resume_report.json"),
+    )
 
     assert list(enriched_df.columns) == list(STAGE2_ENRICHED_COLUMNS)
     assert enriched_df.loc[0, "match_status"] == "matched"
@@ -88,7 +94,7 @@ def test_stage2_outputs_are_deterministic(
     assert report["run_finished_at_utc"]
 
 
-def test_stage2_search_errors_write_resume_report(in_memory_fs) -> None:
+def test_stage2_search_errors_write_resume_report(in_memory_fs: InMemoryFileSystem) -> None:
     stage1_path = Path("data/interim/stage1.csv")
     out_dir = Path("data/processed")
     cache_dir = Path("data/cache")
@@ -96,7 +102,7 @@ def test_stage2_search_errors_write_resume_report(in_memory_fs) -> None:
     in_memory_fs.write_csv(_stage1_input_df(), stage1_path)
 
     class FailingHttp:
-        def get_json(self, url, cache_key=None):
+        def get_json(self, url: str, cache_key: str | None = None) -> dict[str, object]:
             raise AuthenticationError("invalid key")
 
     config = PipelineConfig(
@@ -118,7 +124,10 @@ def test_stage2_search_errors_write_resume_report(in_memory_fs) -> None:
             fs=in_memory_fs,
         )
 
-    report = in_memory_fs.read_json(out_dir / "stage2_resume_report.json")
+    report = validate_as(
+        Stage2ResumeReport,
+        in_memory_fs.read_json(out_dir / "stage2_resume_report.json"),
+    )
     assert report["status"] == "error"
     assert "invalid key" in report["error_message"]
     assert report["processed_total"] == 0

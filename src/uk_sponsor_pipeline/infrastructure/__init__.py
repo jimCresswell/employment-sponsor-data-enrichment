@@ -1,23 +1,24 @@
 """Concrete infrastructure implementations and shared helpers."""
 
-from .cache import DiskCache
-from .filesystem import LocalFileSystem
-from .http import (
+from .io.filesystem import DiskCache, LocalFileSystem
+from .io.http import (
     CachedHttpClient,
-    _is_auth_error,
-    _is_rate_limit_error,
-    _parse_retry_after,
+    RequestsSession,
+    is_auth_error,
+    is_rate_limit_error,
+    parse_retry_after,
 )
 from .resilience import CircuitBreaker, RateLimiter, RetryPolicy
 
 __all__ = [
     "CachedHttpClient",
     "CircuitBreaker",
-    "DiskCache",
     "LocalFileSystem",
+    "DiskCache",
+    "RequestsSession",
     "RateLimiter",
     "RetryPolicy",
-    "_is_auth_error",
-    "_is_rate_limit_error",
-    "_parse_retry_after",
+    "is_auth_error",
+    "is_rate_limit_error",
+    "parse_retry_after",
 ]

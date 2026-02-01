@@ -17,10 +17,10 @@ Always ask: **could it be simpler without compromising quality?**
 
 ## Repo Context
 
-- Language: Python 3.11+
-- Tooling: `uv`, `pytest`, `ruff`, `mypy`
+- Language: Python 3.13+
+- Tooling: `uv`, `pytest`, `ruff`, `pyright`
 - Commands:
-  - `uv sync --extra dev`
+  - `uv sync --group dev`
   - `uv run lint`
   - `uv run format`
   - `uv run format-check`
@@ -41,3 +41,10 @@ Always ask: **could it be simpler without compromising quality?**
 - Read environment variables once at the entry point (CLI), pass config through.
 - Remove dead code and unused files.
 - Keep documentation current with behaviour and CLI flags.
+- Incoming IO boundaries accept `object`/`Mapping[str, object]` only, then validate with Pydantic and emit strict dataclasses/`TypedDict` shapes via `infrastructure/io/validation.py`.
+
+## Size and Complexity Guidance
+
+- Functions should be ≤ 50 lines and classes ≤ 200 lines; split earlier if behaviour is mixed.
+- Modules should be ≤ 400 lines; split by responsibility when exceeded.
+- Complexity is enforced by Ruff: max complexity 45, max branches 45, max returns 8, max statements 220, max arguments 20.

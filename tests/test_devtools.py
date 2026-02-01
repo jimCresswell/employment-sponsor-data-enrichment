@@ -7,10 +7,10 @@ import pytest
 from uk_sponsor_pipeline import devtools
 
 
-def _capture_run(monkeypatch):
-    calls = []
+def _capture_run(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    calls: list[list[str]] = []
 
-    def fake_run(args, check=False):
+    def fake_run(args: list[str], check: bool = False) -> SimpleNamespace:
         calls.append(args)
         return SimpleNamespace(returncode=0)
 
@@ -18,11 +18,11 @@ def _capture_run(monkeypatch):
     return calls
 
 
-def _assert_exit_ok(exc_info):
+def _assert_exit_ok(exc_info: pytest.ExceptionInfo[SystemExit]) -> None:
     assert exc_info.value.code == 0
 
 
-def test_lint_calls_ruff(monkeypatch):
+def test_lint_calls_ruff(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _capture_run(monkeypatch)
     monkeypatch.setattr(devtools.sys, "argv", ["devtools", "--select", "E"])
     with pytest.raises(SystemExit) as exc_info:
@@ -31,7 +31,7 @@ def test_lint_calls_ruff(monkeypatch):
     assert calls[0][:4] == ["ruff", "check", "src", "tests"]
 
 
-def test_format_calls_ruff(monkeypatch):
+def test_format_calls_ruff(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _capture_run(monkeypatch)
     monkeypatch.setattr(devtools.sys, "argv", ["devtools", "--line-length", "100"])
     with pytest.raises(SystemExit) as exc_info:
@@ -40,7 +40,7 @@ def test_format_calls_ruff(monkeypatch):
     assert calls[0][:3] == ["ruff", "format", "src"]
 
 
-def test_format_check_calls_ruff(monkeypatch):
+def test_format_check_calls_ruff(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _capture_run(monkeypatch)
     monkeypatch.setattr(devtools.sys, "argv", ["devtools"])
     with pytest.raises(SystemExit) as exc_info:
@@ -49,16 +49,16 @@ def test_format_check_calls_ruff(monkeypatch):
     assert calls[0][:4] == ["ruff", "format", "--check", "src"]
 
 
-def test_typecheck_calls_mypy(monkeypatch):
+def test_typecheck_calls_pyright(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _capture_run(monkeypatch)
     monkeypatch.setattr(devtools.sys, "argv", ["devtools"])
     with pytest.raises(SystemExit) as exc_info:
         devtools.typecheck()
     _assert_exit_ok(exc_info)
-    assert calls[0][:2] == ["mypy", "src"]
+    assert calls[0][0] == "pyright"
 
 
-def test_test_calls_pytest(monkeypatch):
+def test_test_calls_pytest(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _capture_run(monkeypatch)
     monkeypatch.setattr(devtools.sys, "argv", ["devtools", "-q"])
     with pytest.raises(SystemExit) as exc_info:
@@ -67,7 +67,7 @@ def test_test_calls_pytest(monkeypatch):
     assert calls[0][0] == "pytest"
 
 
-def test_coverage_calls_pytest(monkeypatch):
+def test_coverage_calls_pytest(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _capture_run(monkeypatch)
     monkeypatch.setattr(devtools.sys, "argv", ["devtools"])
     with pytest.raises(SystemExit) as exc_info:
@@ -77,16 +77,20 @@ def test_coverage_calls_pytest(monkeypatch):
     assert "--cov-fail-under=85" in calls[0]
 
 
-def test_check_runs_quality_gates_in_order(monkeypatch):
+def test_check_runs_quality_gates_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _capture_run(monkeypatch)
-    emitted = []
-    monkeypatch.setattr(devtools, "_emit", lambda msg: emitted.append(msg))
+    emitted: list[str] = []
+
+    def emit(msg: str) -> None:
+        emitted.append(msg)
+
+    monkeypatch.setattr(devtools, "_emit", emit)
     with pytest.raises(SystemExit) as exc_info:
         devtools.check()
     _assert_exit_ok(exc_info)
     assert calls == [
         ["ruff", "format", "src", "tests"],
-        ["mypy", "src"],
+        ["pyright"],
         ["ruff", "check", "src", "tests"],
         ["lint-imports"],
         ["pytest"],
@@ -102,18 +106,21 @@ def test_check_runs_quality_gates_in_order(monkeypatch):
     assert "All checks passed" in emitted[-1]
 
 
-def test_check_stops_on_first_error(monkeypatch):
-    calls = []
+def test_check_stops_on_first_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
     returncodes = [0, 3]
-    emitted = []
+    emitted: list[str] = []
 
-    def fake_run(args, check=False):
+    def fake_run(args: list[str], check: bool = False) -> SimpleNamespace:
         calls.append(args)
         code = returncodes.pop(0) if returncodes else 0
         return SimpleNamespace(returncode=code)
 
+    def emit(msg: str) -> None:
+        emitted.append(msg)
+
     monkeypatch.setattr(devtools.subprocess, "run", fake_run)
-    monkeypatch.setattr(devtools, "_emit", lambda msg: emitted.append(msg))
+    monkeypatch.setattr(devtools, "_emit", emit)
 
     with pytest.raises(SystemExit) as exc_info:
         devtools.check()
@@ -121,6 +128,6 @@ def test_check_stops_on_first_error(monkeypatch):
     assert exc_info.value.code == 3
     assert calls == [
         ["ruff", "format", "src", "tests"],
-        ["mypy", "src"],
+        ["pyright"],
     ]
     assert any("✗ typecheck failed" in msg for msg in emitted)

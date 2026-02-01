@@ -14,12 +14,12 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import cast
 
 import pandas as pd
 
 from ..config import PipelineConfig
 from ..infrastructure import LocalFileSystem
+from ..infrastructure.io.validation import validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem
 from ..schemas import (
@@ -148,15 +148,15 @@ class ScoringFeatures:
             return "unlikely"
 
 
-def _parse_sic_list(s: str) -> list[str]:
+def parse_sic_list(s: str) -> list[str]:
     """Parse semicolon/comma-separated SIC codes."""
-    if not isinstance(s, str) or not s.strip():
+    if not s.strip():
         return []
     parts = [p.strip() for p in s.replace(",", ";").split(";")]
     return [p for p in parts if p]
 
 
-def _score_from_sic(sics: list[str]) -> float:
+def score_from_sic(sics: list[str]) -> float:
     """Calculate SIC-based tech score."""
     if not sics:
         return 0.10  # Unknown: small baseline
@@ -176,7 +176,7 @@ def _score_from_sic(sics: list[str]) -> float:
     return max(0.0, min(0.5, score))
 
 
-def _score_company_age(date_of_creation: str) -> float:
+def score_company_age(date_of_creation: str) -> float:
     """Score based on company age (established companies score higher)."""
     if not date_of_creation:
         return 0.05  # Unknown: small baseline
@@ -199,13 +199,13 @@ def _score_company_age(date_of_creation: str) -> float:
         return 0.05
 
 
-def _score_company_type(company_type: str) -> float:
+def score_company_type(company_type: str) -> float:
     """Score based on company type."""
     ct = (company_type or "").lower().strip()
     return COMPANY_TYPE_WEIGHTS.get(ct, 0.03)
 
 
-def _score_name_keywords(name: str) -> float:
+def score_name_keywords(name: str) -> float:
     """Score based on keywords in company name."""
     if not name:
         return 0.0
@@ -230,18 +230,18 @@ def _score_name_keywords(name: str) -> float:
 
 def calculate_features(row: Stage2EnrichedRow) -> ScoringFeatures:
     """Calculate all scoring features for a company row."""
-    sics = _parse_sic_list(row["ch_sic_codes"])
+    sics = parse_sic_list(row["ch_sic_codes"])
     status = row["ch_company_status"].lower()
     date_of_creation = row["ch_date_of_creation"]
     company_type = row["ch_company_type"]
     company_name = row["ch_company_name"] or row["Organisation Name"]
 
     return ScoringFeatures(
-        sic_tech_score=_score_from_sic(sics),
+        sic_tech_score=score_from_sic(sics),
         is_active_score=0.10 if status == "active" else 0.0,
-        company_age_score=_score_company_age(date_of_creation),
-        company_type_score=_score_company_type(company_type),
-        name_keyword_score=_score_name_keywords(company_name),
+        company_age_score=score_company_age(date_of_creation),
+        company_type_score=score_company_type(company_type),
+        name_keyword_score=score_name_keywords(company_name),
     )
 
 
@@ -271,6 +271,14 @@ def _matches_geographic_filter(
             return True
 
     return not regions and not postcodes  # Only pass if no filters specified
+
+
+def _matches_geographic_filter_row(
+    row: pd.Series[str], regions: tuple[str, ...], postcodes: tuple[str, ...]
+) -> bool:
+    return _matches_geographic_filter(
+        validate_as(Stage2EnrichedRow, row.to_dict()), regions, postcodes
+    )
 
 
 def run_stage3(
@@ -315,7 +323,7 @@ def run_stage3(
     # Calculate features for each row
     features_list: list[ScoringFeatures] = []
     for _, row in df.iterrows():
-        features_list.append(calculate_features(cast(Stage2EnrichedRow, row.to_dict())))
+        features_list.append(calculate_features(validate_as(Stage2EnrichedRow, row.to_dict())))
 
     # Add feature columns to DataFrame
     df["sic_tech_score"] = [f.sic_tech_score for f in features_list]
@@ -345,12 +353,9 @@ def run_stage3(
     # Apply geographic filter if specified
     if config.geo_filter_regions or config.geo_filter_postcodes:
         geo_mask = shortlist.apply(
-            lambda row: _matches_geographic_filter(
-                row.to_dict(),
-                config.geo_filter_regions,
-                config.geo_filter_postcodes,
-            ),
+            _matches_geographic_filter_row,
             axis=1,
+            args=(config.geo_filter_regions, config.geo_filter_postcodes),
         )
         shortlist = shortlist[geo_mask]
         logger.info("Geographic filter: %s companies match", int(geo_mask.sum()))

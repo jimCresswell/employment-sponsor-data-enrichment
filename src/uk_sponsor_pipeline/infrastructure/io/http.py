@@ -4,8 +4,8 @@ Usage example:
     import requests
     from pathlib import Path
 
-    from uk_sponsor_pipeline.infrastructure.cache import DiskCache
-    from uk_sponsor_pipeline.infrastructure.http import CachedHttpClient
+    from uk_sponsor_pipeline.infrastructure.io.filesystem import DiskCache
+    from uk_sponsor_pipeline.infrastructure.io.http import CachedHttpClient
     from uk_sponsor_pipeline.infrastructure.resilience import CircuitBreaker, RateLimiter
 
     session = requests.Session()
@@ -24,18 +24,19 @@ import time
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import Any, cast
+from typing import override
 
 import requests
 
-from ..exceptions import AuthenticationError, RateLimitError
-from ..protocols import Cache, CircuitBreaker, RateLimiter, RetryPolicy
-from .resilience import CircuitBreaker as CircuitBreakerImpl
-from .resilience import RateLimiter as RateLimiterImpl
-from .resilience import RetryPolicy as RetryPolicyImpl
+from ...exceptions import AuthenticationError, RateLimitError
+from ...protocols import Cache, CircuitBreaker, HttpSession, RateLimiter, RetryPolicy
+from ..resilience import CircuitBreaker as CircuitBreakerImpl
+from ..resilience import RateLimiter as RateLimiterImpl
+from ..resilience import RetryPolicy as RetryPolicyImpl
+from .validation import IncomingDataError, validate_as, validate_json_as
 
 
-def _is_auth_error(error: Exception) -> bool:
+def is_auth_error(error: Exception) -> bool:
     """Check if an exception indicates an authentication error."""
     if isinstance(error, requests.HTTPError):
         if error.response is not None and error.response.status_code == 401:
@@ -44,7 +45,7 @@ def _is_auth_error(error: Exception) -> bool:
     return "401" in error_str or "unauthorized" in error_str
 
 
-def _is_rate_limit_error(error: Exception) -> bool:
+def is_rate_limit_error(error: Exception) -> bool:
     """Check if an exception indicates a rate limit error."""
     if isinstance(error, requests.HTTPError):
         if error.response is not None and error.response.status_code == 429:
@@ -53,7 +54,7 @@ def _is_rate_limit_error(error: Exception) -> bool:
     return "429" in error_str or "rate limit" in error_str or "too many requests" in error_str
 
 
-def _parse_retry_after(headers: Mapping[str, str] | None) -> int | None:
+def parse_retry_after(headers: Mapping[str, str] | None) -> int | None:
     """Parse Retry-After header into seconds, if available."""
     if not headers:
         return None
@@ -113,7 +114,7 @@ class CachedHttpClient:
         self.retry_policy = retry_policy or RetryPolicyImpl()
         self.timeout_seconds = timeout_seconds
 
-    def get_json(self, url: str, cache_key: str | None = None) -> dict[str, Any]:
+    def get_json(self, url: str, cache_key: str | None = None) -> dict[str, object]:
         """Fetch JSON from URL with caching and rate limiting.
 
         Raises:
@@ -168,7 +169,7 @@ class CachedHttpClient:
                 )
 
             if r.status_code in self.retry_policy.retry_statuses:
-                retry_after = _parse_retry_after(getattr(r, "headers", None))
+                retry_after = parse_retry_after(getattr(r, "headers", None))
                 if attempt < self.retry_policy.max_retries:
                     delay = self.retry_policy.compute_backoff(attempt, retry_after)
                     time.sleep(delay)
@@ -184,17 +185,24 @@ class CachedHttpClient:
             try:
                 r.raise_for_status()
             except requests.HTTPError as e:
-                if _is_auth_error(e):
+                if is_auth_error(e):
                     self.circuit_breaker.record_failure()
                     raise AuthenticationError(f"HTTP error indicates auth failure: {e}") from e
+                if is_rate_limit_error(e):
+                    self.circuit_breaker.record_failure()
+                    raise RateLimitError(60) from e
                 self.circuit_breaker.record_failure()
                 raise
 
             try:
-                data = cast(dict[str, Any], r.json())
-            except Exception:
-                self.circuit_breaker.record_failure()
-                raise
+                data = validate_json_as(dict[str, object], r.text)
+            except IncomingDataError:
+                try:
+                    payload: object = r.json()
+                    data = validate_as(dict[str, object], payload)
+                except Exception as exc:
+                    self.circuit_breaker.record_failure()
+                    raise RuntimeError("Companies House response must be a JSON object.") from exc
 
             # Record success
             self.circuit_breaker.record_success()
@@ -204,3 +212,22 @@ class CachedHttpClient:
                 self.cache.set(cache_key, data)
 
             return data
+
+
+class RequestsSession(HttpSession):
+    """Requests-backed session for non-JSON HTTP fetching."""
+
+    def __init__(self, *, session: requests.Session | None = None) -> None:
+        self._session = session or requests.Session()
+
+    @override
+    def get_text(self, url: str, *, timeout_seconds: float) -> str:
+        response = self._session.get(url, timeout=timeout_seconds)
+        response.raise_for_status()
+        return response.text
+
+    @override
+    def get_bytes(self, url: str, *, timeout_seconds: float) -> bytes:
+        response = self._session.get(url, timeout=timeout_seconds, stream=True)
+        response.raise_for_status()
+        return response.content

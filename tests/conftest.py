@@ -6,7 +6,6 @@ All tests are network-isolated - socket connections are blocked by default.
 from __future__ import annotations
 
 import socket
-from typing import Any
 
 import pandas as pd
 import pytest
@@ -20,7 +19,7 @@ from tests.fakes import FakeHttpClient, InMemoryCache, InMemoryFileSystem
 _original_socket_connect = socket.socket.connect
 
 
-def _blocked_socket_connect(self, *args, **kwargs):
+def _blocked_socket_connect(self: socket.socket, *args: object, **kwargs: object) -> None:
     """Raise an error if any test tries to make a real network connection."""
     raise RuntimeError(
         "Tests must not make network connections! "
@@ -30,7 +29,7 @@ def _blocked_socket_connect(self, *args, **kwargs):
 
 
 @pytest.fixture(autouse=True)
-def block_network_access(monkeypatch):
+def block_network_access(monkeypatch: pytest.MonkeyPatch):
     """Block all network access in tests.
 
     This fixture runs automatically for all tests and prevents any real
@@ -94,7 +93,7 @@ def sample_raw_csv() -> pd.DataFrame:
 
 
 @pytest.fixture
-def sample_ch_search_response() -> dict[str, Any]:
+def sample_ch_search_response() -> dict[str, object]:
     """Sample Companies House search response."""
     return {
         "items": [
@@ -123,7 +122,7 @@ def sample_ch_search_response() -> dict[str, Any]:
 
 
 @pytest.fixture
-def sample_ch_profile_response() -> dict[str, Any]:
+def sample_ch_profile_response() -> dict[str, object]:
     """Sample Companies House company profile response."""
     return {
         "company_number": "12345678",

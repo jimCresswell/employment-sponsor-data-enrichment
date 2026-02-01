@@ -37,6 +37,10 @@ STAGE2_ENRICHED_COLUMNS = (
     "match_score",
     "match_confidence",  # high | medium | low
     "match_query_used",  # which query variant matched
+    "score_name_similarity",
+    "score_locality_bonus",
+    "score_region_bonus",
+    "score_status_bonus",
     "ch_company_number",
     "ch_company_name",
     "ch_company_status",

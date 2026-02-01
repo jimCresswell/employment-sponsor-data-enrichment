@@ -13,9 +13,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-import pandas as pd
-
 from ..infrastructure import LocalFileSystem
+from ..infrastructure.io.validation import IncomingDataError, validate_as
 from ..normalization import normalize_org_name
 from ..observability import get_logger
 from ..protocols import FileSystem
@@ -66,9 +65,45 @@ def _arr_to_str(a: Iterable[object] | str) -> str:
     return out[0] if len(out) == 1 else " | ".join(out)
 
 
-def _unique_list(values: pd.Series) -> list[str]:
+def _unique_list(values: Iterable[object]) -> list[str]:
     """Return unique values as a list of strings."""
-    return [str(v) for v in values.unique()]
+    seen: set[str] = set()
+    out: list[str] = []
+    for v in values:
+        text = v if isinstance(v, str) else str(v)
+        if text and text not in seen:
+            seen.add(text)
+            out.append(text)
+    return out
+
+
+def _to_str(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
+def _join_variants(values: object) -> str:
+    try:
+        values_list = validate_as(list[object], values)
+    except IncomingDataError:
+        return ""
+    cleaned: list[str] = []
+    for value in values_list:
+        text = _to_str(value)
+        if text:
+            cleaned.append(text)
+    return " | ".join(sorted(set(cleaned)))
+
+
+def _primary_name(values: object) -> str:
+    try:
+        values_list = validate_as(list[object], values)
+    except IncomingDataError:
+        return ""
+    if not values_list:
+        return ""
+    return _to_str(values_list[0])
 
 
 def run_stage1(
@@ -154,10 +189,8 @@ def run_stage1(
     )
 
     # Process aggregated columns
-    agg["raw_name_variants"] = agg["Organisation Name"].apply(lambda x: " | ".join(sorted(set(x))))
-    agg["Organisation Name"] = agg["Organisation Name"].apply(
-        lambda x: x[0] if x else ""
-    )  # Primary name
+    agg["raw_name_variants"] = agg["Organisation Name"].apply(_join_variants)
+    agg["Organisation Name"] = agg["Organisation Name"].apply(_primary_name)  # Primary name
 
     for col in ["Town/City", "County", "Type & Rating", "Route"]:
         agg[col] = agg[col].apply(_arr_to_str)

@@ -1,13 +1,15 @@
 """Tests for Stage 1 pipeline behavior."""
 
 import json
+from pathlib import Path
 
 import pandas as pd
 
+from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
 from uk_sponsor_pipeline.stages.stage1 import run_stage1
 
 
-def test_stage1_filters_and_aggregates(sample_raw_csv, tmp_path):
+def test_stage1_filters_and_aggregates(sample_raw_csv: pd.DataFrame, tmp_path: Path) -> None:
     raw_dir = tmp_path / "raw"
     raw_dir.mkdir()
     in_path = raw_dir / "input.csv"
@@ -26,7 +28,13 @@ def test_stage1_filters_and_aggregates(sample_raw_csv, tmp_path):
     acme = df[df["org_name_normalized"] == "acme software"].iloc[0]
     assert "ACME SOFTWARE LIMITED" in acme["raw_name_variants"]
 
-    stats = json.loads((reports_dir / "stage1_stats.json").read_text())
+    stats = validate_as(
+        dict[str, object],
+        json.loads((reports_dir / "stage1_stats.json").read_text()),
+    )
+    assert isinstance(stats.get("total_raw_rows"), int)
+    assert isinstance(stats.get("filtered_rows"), int)
+    assert isinstance(stats.get("unique_orgs_normalized"), int)
     assert stats["total_raw_rows"] == 5
     assert stats["filtered_rows"] == 5
     assert stats["unique_orgs_normalized"] == 4

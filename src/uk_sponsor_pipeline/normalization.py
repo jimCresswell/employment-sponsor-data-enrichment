@@ -119,7 +119,7 @@ def extract_bracketed_names(name: str) -> list[str]:
     Returns:
         List of extracted names (may be empty)
     """
-    names = []
+    names: list[str] = []
 
     # Find all bracketed content
     brackets = re.findall(r"\(([^)]+)\)", name)

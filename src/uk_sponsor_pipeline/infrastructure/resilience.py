@@ -12,6 +12,7 @@ from __future__ import annotations
 import random
 import time
 from dataclasses import dataclass, field
+from typing import override
 
 import requests
 
@@ -34,6 +35,7 @@ class RateLimiter(RateLimiterProtocol):
     minute_start: float = field(default_factory=time.monotonic, init=False)
     last_request_time: float = field(default=0.0, init=False)
 
+    @override
     def wait_if_needed(self) -> None:
         """Block if we've exceeded the rate limit or need inter-request delay."""
         now = time.monotonic()
@@ -83,6 +85,7 @@ class CircuitBreaker(CircuitBreakerProtocol):
     def is_open(self) -> bool:
         return self.state == "open"
 
+    @override
     def record_success(self) -> None:
         """Record a successful request - resets failure count."""
         self.consecutive_failures = 0
@@ -91,6 +94,7 @@ class CircuitBreaker(CircuitBreakerProtocol):
         self.open_until = None
         self.half_open_calls = 0
 
+    @override
     def record_failure(self) -> None:
         """Record a failed request - may open circuit."""
         now = time.monotonic()
@@ -104,6 +108,7 @@ class CircuitBreaker(CircuitBreakerProtocol):
         if self.consecutive_failures >= self.threshold:
             self._open(now)
 
+    @override
     def check(self) -> None:
         """Check if circuit is open - raises if so."""
         if self.state == "open":
@@ -146,6 +151,7 @@ class RetryPolicy(RetryPolicyProtocol):
     retry_statuses: tuple[int, ...] = (429, 500, 502, 503, 504)
     retry_exceptions: tuple[type[Exception], ...] = (requests.Timeout, requests.ConnectionError)
 
+    @override
     def compute_backoff(self, attempt: int, retry_after: int | None = None) -> float:
         """Compute backoff delay with optional Retry-After override."""
         base = min(self.max_backoff_seconds, self.backoff_factor * (2**attempt))

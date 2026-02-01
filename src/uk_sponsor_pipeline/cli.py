@@ -81,7 +81,8 @@ def stage1(
     result: Stage1Result = run_stage1(raw_dir=raw_dir, out_path=out_path)
     rprint(f"[green]✓ Stage 1 complete:[/green] {result.output_path}")
     rprint(
-        f"  {result.total_raw_rows:,} raw → {result.filtered_rows:,} filtered → {result.unique_orgs:,} unique orgs"
+        f"  {result.total_raw_rows:,} raw → {result.filtered_rows:,} filtered → "
+        f"{result.unique_orgs:,} unique orgs"
     )
 
 
@@ -191,7 +192,10 @@ def stage3(
         typer.Option(
             "--postcode-prefix",
             "-p",
-            help="Filter by postcode prefix (repeatable, e.g. --postcode-prefix EC --postcode-prefix SW)",
+            help=(
+                "Filter by postcode prefix (repeatable, e.g. --postcode-prefix EC "
+                "--postcode-prefix SW)"
+            ),
         ),
     ] = None,
 ) -> None:

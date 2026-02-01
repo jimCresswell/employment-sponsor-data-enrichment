@@ -16,12 +16,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
-import requests
 from bs4 import BeautifulSoup
 from rich import print as rprint
 
-from ..infrastructure import LocalFileSystem
-from ..protocols import FileSystem
+from ..infrastructure import LocalFileSystem, RequestsSession
+from ..infrastructure.io.validation import validate_as
+from ..protocols import FileSystem, HttpSession
 from ..schemas import RAW_REQUIRED_COLUMNS
 
 GOVUK_PAGE = "https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers"
@@ -62,7 +62,7 @@ def _find_best_csv_link(soup: BeautifulSoup) -> str | None:
     """Find the best CSV link from the page, preferring specific patterns."""
     csv_links: list[tuple[int, str, str]] = []  # (priority, link_text, url)
 
-    for a in soup.select("a[href]"):
+    for a in soup.find_all("a", href=True):
         href = a.get("href", "")
         if not isinstance(href, str):
             continue
@@ -117,7 +117,7 @@ def download_latest(
     url_override: str | None = None,
     data_dir: str | Path = "data/raw",
     reports_dir: str | Path = "reports",
-    session: requests.Session | None = None,
+    session: HttpSession | None = None,
     fs: FileSystem | None = None,
 ) -> DownloadResult:
     """Download the latest sponsor register CSV from GOV.UK.
@@ -126,7 +126,7 @@ def download_latest(
         url_override: Direct URL to CSV (bypasses page scraping).
         data_dir: Directory to save downloaded CSV.
         reports_dir: Directory to save manifest.
-        session: Optional requests session for testing.
+        session: Optional HTTP session for testing.
         fs: Optional filesystem for testing.
 
     Returns:
@@ -141,7 +141,7 @@ def download_latest(
     fs.mkdir(data_dir, parents=True)
     fs.mkdir(reports_dir, parents=True)
 
-    session = session or requests.Session()
+    session = session or RequestsSession()
 
     # Determine asset URL
     asset_url: str | None = url_override
@@ -149,7 +149,7 @@ def download_latest(
         rprint(f"[cyan]Using override URL:[/cyan] {asset_url}")
     else:
         rprint(f"[cyan]Fetching GOV.UK page:[/cyan] {GOVUK_PAGE}")
-        html = session.get(GOVUK_PAGE, timeout=30).text
+        html = validate_as(str, session.get_text(GOVUK_PAGE, timeout_seconds=30))
         soup = BeautifulSoup(html, "lxml")
 
         asset_url = _find_best_csv_link(soup)
@@ -166,10 +166,7 @@ def download_latest(
     out_path = data_dir / filename
 
     rprint(f"[cyan]Downloading:[/cyan] {asset_url}")
-    r = session.get(asset_url, timeout=120, stream=True)
-    r.raise_for_status()
-
-    content = r.content
+    content = validate_as(bytes, session.get_bytes(asset_url, timeout_seconds=120))
     fs.write_bytes(content, out_path)
 
     # Calculate hash and validate schema

@@ -28,4 +28,4 @@ The pipeline ingests untrusted data from disk (CSV/JSON) and the network (Compan
 - Enable Ruff’s `ANN401` to ban `Any`, with per-file ignores only for IO boundary modules.
 - Keep IO boundary code in a small, explicit module set (e.g., `infrastructure/` and CLI) to make per-file ignores precise.
 - Add import-linter contracts to prevent boundary types leaking into domain/application packages.
-- Tighten mypy settings for domain/application packages over time.
+- Use strict Pyright as the primary gate.

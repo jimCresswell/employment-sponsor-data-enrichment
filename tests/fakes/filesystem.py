@@ -3,19 +3,29 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
+
+from uk_sponsor_pipeline.infrastructure.io.validation import IncomingDataError, validate_as
+
+
+def _empty_files() -> dict[str, object]:
+    return {}
+
+
+def _empty_mtimes() -> dict[str, float]:
+    return {}
 
 
 @dataclass
 class InMemoryFileSystem:
     """In-memory filesystem for testing."""
 
-    _files: dict[str, Any] = field(default_factory=dict)
-    _mtimes: dict[str, float] = field(default_factory=dict)
+    _files: dict[str, object] = field(default_factory=_empty_files)
+    _mtimes: dict[str, float] = field(default_factory=_empty_mtimes)
 
     def read_csv(self, path: Path) -> pd.DataFrame:
         key = str(path)
@@ -40,22 +50,29 @@ class InMemoryFileSystem:
         else:
             self.write_csv(df, path)
 
-    def read_json(self, path: Path) -> dict[str, Any]:
+    def read_json(self, path: Path) -> dict[str, object]:
         key = str(path)
         if key not in self._files:
             raise FileNotFoundError(f"No such file: {path}")
-        return self._files[key]
+        data: object = self._files[key]
+        try:
+            return validate_as(dict[str, object], data)
+        except IncomingDataError as exc:
+            raise TypeError(f"Expected dict at {path}") from exc
 
-    def write_json(self, data: dict[str, Any], path: Path) -> None:
+    def write_json(self, data: Mapping[str, object], path: Path) -> None:
         key = str(path)
-        self._files[key] = data
+        self._files[key] = dict(data)
         self._mtimes[key] = time.time()
 
     def read_text(self, path: Path) -> str:
         key = str(path)
         if key not in self._files:
             raise FileNotFoundError(f"No such file: {path}")
-        return self._files[key]
+        data = self._files[key]
+        if isinstance(data, str):
+            return data
+        raise TypeError(f"Expected str at {path}")
 
     def write_text(self, content: str, path: Path) -> None:
         key = str(path)
@@ -87,7 +104,7 @@ class InMemoryFileSystem:
         import fnmatch
 
         prefix = str(path)
-        matches = []
+        matches: list[Path] = []
         for key in self._files:
             if key.startswith(prefix):
                 relative = key[len(prefix) :].lstrip("/")

@@ -22,7 +22,7 @@ Stages describe artefact boundaries for audit and resume. They are not architect
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.13+
 - [uv](https://github.com/astral-sh/uv) (fast Python package manager)
 - Companies House API key ([register free](https://developer.company-information.service.gov.uk/))
 
@@ -37,7 +37,7 @@ cd uk-sponsor-tech-hiring-pipeline
 
 # Create and sync a uv environment
 uv venv
-uv sync --extra dev
+uv sync --group dev
 
 # Copy env template and add your API key
 cp .env.example .env
@@ -251,7 +251,7 @@ Companies are scored on multiple features:
 ## Contributing
 
 ```bash
-uv sync --extra dev
+uv sync --group dev
 uv run format
 uv run typecheck
 uv run lint

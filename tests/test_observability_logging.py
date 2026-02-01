@@ -3,12 +3,20 @@
 import logging
 import time
 
+import pytest
+
 from uk_sponsor_pipeline.observability.logging import get_logger
 
 
-def test_get_logger_formats_utc_timestamps(monkeypatch, capsys) -> None:
+def test_get_logger_formats_utc_timestamps(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     fixed = time.struct_time((2020, 1, 2, 3, 4, 5, 3, 2, 0))
-    monkeypatch.setattr(time, "gmtime", lambda *args, **kwargs: fixed)
+
+    def fake_gmtime(_: float | None = None) -> time.struct_time:
+        return fixed
+
+    monkeypatch.setattr(time, "gmtime", fake_gmtime)
 
     name = "uk_sponsor_pipeline.test.logging"
     logger = get_logger(name)

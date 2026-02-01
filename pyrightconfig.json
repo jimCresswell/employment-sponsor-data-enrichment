@@ -1,0 +1,41 @@
+{
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.13",
+  "pythonPlatform": "All",
+  "include": ["src", "tests"],
+  "exclude": [
+    "**/__pycache__",
+    ".venv",
+    "dist",
+    "build",
+    ".mypy_cache",
+    ".pytest_cache"
+  ],
+
+  "venvPath": ".",
+  "venv": ".venv",
+
+  "useLibraryCodeForTypes": true,
+
+  "reportUnknownArgumentType": "error",
+  "reportUnknownLambdaType": "error",
+  "reportUnknownMemberType": "error",
+  "reportUnknownParameterType": "error",
+  "reportUnknownVariableType": "error",
+
+  "reportMissingTypeStubs": "error",
+  "reportMissingImports": "error",
+
+  "reportUntypedBaseClass": "error",
+  "reportUntypedClassDecorator": "error",
+  "reportUntypedFunctionDecorator": "error",
+
+  "reportUnnecessaryTypeIgnoreComment": "warning",
+  "reportUnreachable": "error",
+
+  "reportPrivateUsage": "warning",
+  "reportImplicitOverride": "error",
+  "reportCallInDefaultInitializer": "error",
+
+  "reportImportCycles": "warning"
+}

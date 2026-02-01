@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import cast
 
 from ..types import (
     CompanyProfile,
@@ -138,36 +137,36 @@ def score_candidates(
 
 def build_candidate_row(*, org: str, cand: CandidateMatch, rank: int) -> Stage2CandidateRow:
     """Build a candidate audit row."""
-    return cast(
-        Stage2CandidateRow,
-        {
-            "Organisation Name": org,
-            "rank": rank,
-            "candidate_company_number": cand.company_number,
-            "candidate_title": cand.title,
-            "candidate_status": cand.status,
-            "candidate_locality": cand.locality,
-            "candidate_region": cand.region,
-            "candidate_postcode": cand.postcode,
-            "candidate_score": round(cand.score.total, 4),
-            "score_name_similarity": round(cand.score.name_similarity, 4),
-            "score_locality_bonus": round(cand.score.locality_bonus, 4),
-            "score_region_bonus": round(cand.score.region_bonus, 4),
-            "score_status_bonus": round(cand.score.status_bonus, 4),
-            "query_used": cand.query_used,
-        },
-    )
+    row: Stage2CandidateRow = {
+        "Organisation Name": org,
+        "rank": rank,
+        "candidate_company_number": cand.company_number,
+        "candidate_title": cand.title,
+        "candidate_status": cand.status,
+        "candidate_locality": cand.locality,
+        "candidate_region": cand.region,
+        "candidate_postcode": cand.postcode,
+        "candidate_score": round(cand.score.total, 4),
+        "score_name_similarity": round(cand.score.name_similarity, 4),
+        "score_locality_bonus": round(cand.score.locality_bonus, 4),
+        "score_region_bonus": round(cand.score.region_bonus, 4),
+        "score_status_bonus": round(cand.score.status_bonus, 4),
+        "query_used": cand.query_used,
+    }
+    return row
 
 
 def build_unmatched_row(*, row: Stage1Row, best_match: CandidateMatch | None) -> Stage2UnmatchedRow:
     """Build an unmatched row for audit."""
-    out = dict(row)
-    out["match_status"] = "unmatched"
-    out["best_candidate_score"] = round(best_match.score.total, 4) if best_match else ""
-    out["best_candidate_title"] = best_match.title if best_match else ""
-    out["best_candidate_company_number"] = best_match.company_number if best_match else ""
-    out["match_error"] = ""
-    return cast(Stage2UnmatchedRow, out)
+    out: Stage2UnmatchedRow = {
+        **row,
+        "match_status": "unmatched",
+        "best_candidate_score": round(best_match.score.total, 4) if best_match else "",
+        "best_candidate_title": best_match.title if best_match else "",
+        "best_candidate_company_number": best_match.company_number if best_match else "",
+        "match_error": "",
+    }
+    return out
 
 
 def build_profile_error_row(
@@ -177,13 +176,15 @@ def build_profile_error_row(
     error: Exception,
 ) -> Stage2UnmatchedRow:
     """Build a profile error row for audit."""
-    out = dict(row)
-    out["match_status"] = "profile_error"
-    out["best_candidate_score"] = round(best_match.score.total, 4)
-    out["best_candidate_title"] = best_match.title
-    out["best_candidate_company_number"] = best_match.company_number
-    out["match_error"] = str(error)
-    return cast(Stage2UnmatchedRow, out)
+    out: Stage2UnmatchedRow = {
+        **row,
+        "match_status": "profile_error",
+        "best_candidate_score": round(best_match.score.total, 4),
+        "best_candidate_title": best_match.title,
+        "best_candidate_company_number": best_match.company_number,
+        "match_error": str(error),
+    }
+    return out
 
 
 def build_enriched_row(
@@ -196,26 +197,24 @@ def build_enriched_row(
     sic = profile.get("sic_codes") or []
     ro = profile.get("registered_office_address") or {}
 
-    out = dict(row)
-    out.update(
-        {
-            "match_status": "matched",
-            "match_score": round(best_match.score.total, 4),
-            "match_confidence": best_match.score.confidence_band,
-            "match_query_used": best_match.query_used,
-            "score_name_similarity": round(best_match.score.name_similarity, 4),
-            "score_locality_bonus": round(best_match.score.locality_bonus, 4),
-            "score_region_bonus": round(best_match.score.region_bonus, 4),
-            "score_status_bonus": round(best_match.score.status_bonus, 4),
-            "ch_company_number": best_match.company_number,
-            "ch_company_name": profile.get("company_name") or best_match.title,
-            "ch_company_status": profile.get("company_status") or best_match.status,
-            "ch_company_type": profile.get("type") or "",
-            "ch_date_of_creation": profile.get("date_of_creation") or "",
-            "ch_sic_codes": ";".join(sic) if isinstance(sic, list) else str(sic),
-            "ch_address_locality": ro.get("locality") or best_match.locality,
-            "ch_address_region": ro.get("region") or best_match.region,
-            "ch_address_postcode": ro.get("postal_code") or best_match.postcode,
-        }
-    )
-    return cast(Stage2EnrichedRow, out)
+    out: Stage2EnrichedRow = {
+        **row,
+        "match_status": "matched",
+        "match_score": round(best_match.score.total, 4),
+        "match_confidence": best_match.score.confidence_band,
+        "match_query_used": best_match.query_used,
+        "score_name_similarity": round(best_match.score.name_similarity, 4),
+        "score_locality_bonus": round(best_match.score.locality_bonus, 4),
+        "score_region_bonus": round(best_match.score.region_bonus, 4),
+        "score_status_bonus": round(best_match.score.status_bonus, 4),
+        "ch_company_number": best_match.company_number,
+        "ch_company_name": profile.get("company_name") or best_match.title,
+        "ch_company_status": profile.get("company_status") or best_match.status,
+        "ch_company_type": profile.get("type") or "",
+        "ch_date_of_creation": profile.get("date_of_creation") or "",
+        "ch_sic_codes": ";".join(sic),
+        "ch_address_locality": ro.get("locality") or best_match.locality,
+        "ch_address_region": ro.get("region") or best_match.region,
+        "ch_address_postcode": ro.get("postal_code") or best_match.postcode,
+    }
+    return out

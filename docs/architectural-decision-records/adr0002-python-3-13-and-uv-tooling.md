@@ -1,4 +1,4 @@
-# ADR 0002: Python 3.11+ and uv Tooling
+# ADR 0002: Python 3.13+ and uv Tooling
 
 Date: 2026-02-01
 
@@ -12,9 +12,9 @@ The project needs fast, reproducible environment management with consistent form
 
 ## Decision
 
-Standardize on Python 3.11+ and use `uv` for environment and command execution. Use:
+Standardize on Python 3.13+ and use `uv` for environment and command execution. Use:
 - `ruff` for linting and formatting
-- `mypy` for type checking
+- `pyright` for type checking
 - `pytest` for tests
 
 All workflow commands are executed via `uv run`.

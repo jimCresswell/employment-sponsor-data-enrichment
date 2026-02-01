@@ -9,6 +9,7 @@ Tests cover:
 import time
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -27,10 +28,11 @@ from uk_sponsor_pipeline.infrastructure import (
     LocalFileSystem,
     RateLimiter,
     RetryPolicy,
-    _is_auth_error,
-    _is_rate_limit_error,
-    _parse_retry_after,
+    is_auth_error,
+    is_rate_limit_error,
+    parse_retry_after,
 )
+from uk_sponsor_pipeline.protocols import Cache
 
 
 class TestCircuitBreaker:
@@ -136,7 +138,7 @@ class TestRateLimiter:
 
 
 class TestIsAuthError:
-    """Tests for _is_auth_error helper."""
+    """Tests for is_auth_error helper."""
 
     def test_detects_401_status_code(self):
         """Detects 401 status code in HTTPError response."""
@@ -144,26 +146,26 @@ class TestIsAuthError:
         response.status_code = 401
         error = requests.HTTPError()
         error.response = response
-        assert _is_auth_error(error) is True
+        assert is_auth_error(error) is True
 
     def test_detects_401_in_string(self):
         """Detects '401' in error message string."""
         error = Exception("401 Client Error: Unauthorized")
-        assert _is_auth_error(error) is True
+        assert is_auth_error(error) is True
 
     def test_detects_unauthorized_in_string(self):
         """Detects 'Unauthorized' in error message string."""
         error = Exception("Request was Unauthorized by server")
-        assert _is_auth_error(error) is True
+        assert is_auth_error(error) is True
 
     def test_returns_false_for_other_errors(self):
         """Returns False for non-auth errors."""
         error = Exception("Connection timeout")
-        assert _is_auth_error(error) is False
+        assert is_auth_error(error) is False
 
 
 class TestIsRateLimitError:
-    """Tests for _is_rate_limit_error helper."""
+    """Tests for is_rate_limit_error helper."""
 
     def test_detects_429_status_code(self):
         """Detects 429 status code in HTTPError response."""
@@ -171,34 +173,34 @@ class TestIsRateLimitError:
         response.status_code = 429
         error = requests.HTTPError()
         error.response = response
-        assert _is_rate_limit_error(error) is True
+        assert is_rate_limit_error(error) is True
 
     def test_detects_429_in_string(self):
         """Detects '429' in error message string."""
         error = Exception("429 Too Many Requests")
-        assert _is_rate_limit_error(error) is True
+        assert is_rate_limit_error(error) is True
 
     def test_returns_false_for_other_errors(self):
         """Returns False for non-rate-limit errors."""
         error = Exception("Connection timeout")
-        assert _is_rate_limit_error(error) is False
+        assert is_rate_limit_error(error) is False
 
 
 class TestParseRetryAfter:
     """Tests for Retry-After parsing."""
 
     def test_numeric_seconds(self):
-        assert _parse_retry_after({"Retry-After": "12"}) == 12
+        assert parse_retry_after({"Retry-After": "12"}) == 12
 
     def test_http_date(self):
         future = datetime.now(UTC) + timedelta(seconds=30)
         header = format_datetime(future)
-        value = _parse_retry_after({"Retry-After": header})
+        value = parse_retry_after({"Retry-After": header})
         assert value is not None
         assert 0 <= value <= 30
 
     def test_invalid_header_returns_none(self):
-        assert _parse_retry_after({"Retry-After": "not-a-date"}) is None
+        assert parse_retry_after({"Retry-After": "not-a-date"}) is None
 
 
 class TestRetryPolicy:
@@ -213,12 +215,17 @@ class TestRetryPolicy:
 class TestCachedHttpClient:
     """Tests for CachedHttpClient error handling."""
 
-    def _make_client(self, session=None, cache=None, retry_policy=None) -> CachedHttpClient:
+    def _make_client(
+        self,
+        session: requests.Session | None = None,
+        cache: Cache | None = None,
+        retry_policy: RetryPolicy | None = None,
+    ) -> CachedHttpClient:
         """Create a CachedHttpClient with mocks."""
         if session is None:
             session = MagicMock(spec=requests.Session)
         if cache is None:
-            cache = MagicMock()
+            cache = MagicMock(spec=Cache)
             cache.get.return_value = None  # Cache miss by default
         rate_limiter = RateLimiter(max_rpm=600, min_delay_seconds=0)
         circuit_breaker = CircuitBreaker(threshold=3)
@@ -402,7 +409,7 @@ class TestCachedHttpClient:
             retry_policy=retry_policy,
         )
 
-        with patch("uk_sponsor_pipeline.infrastructure.http.time.sleep") as sleep_mock:
+        with patch("uk_sponsor_pipeline.infrastructure.io.http.time.sleep") as sleep_mock:
             result = client.get_json("https://example.com", None)
 
         assert result == {"ok": True}
@@ -434,7 +441,7 @@ class TestCachedHttpClient:
             retry_policy=retry_policy,
         )
 
-        with patch("uk_sponsor_pipeline.infrastructure.http.time.sleep"):
+        with patch("uk_sponsor_pipeline.infrastructure.io.http.time.sleep"):
             with pytest.raises(RateLimitError) as exc_info:
                 client.get_json("https://example.com", None)
 
@@ -463,7 +470,7 @@ class TestCachedHttpClient:
             retry_policy=retry_policy,
         )
 
-        with patch("uk_sponsor_pipeline.infrastructure.http.time.sleep"):
+        with patch("uk_sponsor_pipeline.infrastructure.io.http.time.sleep"):
             result = client.get_json("https://example.com", None)
 
         assert result == {"ok": True}
@@ -473,19 +480,19 @@ class TestCachedHttpClient:
 class TestDiskCache:
     """Tests for DiskCache."""
 
-    def test_get_returns_none_for_missing_key(self, tmp_path):
+    def test_get_returns_none_for_missing_key(self, tmp_path: Path) -> None:
         """get() returns None for missing key."""
         cache = DiskCache(tmp_path / "cache")
         assert cache.get("nonexistent") is None
 
-    def test_set_and_get_roundtrip(self, tmp_path):
+    def test_set_and_get_roundtrip(self, tmp_path: Path) -> None:
         """set() and get() roundtrip works correctly."""
         cache = DiskCache(tmp_path / "cache")
         cache.set("mykey", {"test": "value", "number": 42})
         result = cache.get("mykey")
         assert result == {"test": "value", "number": 42}
 
-    def test_has_returns_correct_values(self, tmp_path):
+    def test_has_returns_correct_values(self, tmp_path: Path) -> None:
         """has() returns correct boolean values."""
         cache = DiskCache(tmp_path / "cache")
         assert cache.has("missing") is False
@@ -496,7 +503,7 @@ class TestDiskCache:
 class TestLocalFileSystemAppend:
     """Tests for LocalFileSystem append_csv."""
 
-    def test_append_csv_writes_and_appends(self, tmp_path):
+    def test_append_csv_writes_and_appends(self, tmp_path: Path) -> None:
         fs = LocalFileSystem()
         path = tmp_path / "out.csv"
         df1 = pd.DataFrame({"col": ["a"]})

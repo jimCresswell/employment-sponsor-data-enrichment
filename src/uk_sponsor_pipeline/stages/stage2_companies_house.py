@@ -17,7 +17,6 @@ import re
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
 from urllib.parse import quote
 
 import pandas as pd
@@ -44,6 +43,11 @@ from ..infrastructure import (
     RateLimiter,
     RetryPolicy,
 )
+from ..infrastructure.io.validation import (
+    parse_companies_house_profile,
+    parse_companies_house_search,
+    validate_as,
+)
 from ..normalization import generate_query_variants, normalize_org_name
 from ..observability import get_logger
 from ..protocols import FileSystem, HttpClient
@@ -56,8 +60,6 @@ from ..schemas import (
 )
 from ..types import (
     BatchRange,
-    CompanyProfile,
-    SearchItem,
     Stage1Row,
     Stage2CandidateRow,
     Stage2EnrichedRow,
@@ -110,7 +112,7 @@ def _simple_similarity(a: str, b: str) -> float:
     return 0.6 * jacc + 0.4 * char_overlap
 
 
-def _basic_auth(api_key: str) -> HTTPBasicAuth:
+def basic_auth(api_key: str) -> HTTPBasicAuth:
     """Create HTTP Basic Auth credentials for Companies House API."""
     return HTTPBasicAuth(api_key, "")
 
@@ -131,57 +133,28 @@ def _append_csv(fs: FileSystem, df: pd.DataFrame, path: Path, columns: tuple[str
     fs.append_csv(coerced, path)
 
 
-def _coerce_search_items(raw: dict[str, Any]) -> list[SearchItem]:
-    items = raw.get("items") or []
-    if not isinstance(items, list):
-        raise RuntimeError("Companies House search response items must be a list.")
-    coerced: list[SearchItem] = []
-    for item in items:
-        if not isinstance(item, dict):
-            raise RuntimeError("Companies House search response item must be an object.")
-        address = item.get("address") or {}
-        if not isinstance(address, dict):
-            address = {}
-        coerced.append(
-            {
-                "title": str(item.get("title") or ""),
-                "company_number": str(item.get("company_number") or ""),
-                "company_status": str(item.get("company_status") or ""),
-                "address": {
-                    "locality": str(address.get("locality") or ""),
-                    "region": str(address.get("region") or ""),
-                    "postal_code": str(address.get("postal_code") or ""),
-                },
-            }
-        )
-    return coerced
+def _as_str(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    return ""
 
 
-def _coerce_profile(raw: dict[str, Any]) -> CompanyProfile:
-    if not isinstance(raw, dict):
-        raise RuntimeError("Companies House profile response must be an object.")
-    ro = raw.get("registered_office_address") or {}
-    if not isinstance(ro, dict):
-        ro = {}
-    sic_raw = raw.get("sic_codes") or []
-    if isinstance(sic_raw, list):
-        sic_codes = [str(code) for code in sic_raw if code]
-    elif isinstance(sic_raw, str):
-        sic_codes = [part.strip() for part in sic_raw.replace(",", ";").split(";") if part.strip()]
-    else:
-        sic_codes = []
+def _coerce_stage1_row(raw: dict[str, object]) -> Stage1Row:
     return {
-        "company_name": str(raw.get("company_name") or ""),
-        "company_status": str(raw.get("company_status") or ""),
-        "type": str(raw.get("type") or ""),
-        "date_of_creation": str(raw.get("date_of_creation") or ""),
-        "sic_codes": sic_codes,
-        "registered_office_address": {
-            "locality": str(ro.get("locality") or ""),
-            "region": str(ro.get("region") or ""),
-            "postal_code": str(ro.get("postal_code") or ""),
-        },
+        "Organisation Name": _as_str(raw.get("Organisation Name")),
+        "org_name_normalized": _as_str(raw.get("org_name_normalized")),
+        "has_multiple_towns": _as_str(raw.get("has_multiple_towns")),
+        "has_multiple_counties": _as_str(raw.get("has_multiple_counties")),
+        "Town/City": _as_str(raw.get("Town/City")),
+        "County": _as_str(raw.get("County")),
+        "Type & Rating": _as_str(raw.get("Type & Rating")),
+        "Route": _as_str(raw.get("Route")),
+        "raw_name_variants": _as_str(raw.get("raw_name_variants")),
     }
+
+
+def _coerce_stage1_rows(raw_rows: list[dict[str, object]]) -> list[Stage1Row]:
+    return [_coerce_stage1_row(row) for row in raw_rows]
 
 
 def _build_resume_report(
@@ -209,15 +182,11 @@ def _build_resume_report(
 ) -> Stage2ResumeReport:
     batch_range: BatchRange | None = None
     if selected_batches:
-        batch_range = cast(
-            BatchRange, {"start": batch_start, "end": batch_start + selected_batches - 1}
-        )
+        batch_range = {"start": batch_start, "end": batch_start + selected_batches - 1}
 
     overall_batch_range: BatchRange | None = None
     if overall_batch_start is not None and overall_batch_end is not None:
-        overall_batch_range = cast(
-            BatchRange, {"start": overall_batch_start, "end": overall_batch_end}
-        )
+        overall_batch_range = {"start": overall_batch_start, "end": overall_batch_end}
 
     resume_command = (
         f"uv run uk-sponsor stage2 --input {stage1_path} --output-dir {out_dir} --resume"
@@ -343,7 +312,7 @@ def run_stage2(
     # Set up HTTP client with circuit breaker
     if http_client is None:
         session = requests.Session()
-        session.auth = _basic_auth(config.ch_api_key)
+        session.auth = basic_auth(config.ch_api_key)
         cache = DiskCache(cache_dir)
         rate_limiter = RateLimiter(
             max_rpm=config.ch_max_rpm, min_delay_seconds=config.ch_sleep_seconds
@@ -368,7 +337,8 @@ def run_stage2(
         )
 
     # Process organizations in batches
-    rows = cast(list[Stage1Row], df.to_dict(orient="records"))
+    raw_rows = validate_as(list[dict[str, object]], df.to_dict(orient="records"))
+    rows = _coerce_stage1_rows(raw_rows)
     to_process_all = [
         (idx, row)
         for idx, row in enumerate(rows)
@@ -398,7 +368,8 @@ def run_stage2(
             else f"{overall_batch_start}-{overall_batch_end}"
         )
     logger.info(
-        "Processing %s organizations (batch size %s, batch start %s, batches %s/%s, overall batch %s/%s)",
+        "Processing %s organizations (batch size %s, batch start %s, batches %s/%s, "
+        "overall batch %s/%s)",
         len(to_process),
         batch_size_value,
         batch_start,
@@ -463,7 +434,10 @@ def run_stage2(
 
             # Try each query variant
             for query in query_variants:
-                search_url = f"{CH_BASE}/search/companies?q={quote(query)}&items_per_page={config.ch_search_limit}"
+                search_url = (
+                    f"{CH_BASE}/search/companies?q={quote(query)}"
+                    f"&items_per_page={config.ch_search_limit}"
+                )
                 cache_key = _cache_key("search", query, str(config.ch_search_limit))
 
                 try:
@@ -479,7 +453,7 @@ def run_stage2(
                         f"Companies House search failed for query '{query}': {e}"
                     ) from e
 
-                items = _coerce_search_items(search)
+                items = parse_companies_house_search(search)
                 scored = score_candidates(
                     org_norm=org_norm,
                     town_norm=town_norm,
@@ -538,7 +512,7 @@ def run_stage2(
                     flush_batch()
                 continue
 
-            profile = _coerce_profile(raw_profile)
+            profile = parse_companies_house_profile(raw_profile)
             batch_enriched.append(
                 build_enriched_row(row=row, best_match=best_match, profile=profile)
             )
@@ -630,6 +604,6 @@ def run_stage2(
             run_duration_seconds=run_duration_seconds,
             error_message=error_message,
         )
-        fs.write_json(cast(dict[str, Any], report), out_resume_report)
+        fs.write_json(dict(report), out_resume_report)
 
     return {"enriched": out_enriched, "unmatched": out_unmatched, "candidates": out_candidates}

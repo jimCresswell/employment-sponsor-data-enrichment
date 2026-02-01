@@ -5,28 +5,15 @@ description = "Pipeline to download UK licensed sponsor register, clean/filter, 
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-  "pandas>=2.2",
-  "requests>=2.31",
-  "beautifulsoup4>=4.12",
-  "lxml>=5.2",
-  "typer>=0.12",
-  "rich>=13.7",
-  "python-dotenv>=1.0",
-  "tqdm>=4.66",
-]
-
-[project.optional-dependencies]
-dev = [
-  "pytest>=8.0",
-  "pytest-cov>=4.1",
-  "mypy>=1.8",
-  "ruff>=0.3",
-  "import-linter>=2.0",
-  "pre-commit>=3.7",
-  "pandas-stubs>=2.2",
-  "types-requests>=2.31",
-  "types-beautifulsoup4>=4.12",
-  "types-tqdm>=4.66",
+  "pandas>=3.0.0",
+  "requests>=2.32.5",
+  "beautifulsoup4>=4.14.3",
+  "lxml>=6.0.2",
+  "pydantic>=2.12.5",
+  "typer>=0.21.1",
+  "rich>=14.3.1",
+  "python-dotenv>=1.2.1",
+  "tqdm>=4.67.2",
 ]
 
 [project.scripts]
@@ -40,32 +27,52 @@ coverage = "uk_sponsor_pipeline.devtools:coverage"
 check = "uk_sponsor_pipeline.devtools:check"
 
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
 
 [tool.uv]
 # If you use uv: `uv sync` will install deps from this file.
 package = true
 
-[tool.setuptools]
-package-dir = {"" = "src"}
+[dependency-groups]
+dev = [
+  "pytest>=9.0.2",
+  "pytest-cov>=7.0.0",
+  "pyright>=1.1.408",
+  "ruff>=0.14.14",
+  "import-linter>=2.9",
+  "pre-commit>=4.5.1",
+  "pandas-stubs>=2.3.3.260113",
+  "types-requests>=2.32.4.20260107",
+  "types-beautifulsoup4>=4.12.0.20250516",
+  "types-tqdm>=4.67.0.20250809",
+]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/uk_sponsor_pipeline"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ANN"]
-ignore = ["E501"]
+# If you use ruff-format, E501 is typically redundant;
 
 [tool.ruff.lint.per-file-ignores]
-"src/uk_sponsor_pipeline/protocols.py" = ["ANN401"]
-"src/uk_sponsor_pipeline/infrastructure/*.py" = ["ANN401"]
-"src/uk_sponsor_pipeline/stages/stage2_companies_house.py" = ["ANN401"]
 "tests/**/*.py" = ["ANN"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 45
+
+[tool.ruff.lint.pylint]
+max-args = 20
+max-branches = 45
+max-returns = 8
+max-statements = 220
 
 [tool.importlinter]
 root_package = "uk_sponsor_pipeline"
@@ -88,16 +95,6 @@ type = "forbidden"
 source_modules = ["uk_sponsor_pipeline.infrastructure"]
 forbidden_modules = ["uk_sponsor_pipeline.domain", "uk_sponsor_pipeline.types"]
 
-[tool.ruff.format]
-quote-style = "double"
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
-
-[tool.mypy]
-python_version = "3.11"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
-ignore_missing_imports = true

@@ -6,8 +6,9 @@ enabling isolated unit testing with mock implementations.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 class HttpClient(Protocol):
     """Abstract HTTP client for making JSON API requests."""
 
-    def get_json(self, url: str, cache_key: str | None = None) -> dict[str, Any]:
+    def get_json(self, url: str, cache_key: str | None = None) -> dict[str, object]:
         """Fetch JSON from URL, optionally using cache.
 
         Args:
@@ -34,14 +35,27 @@ class HttpClient(Protocol):
 
 
 @runtime_checkable
+class HttpSession(Protocol):
+    """Abstract HTTP session for non-JSON requests."""
+
+    def get_text(self, url: str, *, timeout_seconds: float) -> str:
+        """Fetch text content from a URL."""
+        ...
+
+    def get_bytes(self, url: str, *, timeout_seconds: float) -> bytes:
+        """Fetch binary content from a URL."""
+        ...
+
+
+@runtime_checkable
 class Cache(Protocol):
     """Abstract cache for storing/retrieving JSON data."""
 
-    def get(self, key: str) -> dict[str, Any] | None:
+    def get(self, key: str) -> dict[str, object] | None:
         """Retrieve cached value by key, or None if not present."""
         ...
 
-    def set(self, key: str, value: dict[str, Any]) -> None:
+    def set(self, key: str, value: dict[str, object]) -> None:
         """Store value in cache with given key."""
         ...
 
@@ -66,11 +80,11 @@ class FileSystem(Protocol):
         """Append DataFrame rows to CSV file (create if missing)."""
         ...
 
-    def read_json(self, path: Path) -> dict[str, Any]:
+    def read_json(self, path: Path) -> dict[str, object]:
         """Read JSON file."""
         ...
 
-    def write_json(self, data: dict[str, Any], path: Path) -> None:
+    def write_json(self, data: Mapping[str, object], path: Path) -> None:
         """Write JSON file."""
         ...
 

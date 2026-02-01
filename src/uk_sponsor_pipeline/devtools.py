@@ -40,7 +40,7 @@ def format_check() -> None:
 
 
 def typecheck() -> None:
-    _run_or_exit(["mypy", "src", *sys.argv[1:]])
+    raise SystemExit(_run(["pyright", *sys.argv[1:]]))
 
 
 def test() -> None:
@@ -62,7 +62,7 @@ def coverage() -> None:
 def check() -> None:
     steps: list[tuple[str, list[str]]] = [
         ("format", ["ruff", "format", "src", "tests"]),
-        ("typecheck", ["mypy", "src"]),
+        ("typecheck", ["pyright"]),
         ("lint", ["ruff", "check", "src", "tests"]),
         ("import-linter", ["lint-imports"]),
         ("test", ["pytest"]),

@@ -4,48 +4,48 @@ from pathlib import Path
 
 import pandas as pd
 
+from tests.fakes import InMemoryFileSystem
 from uk_sponsor_pipeline.config import PipelineConfig
-from uk_sponsor_pipeline.schemas import (
-    STAGE2_ENRICHED_COLUMNS,
-    STAGE3_EXPLAIN_COLUMNS,
-    STAGE3_SCORED_COLUMNS,
-)
+from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
+from uk_sponsor_pipeline.schemas import STAGE3_EXPLAIN_COLUMNS, STAGE3_SCORED_COLUMNS
 from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
+from uk_sponsor_pipeline.types import Stage2EnrichedRow
 
 
-def _stage2_row(**overrides: str) -> dict[str, str]:
-    row = {col: "" for col in STAGE2_ENRICHED_COLUMNS}
-    row.update(
-        {
-            "Organisation Name": "Acme Ltd",
-            "org_name_normalized": "acme",
-            "has_multiple_towns": "False",
-            "has_multiple_counties": "False",
-            "Town/City": "London",
-            "County": "Greater London",
-            "Type & Rating": "A rating",
-            "Route": "Skilled Worker",
-            "raw_name_variants": "Acme Ltd",
-            "match_status": "matched",
-            "match_score": "0.9",
-            "match_confidence": "high",
-            "match_query_used": "Acme Ltd",
-            "ch_company_number": "12345678",
-            "ch_company_name": "ACME LTD",
-            "ch_company_status": "active",
-            "ch_company_type": "ltd",
-            "ch_date_of_creation": "2015-01-01",
-            "ch_sic_codes": "62020",
-            "ch_address_locality": "London",
-            "ch_address_region": "Greater London",
-            "ch_address_postcode": "EC1A 1BB",
-        }
-    )
-    row.update(overrides)
-    return row
+def _stage2_row(**overrides: str | float) -> Stage2EnrichedRow:
+    row: Stage2EnrichedRow = {
+        "Organisation Name": "Acme Ltd",
+        "org_name_normalized": "acme",
+        "has_multiple_towns": "False",
+        "has_multiple_counties": "False",
+        "Town/City": "London",
+        "County": "Greater London",
+        "Type & Rating": "A rating",
+        "Route": "Skilled Worker",
+        "raw_name_variants": "Acme Ltd",
+        "match_status": "matched",
+        "match_score": 0.9,
+        "match_confidence": "high",
+        "match_query_used": "Acme Ltd",
+        "score_name_similarity": 0.8,
+        "score_locality_bonus": 0.1,
+        "score_region_bonus": 0.05,
+        "score_status_bonus": 0.1,
+        "ch_company_number": "12345678",
+        "ch_company_name": "ACME LTD",
+        "ch_company_status": "active",
+        "ch_company_type": "ltd",
+        "ch_date_of_creation": "2015-01-01",
+        "ch_sic_codes": "62020",
+        "ch_address_locality": "London",
+        "ch_address_region": "Greater London",
+        "ch_address_postcode": "EC1A 1BB",
+    }
+    merged = {**row, **overrides}
+    return validate_as(Stage2EnrichedRow, merged)
 
 
-def test_stage3_outputs_are_deterministic(in_memory_fs) -> None:
+def test_stage3_outputs_are_deterministic(in_memory_fs: InMemoryFileSystem) -> None:
     stage2_path = Path("data/processed/stage2_enriched_companies_house.csv")
     out_dir = Path("data/processed")
 
@@ -56,7 +56,7 @@ def test_stage3_outputs_are_deterministic(in_memory_fs) -> None:
                 **{
                     "Organisation Name": "Care Services Ltd",
                     "org_name_normalized": "care services",
-                    "match_score": "0.4",
+                    "match_score": 0.4,
                     "ch_company_name": "CARE SERVICES LTD",
                     "ch_sic_codes": "87100",
                 }
