@@ -5,8 +5,11 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
+from requests.auth import HTTPBasicAuth
 
 from tests.fakes import FakeHttpClient, InMemoryFileSystem
+from uk_sponsor_pipeline.application import stage2_companies_house as s2
+from uk_sponsor_pipeline.application.stage2_companies_house import run_stage2
 from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.domain.companies_house import (
     CandidateMatch,
@@ -17,27 +20,7 @@ from uk_sponsor_pipeline.domain.companies_house import (
 from uk_sponsor_pipeline.exceptions import AuthenticationError, CircuitBreakerOpen, RateLimitError
 from uk_sponsor_pipeline.infrastructure import CachedHttpClient, CircuitBreaker, RateLimiter
 from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
-from uk_sponsor_pipeline.stages import stage2_companies_house as s2
-from uk_sponsor_pipeline.stages.stage2_companies_house import basic_auth, run_stage2
 from uk_sponsor_pipeline.types import SearchItem, Stage2ResumeReport
-
-
-class TestBasicAuth:
-    """Tests for API key authentication setup."""
-
-    def test_auth_header_format(self) -> None:
-        """Verify auth uses HTTP Basic Auth with key + blank password."""
-        api_key = "test-api-key-12345"
-        auth = basic_auth(api_key)
-        assert auth.username == api_key
-        assert auth.password == ""
-
-    def test_auth_header_with_real_format_key(self) -> None:
-        """Test with a key that looks like a real CH API key (UUID format)."""
-        api_key = "a06e8c82-0b3b-4b1a-9c1a-1a2b3c4d5e6f"
-        auth = basic_auth(api_key)
-        assert auth.username == api_key
-        assert auth.password == ""
 
 
 class TestCachedHttpClientAuth:
@@ -56,7 +39,7 @@ class TestCachedHttpClientAuth:
 
         # Add auth to session
         api_key = "test-key-123"
-        mock_session.auth = basic_auth(api_key)
+        mock_session.auth = HTTPBasicAuth(api_key, "")
 
         # Create cache, rate limiter, and circuit breaker
         cache = MagicMock()

@@ -20,6 +20,7 @@ Consolidate incoming IO boundaries into two infrastructure files:
 Stages must use the `FileSystem` and `HttpSession` / `HttpClient` protocols rather than calling `requests` or filesystem APIs directly.
 
 Validation helpers live in `infrastructure/io/validation.py` and are used to convert untrusted payloads into strict types at the boundary.
+Stages and application logic must not import `requests` or perform filesystem/network IO directly; they only depend on protocols.
 
 ## Consequences
 

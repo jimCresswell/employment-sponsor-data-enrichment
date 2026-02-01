@@ -27,3 +27,7 @@ The pipeline uses staged CSV outputs for auditability and resumability. However,
 - Application orchestration becomes the single owner of batching/resume/reporting.
 - Requires refactoring existing stage modules into application steps (see refactor plan).
 - Supersedes ADR 0003’s implication that stages are architectural boundaries.
+
+## Migration Status
+
+In progress: the target architecture is an `application/` use‑case layer with `stages/` acting only as delegates. Residual logic in `stages/` should continue to be moved into `application/` until `stages/` contains no business logic.

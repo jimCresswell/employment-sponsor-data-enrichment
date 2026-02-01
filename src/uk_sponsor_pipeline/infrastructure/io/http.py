@@ -24,16 +24,57 @@ import time
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from pathlib import Path
 from typing import override
 
 import requests
+from requests.auth import HTTPBasicAuth
 
 from ...exceptions import AuthenticationError, RateLimitError
 from ...protocols import Cache, CircuitBreaker, HttpSession, RateLimiter, RetryPolicy
 from ..resilience import CircuitBreaker as CircuitBreakerImpl
 from ..resilience import RateLimiter as RateLimiterImpl
 from ..resilience import RetryPolicy as RetryPolicyImpl
+from .filesystem import DiskCache
 from .validation import IncomingDataError, validate_as, validate_json_as
+
+
+def build_companies_house_client(
+    *,
+    api_key: str,
+    cache_dir: str | Path,
+    max_rpm: int,
+    min_delay_seconds: float,
+    circuit_breaker_threshold: int,
+    circuit_breaker_timeout_seconds: float,
+    max_retries: int,
+    backoff_factor: float,
+    max_backoff_seconds: float,
+    jitter_seconds: float,
+    timeout_seconds: float,
+) -> CachedHttpClient:
+    session = requests.Session()
+    session.auth = HTTPBasicAuth(api_key, "")
+    cache = DiskCache(Path(cache_dir))
+    rate_limiter = RateLimiterImpl(max_rpm=max_rpm, min_delay_seconds=min_delay_seconds)
+    circuit_breaker = CircuitBreakerImpl(
+        threshold=circuit_breaker_threshold,
+        recovery_timeout_seconds=circuit_breaker_timeout_seconds,
+    )
+    retry_policy = RetryPolicyImpl(
+        max_retries=max_retries,
+        backoff_factor=backoff_factor,
+        max_backoff_seconds=max_backoff_seconds,
+        jitter_seconds=jitter_seconds,
+    )
+    return CachedHttpClient(
+        session=session,
+        cache=cache,
+        rate_limiter=rate_limiter,
+        circuit_breaker=circuit_breaker,
+        retry_policy=retry_policy,
+        timeout_seconds=timeout_seconds,
+    )
 
 
 def is_auth_error(error: Exception) -> bool:
