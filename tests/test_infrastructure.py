@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
 from unittest.mock import MagicMock, patch
 
+import pandas as pd
 import pytest
 import requests
 
@@ -23,6 +24,7 @@ from uk_sponsor_pipeline.infrastructure import (
     CachedHttpClient,
     CircuitBreaker,
     DiskCache,
+    LocalFileSystem,
     RateLimiter,
     RetryPolicy,
     _is_auth_error,
@@ -489,3 +491,19 @@ class TestDiskCache:
         assert cache.has("missing") is False
         cache.set("exists", {"data": True})
         assert cache.has("exists") is True
+
+
+class TestLocalFileSystemAppend:
+    """Tests for LocalFileSystem append_csv."""
+
+    def test_append_csv_writes_and_appends(self, tmp_path):
+        fs = LocalFileSystem()
+        path = tmp_path / "out.csv"
+        df1 = pd.DataFrame({"col": ["a"]})
+        df2 = pd.DataFrame({"col": ["b"]})
+
+        fs.append_csv(df1, path)
+        fs.append_csv(df2, path)
+
+        out = pd.read_csv(path, dtype=str).fillna("")
+        assert out["col"].tolist() == ["a", "b"]

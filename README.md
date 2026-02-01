@@ -57,6 +57,24 @@ uv run uk-sponsor stage3
 
 `uv run <command>` executes tools inside the project environment.
 
+### Stage 2 Batching and Resume
+
+Stage 2 runs in batches by default using `CH_BATCH_SIZE`. You can control which batches run:
+
+```bash
+# Run only the first 2 batches (after resume filtering)
+uv run uk-sponsor stage2 --batch-count 2
+
+# Start at batch 3 and run 2 batches
+uv run uk-sponsor stage2 --batch-start 3 --batch-count 2
+
+# Override batch size for this run
+uv run uk-sponsor stage2 --batch-size 50
+```
+
+Resume data is written to `data/processed/stage2_checkpoint.csv` and
+`data/processed/stage2_resume_report.json` (includes overall batch range and timing).
+
 ### Geographic Filtering
 
 Filter the final shortlist by region or postcode:
@@ -157,6 +175,9 @@ uv run format-check
 
 # Type check
 uv run typecheck
+
+# Full quality gate run (format check → typecheck → lint → test → coverage)
+uv run check
 ```
 
 ## Scoring Model (Stage 3)
@@ -186,6 +207,8 @@ Companies are scored on multiple features:
 | `data/processed/stage2_enriched_companies_house.csv` | Matched companies with CH data |
 | `data/processed/stage2_unmatched.csv` | Orgs that couldn't be matched |
 | `data/processed/stage2_candidates_top3.csv` | Audit trail: top 3 match candidates per org |
+| `data/processed/stage2_checkpoint.csv` | Resume checkpoint of processed orgs |
+| `data/processed/stage2_resume_report.json` | Resume report for interrupted or partial runs |
 | `data/processed/stage3_scored.csv` | All companies with scores |
 | `data/processed/stage3_shortlist_tech.csv` | Filtered shortlist |
 | `data/processed/stage3_explain.csv` | Score breakdown for shortlist |
@@ -206,6 +229,22 @@ Notes:
 - Keep behaviour and docs in sync with the CLI and pipeline outputs.
 - No compatibility layers; delete replaced code paths.
 
+### Git Hooks (Quality Gates)
+
+Install pre-commit hooks to run the full quality gates on commit and push:
+
+```bash
+uv run pre-commit install --hook-type pre-commit --hook-type pre-push
+```
+
+## Troubleshooting
+
+- **Companies House 401/403**: ensure `CH_API_KEY` is a valid API key and not an OAuth token; Stage 2 uses Basic Auth with the key as username and a blank password. See `docs/troubleshooting.md`.
+
+## Future Work
+
+- CI/CD workflow to run quality gates automatically.
+
 ## Configuration
 
 Set in `.env` or environment variables:
@@ -221,6 +260,7 @@ CH_BACKOFF_MAX_SECONDS=60     # Max backoff delay
 CH_BACKOFF_JITTER_SECONDS=0.1 # Random jitter added to backoff
 CH_CIRCUIT_BREAKER_THRESHOLD=5  # Failures before opening breaker
 CH_CIRCUIT_BREAKER_TIMEOUT_SECONDS=60  # Seconds before half-open probe
+CH_BATCH_SIZE=250             # Organisations per batch (incremental output)
 CH_MIN_MATCH_SCORE=0.72       # Minimum score to accept a match
 CH_SEARCH_LIMIT=5             # Candidates per search
 TECH_SCORE_THRESHOLD=0.55     # Minimum score for shortlist

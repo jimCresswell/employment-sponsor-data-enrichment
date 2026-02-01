@@ -204,6 +204,18 @@ def _parse_retry_after(headers: Mapping[str, str] | None) -> int | None:
         return None
 
 
+def _response_details(response: requests.Response) -> str:
+    """Return a compact status/body summary for error reporting."""
+    try:
+        body = response.text
+    except Exception:
+        body = "<unreadable>"
+    body = " ".join(body.split())
+    if len(body) > 300:
+        body = body[:300] + "..."
+    return f"status={response.status_code}, body={body}"
+
+
 @dataclass
 class RetryPolicy:
     """Retry policy for transient failures."""
@@ -284,13 +296,18 @@ class CachedHttpClient:
             # Check for auth errors BEFORE raise_for_status
             if r.status_code == 401:
                 self.circuit_breaker.record_failure()
-                raise AuthenticationError("Companies House API returned 401 Unauthorized")
+                details = _response_details(r)
+                raise AuthenticationError(
+                    f"Companies House API returned 401 Unauthorized ({details})"
+                )
 
             if r.status_code == 403:
                 self.circuit_breaker.record_failure()
+                details = _response_details(r)
                 raise AuthenticationError(
                     "Companies House API returned 403 Forbidden. "
-                    "Your IP may be temporarily blocked due to excessive requests."
+                    "Your IP may be temporarily blocked due to excessive requests. "
+                    f"({details})"
                 )
 
             if r.status_code in self.retry_policy.retry_statuses:
@@ -302,6 +319,8 @@ class CachedHttpClient:
                     continue
                 self.circuit_breaker.record_failure()
                 if r.status_code == 429:
+                    details = _response_details(r)
+                    print(f"Rate limit response: {details}")
                     raise RateLimitError(retry_after or 60)
                 r.raise_for_status()
 
@@ -340,6 +359,11 @@ class LocalFileSystem:
     def write_csv(self, df: pd.DataFrame, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(path, index=False)
+
+    def append_csv(self, df: pd.DataFrame, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_header = not path.exists()
+        df.to_csv(path, mode="a", header=write_header, index=False)
 
     def read_json(self, path: Path) -> dict[str, Any]:
         return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))

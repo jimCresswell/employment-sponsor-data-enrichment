@@ -8,6 +8,8 @@ These rules are mandatory for all work in this repository. For goals and outputs
 - No compatibility layers. Replace and delete old paths.
 - DRY + YAGNI + KISS.
 - Keep boundaries explicit: protocols for interfaces, infrastructure for implementations.
+- Each module has a single responsibility and a narrow public API; keep helpers private.
+- Dependency direction is one-way: domain/application code must not import infrastructure.
 - Delete unused code, unused files, and dead branches.
 - Use conventional commit messages (e.g. `feat: ...`, `fix: ...`).
 
@@ -16,6 +18,7 @@ These rules are mandatory for all work in this repository. For goals and outputs
 - Fail fast with clear error messages.
 - Do not ignore exceptions.
 - Preserve error context when re‑raising.
+- Prefer typed, domain-specific exceptions over generic ones.
 
 ## Configuration
 
@@ -28,12 +31,14 @@ These rules are mandatory for all work in this repository. For goals and outputs
 - Prefer small, injected fakes over complex mocks.
 - Tests must prove behaviour, not implementation details.
 - No skipped tests.
+- For each new boundary: add unit tests for pure logic and contract tests for protocols.
 
 ## Style
 
 - Python 3.11+ with type hints.
 - Use snake_case for modules and functions.
 - Keep Ruff and Mypy clean; fix root causes instead of suppressing.
+- Avoid `Any` in core/domain code; use Protocols, dataclasses, and TypedDicts instead.
 
 ## Quality Gates
 
@@ -44,3 +49,7 @@ These rules are mandatory for all work in this repository. For goals and outputs
 
 - Use `uv` for environments and commands.
 - Use `ruff` for linting/formatting, `mypy` for types, `pytest` for tests.
+
+## Architecture Records
+
+- Add/adjust ADRs when introducing new boundaries, dependency direction changes, or cross-cutting infrastructure.

@@ -16,8 +16,8 @@ from typing import Any
 import pandas as pd
 from rich import print as rprint
 
-from ..normalization import normalize_org_name
 from ..infrastructure import LocalFileSystem
+from ..normalization import normalize_org_name
 from ..protocols import FileSystem
 from ..schemas import RAW_REQUIRED_COLUMNS, STAGE1_OUTPUT_COLUMNS, validate_columns
 

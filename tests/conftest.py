@@ -97,6 +97,15 @@ class InMemoryFileSystem:
         self._files[key] = df.copy()
         self._mtimes[key] = time.time()
 
+    def append_csv(self, df: pd.DataFrame, path: Path) -> None:
+        key = str(path)
+        if key in self._files:
+            existing = self.read_csv(path)
+            combined = pd.concat([existing, df], ignore_index=True)
+            self.write_csv(combined, path)
+        else:
+            self.write_csv(df, path)
+
     def read_json(self, path: Path) -> dict[str, Any]:
         key = str(path)
         if key not in self._files:

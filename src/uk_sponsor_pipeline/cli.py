@@ -110,9 +110,41 @@ def stage2(
             help="Resume from previous run (skip already-processed orgs)",
         ),
     ] = True,
+    batch_start: Annotated[
+        int,
+        typer.Option(
+            "--batch-start",
+            help="1-based batch index to start from (after resume filtering)",
+        ),
+    ] = 1,
+    batch_count: Annotated[
+        int | None,
+        typer.Option(
+            "--batch-count",
+            help="Number of batches to run (default: all remaining)",
+        ),
+    ] = None,
+    batch_size: Annotated[
+        int | None,
+        typer.Option(
+            "--batch-size",
+            help="Override batch size for this run (default: CH_BATCH_SIZE)",
+        ),
+    ] = None,
 ) -> None:
-    """Stage 2: Enrich Stage 1 output using Companies House API."""
-    outs = run_stage2(stage1_path=stage1_path, out_dir=out_dir, resume=resume)
+    """Stage 2: Enrich Stage 1 output using Companies House API.
+
+    Batching: use --batch-start/--batch-count/--batch-size.
+    Resume: --resume and check data/processed/stage2_resume_report.json.
+    """
+    outs = run_stage2(
+        stage1_path=stage1_path,
+        out_dir=out_dir,
+        resume=resume,
+        batch_start=batch_start,
+        batch_count=batch_count,
+        batch_size=batch_size,
+    )
     rprint("[green]✓ Stage 2 complete:[/green]")
     for k, v in outs.items():
         rprint(f"  {k}: {v}")

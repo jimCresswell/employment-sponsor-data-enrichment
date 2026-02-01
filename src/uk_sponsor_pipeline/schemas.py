@@ -100,6 +100,7 @@ STAGE3_EXPLAIN_COLUMNS = (
     "role_fit_bucket",
 )
 
+
 def validate_columns(df_columns: list[str], required: frozenset[str], stage_name: str) -> None:
     """Validate that DataFrame has required columns.
 

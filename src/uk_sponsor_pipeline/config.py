@@ -29,6 +29,7 @@ class PipelineConfig:
     ch_backoff_jitter_seconds: float = 0.1
     ch_circuit_breaker_threshold: int = 5
     ch_circuit_breaker_timeout_seconds: float = 60.0
+    ch_batch_size: int = 250
 
     # Stage 3 scoring
     tech_score_threshold: float = 0.55
@@ -64,6 +65,7 @@ class PipelineConfig:
             ch_circuit_breaker_timeout_seconds=float(
                 os.getenv("CH_CIRCUIT_BREAKER_TIMEOUT_SECONDS", "60")
             ),
+            ch_batch_size=int(os.getenv("CH_BATCH_SIZE", "250")),
             tech_score_threshold=float(os.getenv("TECH_SCORE_THRESHOLD", "0.55")),
             geo_filter_regions=_parse_list(os.getenv("GEO_FILTER_REGIONS", "")),
             geo_filter_postcodes=_parse_list(os.getenv("GEO_FILTER_POSTCODES", "")),

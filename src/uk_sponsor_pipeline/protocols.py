@@ -62,6 +62,10 @@ class FileSystem(Protocol):
         """Write DataFrame to CSV file."""
         ...
 
+    def append_csv(self, df: pd.DataFrame, path: Path) -> None:
+        """Append DataFrame rows to CSV file (create if missing)."""
+        ...
+
     def read_json(self, path: Path) -> dict[str, Any]:
         """Read JSON file."""
         ...
