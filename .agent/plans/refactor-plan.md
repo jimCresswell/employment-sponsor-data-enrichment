@@ -75,11 +75,11 @@ This plan is the authoritative entry point for the refactor. It captures the key
 - Configuration is read once at the CLI entry point and passed through. Application entry points require `PipelineConfig`.
 - Transform Enrich fails fast on auth/rate‑limit/circuit‑breaker and unexpected HTTP errors; resumable artefacts are written before exit.
 - If `resume=False`, Transform Enrich must write to a new output directory to avoid stale data reuse.
-- All linting runs via `uv run lint` (ruff + import‑linter); no separate lint entry points.
+- All linting runs via `uv run lint` (ruff + inline ignore check + US spelling scan + import‑linter); no separate lint entry points.
 - British spelling throughout docs; code identifiers use British spelling unless constrained by external names.
 - Test doubles will live in `tests/fakes/`; `conftest.py` provides fixtures only.
 - `Any` is allowed only at IO boundaries; external data is validated into strict `TypedDict`/dataclass shapes immediately after ingestion (ADR 0013).
-- Ruff `ANN` (incl. `ANN401`) is enabled; per-file ignores are limited to IO boundary modules and tests.
+- Ruff `ANN` (incl. `ANN401`) is enabled; per-file ignores are not permitted.
 - Import-linter contracts are enforced in `uv run lint`/`uv run check`.
 - Domain is the core: domain code must not import application, CLI, or infrastructure.
 - Reproducibility is mandatory: avoid hidden time dependencies unless explicitly accepted (age-based scoring uses `datetime.now()` by decision).
@@ -182,7 +182,7 @@ Refactor the pipeline into explicit domains, reusable infrastructure modules, an
 - Steps are conceptual labels for artefact boundaries, not architectural boundaries. Prefer application pipeline steps/use-cases and shared infrastructure; keep orchestration in `application/`.
 - ETL transforms must be separated from usage/query steps. Usage reads artefacts and filters; it does not mutate upstream artefacts.
 - All standards (observability, resilience, filesystem, HTTP, error handling) are shared across the pipeline; no step-specific infrastructure.
-- All linting (ruff + import-linter) runs via `uv run lint`; no separate lint gate.
+- All linting (ruff + inline ignore check + US spelling scan + import-linter) runs via `uv run lint`; no separate lint gate.
 
 ## Test Harness Constraints
 
