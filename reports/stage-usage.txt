@@ -1,484 +1,477 @@
-./README.md:9:       (CSV)             Stage1   Stage2  Stage3   (CSV)
-./README.md:12:| Stage    | Input       | Output                        | What it does                                        |
-./README.md:15:| stage1   | Raw CSV     | `data/interim/stage1_*.csv`   | Filters Skilled Worker + A-rated, aggregates by org |
-./README.md:16:| stage2   | Stage1 CSV  | `data/processed/stage2_*.csv` | Enriches via Companies House API                    |
-./README.md:17:| stage3   | Stage2 CSV  | `data/processed/stage3_*.csv` | Scores for tech-likelihood, outputs shortlist       |
-./README.md:19:Stages describe artefact boundaries for audit and resume. They are not architectural boundaries; orchestration and shared standards live in the application pipeline (see `docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md`).
-./README.md:50:# All stages in sequence
-./README.md:53:# Or run each stage individually:
-./README.md:55:uv run uk-sponsor stage1
-./README.md:56:uv run uk-sponsor stage2
-./README.md:57:uv run uk-sponsor stage3
-./README.md:62:### Stage 2 Batching and Resume
-./README.md:64:Stage 2 runs in batches by default using `CH_BATCH_SIZE`. You can control which batches run:
-./README.md:68:uv run uk-sponsor stage2 --batch-count 2
-./README.md:71:uv run uk-sponsor stage2 --batch-start 3 --batch-count 2
-./README.md:74:uv run uk-sponsor stage2 --batch-size 50
-./README.md:77:Resume data is written to `data/processed/stage2_checkpoint.csv` and
-./README.md:78:`data/processed/stage2_resume_report.json` (includes overall batch range and timing).
-./README.md:80:Stage 2 fails fast on authentication, rate limit, circuit breaker, or unexpected HTTP errors. Fix the issue and rerun with `--resume`; the resume report includes a ready‑made command.
-./README.md:82:When running with `--no-resume`, Stage 2 writes to a new timestamped subdirectory under the output directory to avoid stale data reuse.
-./README.md:90:uv run uk-sponsor stage3 --region London
-./README.md:93:uv run uk-sponsor stage3 --region London
-./README.md:96:uv run uk-sponsor stage3 --postcode-prefix EC --postcode-prefix SW
-./README.md:99:uv run uk-sponsor stage3 --threshold 0.40
-./README.md:109:The long‑term direction is an application‑owned pipeline: orchestration and step ownership live in an application layer, domain logic is pure and infrastructure is shared and injected. Staged CSVs remain as artefact boundaries for audit and resume, while `stages/` (if retained) becomes a thin delegate layer only.
-./README.md:111:Observability is standardised via a shared logger factory with UTC timestamps so pipeline logs remain consistent across stages.
-./README.md:123:│   ├── stage1.py
-./README.md:124:│   ├── stage2_companies_house.py
-./README.md:125:│   └── stage3_scoring.py
-./README.md:138:├── schemas.py          # Column contracts per stage
-./README.md:139:└── stages/
-./README.md:141:    ├── stage1.py
-./README.md:142:    ├── stage2_companies_house.py
-./README.md:143:    └── stage3_scoring.py
-./README.md:151:The current `stages/` modules implement pipeline steps, but the architectural direction is to move orchestration into an application layer with shared infrastructure and keep `stages/` as thin delegates (or remove it entirely). Track this in `/.agent/plans/refactor-plan.md`.
-./README.md:173:Stage entry points require a `PipelineConfig` instance; environment variables are read once at the CLI entry point and passed through. For programmatic use:
-./README.md:177:from uk_sponsor_pipeline.stages.stage2_companies_house import run_stage2
-./README.md:178:from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
-./README.md:181:run_stage2(stage1_path="data/interim/stage1.csv", out_dir="data/processed", config=config)
-./README.md:182:run_stage3(stage2_path="data/processed/stage2_enriched_companies_house.csv", out_dir="data/processed", config=config)
-./README.md:202:uv run test tests/test_stage3.py::TestScoreFromSic
-./README.md:229:## Scoring Model (Stage 3)
-./README.md:249:When running Stage 2 with `--no-resume`, outputs are written under a timestamped
-./README.md:255:| `reports/stage1_stats.json`                          | Filtering statistics                          |
-./README.md:256:| `data/processed/stage2_enriched_companies_house.csv` | Matched companies with CH data                |
-./README.md:257:| `data/processed/stage2_unmatched.csv`                | Orgs that couldn't be matched                 |
-./README.md:258:| `data/processed/stage2_candidates_top3.csv`          | Audit trail: top 3 match candidates per org   |
-./README.md:259:| `data/processed/stage2_checkpoint.csv`               | Resume checkpoint of processed orgs           |
-./README.md:260:| `data/processed/stage2_resume_report.json`           | Resume report for interrupted or partial runs |
-./README.md:261:| `data/processed/stage3_scored.csv`                   | All companies with scores                     |
-./README.md:262:| `data/processed/stage3_shortlist_tech.csv`           | Filtered shortlist                            |
-./README.md:263:| `data/processed/stage3_explain.csv`                  | Score breakdown for shortlist                 |
-./README.md:296:- **Companies House 401/403**: ensure `CH_API_KEY` is a valid API key and not an OAuth token; Stage 2 uses Basic Auth with the key as username and a blank password. See `docs/troubleshooting.md`.
-./src/uk_sponsor_pipeline/domain/sponsor_register.py:1:"""Sponsor register domain rules for Stage 1 filtering and aggregation.
-./src/uk_sponsor_pipeline/domain/sponsor_register.py:55:class Stage1StatsData:
-./src/uk_sponsor_pipeline/domain/sponsor_register.py:56:    """Stage 1 statistics computed from raw and filtered rows."""
-./src/uk_sponsor_pipeline/domain/sponsor_register.py:71:    """Snapshot of Stage 1 filtering and aggregation."""
-./src/uk_sponsor_pipeline/domain/sponsor_register.py:75:    stats: Stage1StatsData
-./src/uk_sponsor_pipeline/domain/sponsor_register.py:108:    """Filter and aggregate sponsor register rows for Stage 1.
-./src/uk_sponsor_pipeline/domain/sponsor_register.py:180:    stats = Stage1StatsData(
-./src/uk_sponsor_pipeline/schemas.py:1:"""Schema definitions for pipeline stage inputs and outputs.
-./src/uk_sponsor_pipeline/schemas.py:3:These define the expected columns at each stage boundary, enabling validation
-./src/uk_sponsor_pipeline/schemas.py:20:# Stage 1 output: filtered and aggregated sponsors
-./src/uk_sponsor_pipeline/schemas.py:33:# Stage 2 output: enriched with Companies House data
-./src/uk_sponsor_pipeline/schemas.py:81:# Stage 3 output: scored for tech-likelihood
-./src/uk_sponsor_pipeline/schemas.py:108:def validate_columns(df_columns: list[str], required: frozenset[str], stage_name: str) -> None:
-./src/uk_sponsor_pipeline/schemas.py:114:        stage_name: Name of stage for error messages.
-./src/uk_sponsor_pipeline/schemas.py:121:        raise ValueError(f"{stage_name}: Missing required columns: {sorted(missing)}")
-./pyproject.toml:93:name = "Domain must not import CLI or stages"
-./pyproject.toml:96:forbidden_modules = ["uk_sponsor_pipeline.cli", "uk_sponsor_pipeline.stages"]
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:1:"""Stage 3: Composable scoring model for tech-likelihood.
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:6:- Explainability output (stage3_explain.csv)
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:29:from ..types import Stage2EnrichedRow
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:33:    row: Stage2EnrichedRow,
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:65:        validate_as(Stage2EnrichedRow, row.to_dict()), region, postcodes
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:69:def run_stage3(
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:70:    stage2_path: str | Path = "data/processed/stage2_enriched_companies_house.csv",
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:75:    """Stage 3: Score companies for tech-likelihood and produce shortlist.
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:78:        stage2_path: Path to Stage 2 enriched CSV.
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:93:    logger = get_logger("uk_sponsor_pipeline.stage3")
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:94:    stage2_path = Path(stage2_path)
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:98:    df = fs.read_csv(stage2_path).fillna("")
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:100:        list(df.columns), frozenset(STAGE2_ENRICHED_COLUMNS), "Stage 2 enriched output"
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:111:        features_list.append(calculate_features(validate_as(Stage2EnrichedRow, row.to_dict())))
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:125:    validate_columns(list(df.columns), frozenset(STAGE3_SCORED_COLUMNS), "Stage 3 scored output")
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:128:    scored_path = out_dir / "stage3_scored.csv"
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:148:    shortlist_path = out_dir / "stage3_shortlist_tech.csv"
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:154:        list(shortlist.columns), frozenset(STAGE3_EXPLAIN_COLUMNS), "Stage 3 shortlist"
-./src/uk_sponsor_pipeline/application/stage3_scoring.py:157:    explain_path = out_dir / "stage3_explain.csv"
-./docs/troubleshooting.md:5:If Stage 2 fails with `401 Unauthorized` or `Invalid Authorization`:
-./docs/troubleshooting.md:9:- Stage 2 uses HTTP Basic Auth with the API key as the username and a blank password.
-./docs/troubleshooting.md:14:Stage 2 fails fast on authentication, rate‑limit exhaustion, circuit breaker open, or unexpected HTTP errors. This is intentional to protect the API and preserve data quality.
-./docs/troubleshooting.md:18:- Check `data/processed/stage2_resume_report.json` for the exact resume command (or the run subdirectory if `--no-resume` was used).
-./data/processed/stage2_resume_report.json:5:  "stage1_path": "data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv",
-./data/processed/stage2_resume_report.json:14:  "total_stage1_orgs": 119053,
-./data/processed/stage2_resume_report.json:21:  "resume_command": "uv run uk-sponsor stage2 --input data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv --output-dir data/processed --resume"
-./src/uk_sponsor_pipeline/domain/scoring.py:5:    from uk_sponsor_pipeline.types import Stage2EnrichedRow
-./src/uk_sponsor_pipeline/domain/scoring.py:7:    row: Stage2EnrichedRow = {
-./src/uk_sponsor_pipeline/domain/scoring.py:46:from ..types import Stage2EnrichedRow
-./src/uk_sponsor_pipeline/domain/scoring.py:246:def calculate_features(row: Stage2EnrichedRow) -> ScoringFeatures:
-./src/uk_sponsor_pipeline/domain/companies_house.py:24:    Stage1Row,
-./src/uk_sponsor_pipeline/domain/companies_house.py:25:    Stage2CandidateRow,
-./src/uk_sponsor_pipeline/domain/companies_house.py:26:    Stage2EnrichedRow,
-./src/uk_sponsor_pipeline/domain/companies_house.py:27:    Stage2UnmatchedRow,
-./src/uk_sponsor_pipeline/domain/companies_house.py:138:def build_candidate_row(*, org: str, cand: CandidateMatch, rank: int) -> Stage2CandidateRow:
-./src/uk_sponsor_pipeline/domain/companies_house.py:140:    row: Stage2CandidateRow = {
-./src/uk_sponsor_pipeline/domain/companies_house.py:159:def build_unmatched_row(*, row: Stage1Row, best_match: CandidateMatch | None) -> Stage2UnmatchedRow:
-./src/uk_sponsor_pipeline/domain/companies_house.py:161:    out: Stage2UnmatchedRow = {
-./src/uk_sponsor_pipeline/domain/companies_house.py:174:    row: Stage1Row,
-./src/uk_sponsor_pipeline/domain/companies_house.py:177:) -> Stage2UnmatchedRow:
-./src/uk_sponsor_pipeline/domain/companies_house.py:179:    out: Stage2UnmatchedRow = {
-./src/uk_sponsor_pipeline/domain/companies_house.py:192:    row: Stage1Row,
-./src/uk_sponsor_pipeline/domain/companies_house.py:195:) -> Stage2EnrichedRow:
-./src/uk_sponsor_pipeline/domain/companies_house.py:200:    out: Stage2EnrichedRow = {
-./src/uk_sponsor_pipeline/observability/logging.py:6:    logger = get_logger("uk_sponsor_pipeline.stage1")
-./src/uk_sponsor_pipeline/application/stage1.py:1:"""Stage 1: Filter to Skilled Worker + A-rated and aggregate by organisation.
-./src/uk_sponsor_pipeline/application/stage1.py:28:class Stage1Result:
-./src/uk_sponsor_pipeline/application/stage1.py:29:    """Result of Stage 1 processing."""
-./src/uk_sponsor_pipeline/application/stage1.py:39:class Stage1Stats:
-./src/uk_sponsor_pipeline/application/stage1.py:40:    """Statistics from Stage 1 processing."""
-./src/uk_sponsor_pipeline/application/stage1.py:96:def run_stage1(
-./src/uk_sponsor_pipeline/application/stage1.py:98:    out_path: str | Path = "data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv",
-./src/uk_sponsor_pipeline/application/stage1.py:101:) -> Stage1Result:
-./src/uk_sponsor_pipeline/application/stage1.py:102:    """Stage 1: Filter to Skilled Worker + A-rated and aggregate to org level.
-./src/uk_sponsor_pipeline/application/stage1.py:111:        Stage1Result with paths and counts.
-./src/uk_sponsor_pipeline/application/stage1.py:114:    logger = get_logger("uk_sponsor_pipeline.stage1")
-./src/uk_sponsor_pipeline/application/stage1.py:165:    validate_columns(list(agg.columns), frozenset(STAGE1_OUTPUT_COLUMNS), "Stage 1 output")
-./src/uk_sponsor_pipeline/application/stage1.py:170:    stats = Stage1Stats(
-./src/uk_sponsor_pipeline/application/stage1.py:185:    stats_path = reports_dir / "stage1_stats.json"
-./src/uk_sponsor_pipeline/application/stage1.py:202:    return Stage1Result(
-./tests/test_cli.py:14:def test_cli_stage3_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
-./tests/test_cli.py:26:    def fake_run_stage3(stage2_path: str, out_dir: str, config: PipelineConfig) -> dict[str, str]:
-./tests/test_cli.py:30:    monkeypatch.setattr(cli, "run_stage3", fake_run_stage3)
-./tests/test_cli.py:35:            "stage3",
-./tests/test_cli.py:51:def test_cli_stage3_rejects_multiple_regions(monkeypatch: pytest.MonkeyPatch) -> None:
-./tests/test_cli.py:61:    result = runner.invoke(cli.app, ["stage3", "--region", "London", "--region", "Leeds"])
-./tests/test_cli.py:68:    calls = {"stage1": 0, "stage2": 0, "stage3": 0}
-./tests/test_cli.py:70:    def fake_stage1(*args: object, **kwargs: object) -> SimpleNamespace:
-./tests/test_cli.py:71:        calls["stage1"] += 1
-./tests/test_cli.py:74:    def fake_stage2(*args: object, **kwargs: object) -> dict[str, str]:
-./tests/test_cli.py:75:        calls["stage2"] += 1
-./tests/test_cli.py:78:    def fake_stage3(*args: object, **kwargs: object) -> dict[str, str]:
-./tests/test_cli.py:79:        calls["stage3"] += 1
-./tests/test_cli.py:94:    monkeypatch.setattr(cli, "run_stage1", fake_stage1)
-./tests/test_cli.py:95:    monkeypatch.setattr(cli, "run_stage2", fake_stage2)
-./tests/test_cli.py:96:    monkeypatch.setattr(cli, "run_stage3", fake_stage3)
-./tests/test_cli.py:101:    assert calls == {"stage1": 1, "stage2": 1, "stage3": 1}
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:1:"""Stage 2: Companies House enrichment with improved matching and resumability.
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:59:    Stage1Row,
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:60:    Stage2CandidateRow,
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:61:    Stage2EnrichedRow,
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:62:    Stage2ResumeReport,
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:63:    Stage2UnmatchedRow,
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:72:    "run_stage2",
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:104:    validate_columns(list(coerced.columns), frozenset(columns), "Stage 2 output")
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:114:def _coerce_stage1_row(raw: dict[str, object]) -> Stage1Row:
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:128:def _coerce_stage1_rows(raw_rows: list[dict[str, object]]) -> list[Stage1Row]:
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:129:    return [_coerce_stage1_row(row) for row in raw_rows]
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:135:    stage1_path: Path,
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:140:    total_stage1_orgs: int,
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:154:) -> Stage2ResumeReport:
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:164:        f"uv run uk-sponsor stage2 --input {stage1_path} --output-dir {out_dir} --resume"
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:174:        "stage1_path": str(stage1_path),
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:180:        "total_stage1_orgs": total_stage1_orgs,
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:193:def run_stage2(
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:194:    stage1_path: str | Path = "data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv",
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:205:    """Stage 2: Enrich Stage 1 orgs with Companies House search + profile.
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:208:        stage1_path: Path to Stage 1 output CSV.
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:237:    stage1_path = Path(stage1_path)
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:242:    logger = get_logger("uk_sponsor_pipeline.stage2")
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:248:    out_enriched = out_dir / "stage2_enriched_companies_house.csv"
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:249:    out_unmatched = out_dir / "stage2_unmatched.csv"
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:250:    out_candidates = out_dir / "stage2_candidates_top3.csv"
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:251:    out_checkpoint = out_dir / "stage2_checkpoint.csv"
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:252:    out_resume_report = out_dir / "stage2_resume_report.json"
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:258:    df = fs.read_csv(stage1_path).fillna("")
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:259:    validate_columns(list(df.columns), frozenset(STAGE1_OUTPUT_COLUMNS), "Stage 1 output")
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:260:    total_stage1_orgs = len(df)
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:306:    rows = _coerce_stage1_rows(raw_rows)
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:315:        math.ceil(total_stage1_orgs / batch_size_value) if total_stage1_orgs else 0
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:347:    batch_enriched: list[Stage2EnrichedRow] = []
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:348:    batch_unmatched: list[Stage2UnmatchedRow] = []
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:349:    batch_candidates: list[Stage2CandidateRow] = []
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:544:        remaining = max(0, total_stage1_orgs - processed_total)
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:547:            stage1_path=stage1_path,
-./src/uk_sponsor_pipeline/application/stage2_companies_house.py:552:            total_stage1_orgs=total_stage1_orgs,
-./src/uk_sponsor_pipeline/types.py:7:Stage1Row = TypedDict(
-./src/uk_sponsor_pipeline/types.py:8:    "Stage1Row",
-./src/uk_sponsor_pipeline/types.py:59:Stage2CandidateRow = TypedDict(
-./src/uk_sponsor_pipeline/types.py:60:    "Stage2CandidateRow",
-./src/uk_sponsor_pipeline/types.py:79:Stage2UnmatchedRow = TypedDict(
-./src/uk_sponsor_pipeline/types.py:80:    "Stage2UnmatchedRow",
-./src/uk_sponsor_pipeline/types.py:99:Stage2EnrichedRow = TypedDict(
-./src/uk_sponsor_pipeline/types.py:100:    "Stage2EnrichedRow",
-./src/uk_sponsor_pipeline/types.py:139:class Stage2ResumeReport(TypedDict):
-./src/uk_sponsor_pipeline/types.py:140:    """Stage 2 resume report shape."""
-./src/uk_sponsor_pipeline/types.py:148:    stage1_path: str
-./src/uk_sponsor_pipeline/types.py:154:    total_stage1_orgs: int
-./src/uk_sponsor_pipeline/types.py:166:Stage3ScoredRow = TypedDict(
-./src/uk_sponsor_pipeline/types.py:167:    "Stage3ScoredRow",
-./src/uk_sponsor_pipeline/types.py:205:Stage3ExplainRow = TypedDict(
-./src/uk_sponsor_pipeline/types.py:206:    "Stage3ExplainRow",
-./src/uk_sponsor_pipeline/types.py:228:Stage3ShortlistRow = Stage3ScoredRow
-./docs/architectural-decision-records/adr0013-strict-internal-typing.md:25:- Additional type definitions for structured data (e.g., stage rows and API payloads).
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:33204:elasticStage Ltd,elasticstage,False,False,London,,Worker (A rating),Skilled Worker,elasticStage Ltd
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:34344:English Stage Company,english stage,False,False,London,,Worker (A rating),Skilled Worker,English Stage Company
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:34871:Erly Stage Studios Ltd,erly stage studios,False,False,Nine Elms,London,Worker (A rating),Skilled Worker,Erly Stage Studios Ltd
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:35129:Estage Group Holding LTD,estage holding,False,False,London,,Worker (A rating),Skilled Worker,Estage Group Holding LTD
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:41214:Gemstage Ltd,gemstage,False,False,London,United Kingdom,Worker (A rating),Skilled Worker,Gemstage Ltd
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:43488:GRAND STAGES & DECOR LTD,grand stages decor,False,False,London,,Worker (A rating),Skilled Worker,GRAND STAGES & DECOR LTD
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:64327:Majorstage Limited,majorstage,False,False,Northwich,,Worker (A rating),Skilled Worker,Majorstage Limited
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:73422:NEXTSTAGE EVENTS LIMITED,nextstage events,False,False,London,,Worker (A rating),Skilled Worker,NEXTSTAGE EVENTS LIMITED
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:85751:Raviga Group Limited T/A Stage Stubs and Class Manager,raviga t a stage stubs and class manager,False,False,Exminster,Devon,Worker (A rating),Skilled Worker,Raviga Group Limited T/A Stage Stubs and Class Manager
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:93030:Serious Stages Ltd,serious stages,False,False,Wells,Somerset,Worker (A rating),Skilled Worker,Serious Stages Ltd
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99106:STAGE AND LIGHT SERVICES LIMITED,stage and light services,False,False,ILFORD,,Worker (A rating),Skilled Worker,STAGE AND LIGHT SERVICES LIMITED
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99107:STAGE DOOR TENBY LTD,stage door tenby,False,False,Quorn,,Worker (A rating),Skilled Worker,STAGE DOOR TENBY LTD
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99108:Stage Enterprises Limited,stage enterprises,False,False,London,,Worker (A rating),Skilled Worker,Stage Enterprises Limited
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99109:Stage Entertainment UK Limited,stage entertainment,False,False,London,,Worker (A rating),Skilled Worker,Stage Entertainment UK Limited
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99110:Stagecoach Holdings Limited,stagecoach,False,False,Perth,,Worker (A rating),Skilled Worker,Stagecoach Holdings Limited
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99111:Stagemount Limited,stagemount,False,False,Nottingham,,Worker (A rating),Skilled Worker,Stagemount Limited
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99422:STARTUP STAGE LIMITED,startup stage,False,False,"Wokingham, United Kingdom",,Worker (A rating),Skilled Worker,STARTUP STAGE LIMITED
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:105770:The landing stage limited,the landing stage,False,False,Birmingham,,Worker (A rating),Skilled Worker,The landing stage limited
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:113387:Vistage International (UK) Limited,vistage,False,False,Hedge End,Hampshire,Worker (A rating),Skilled Worker,Vistage International (UK) Limited
-./data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv:115514:WhatsOnStage Limited,whatsonstage,False,False,Hull,East Yorkshire,Worker (A rating),Skilled Worker,WhatsOnStage Limited
-./src/uk_sponsor_pipeline/stages/stage1.py:1:"""Stage wrapper for Stage 1 use-case."""
-./src/uk_sponsor_pipeline/stages/stage1.py:5:from ..application.stage1 import Stage1Result, Stage1Stats, run_stage1
-./src/uk_sponsor_pipeline/stages/stage1.py:7:__all__ = ["Stage1Result", "Stage1Stats", "run_stage1"]
-./src/uk_sponsor_pipeline/stages/stage3_scoring.py:1:"""Stage wrapper for Stage 3 scoring use-case."""
-./src/uk_sponsor_pipeline/stages/stage3_scoring.py:5:from ..application.stage3_scoring import run_stage3
-./src/uk_sponsor_pipeline/stages/stage3_scoring.py:20:    "run_stage3",
-./src/uk_sponsor_pipeline/stages/stage2_companies_house.py:1:"""Stage wrapper for Stage 2 Companies House use-case."""
-./src/uk_sponsor_pipeline/stages/stage2_companies_house.py:5:from ..application.stage2_companies_house import CandidateMatch, MatchScore, run_stage2
-./src/uk_sponsor_pipeline/stages/stage2_companies_house.py:7:__all__ = ["CandidateMatch", "MatchScore", "run_stage2"]
-./src/uk_sponsor_pipeline/config.py:14:    """Immutable configuration object for all pipeline stages.
-./src/uk_sponsor_pipeline/config.py:34:    # Stage 3 scoring
-./src/uk_sponsor_pipeline/config.py:37:    # Geographic filters (applied in Stage 3)
-./src/uk_sponsor_pipeline/cli.py:5:- stage1: Filter to Skilled Worker + A-rated, aggregate by org
-./src/uk_sponsor_pipeline/cli.py:6:- stage2: Enrich with Companies House data
-./src/uk_sponsor_pipeline/cli.py:7:- stage3: Score for tech-likelihood, produce shortlist
-./src/uk_sponsor_pipeline/cli.py:8:- run-all: Execute all stages sequentially
-./src/uk_sponsor_pipeline/cli.py:20:from .stages.download import DownloadResult, download_latest
-./src/uk_sponsor_pipeline/cli.py:21:from .stages.stage1 import Stage1Result, run_stage1
-./src/uk_sponsor_pipeline/cli.py:22:from .stages.stage2_companies_house import run_stage2
-./src/uk_sponsor_pipeline/cli.py:23:from .stages.stage3_scoring import run_stage3
-./src/uk_sponsor_pipeline/cli.py:31:DEFAULT_STAGE1_OUT = Path("data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv")
-./src/uk_sponsor_pipeline/cli.py:33:DEFAULT_STAGE2_IN = Path("data/processed/stage2_enriched_companies_house.csv")
-./src/uk_sponsor_pipeline/cli.py:71:def stage1(
-./src/uk_sponsor_pipeline/cli.py:88:    """Stage 1: Filter to Skilled Worker + A-rated and aggregate by organization."""
-./src/uk_sponsor_pipeline/cli.py:89:    result: Stage1Result = run_stage1(raw_dir=raw_dir, out_path=out_path)
-./src/uk_sponsor_pipeline/cli.py:90:    rprint(f"[green]✓ Stage 1 complete:[/green] {result.output_path}")
-./src/uk_sponsor_pipeline/cli.py:98:def stage2(
-./src/uk_sponsor_pipeline/cli.py:99:    stage1_path: Annotated[
-./src/uk_sponsor_pipeline/cli.py:104:            help="Path to Stage 1 output CSV",
-./src/uk_sponsor_pipeline/cli.py:144:    """Stage 2: Enrich Stage 1 output using Companies House API.
-./src/uk_sponsor_pipeline/cli.py:147:    Resume: --resume and check data/processed/stage2_resume_report.json.
-./src/uk_sponsor_pipeline/cli.py:150:    outs = run_stage2(
-./src/uk_sponsor_pipeline/cli.py:151:        stage1_path=stage1_path,
-./src/uk_sponsor_pipeline/cli.py:159:    rprint("[green]✓ Stage 2 complete:[/green]")
-./src/uk_sponsor_pipeline/cli.py:165:def stage3(
-./src/uk_sponsor_pipeline/cli.py:166:    stage2_path: Annotated[
-./src/uk_sponsor_pipeline/cli.py:171:            help="Path to Stage 2 enriched CSV",
-./src/uk_sponsor_pipeline/cli.py:210:    """Stage 3: Score for tech-likelihood and produce shortlist.
-./src/uk_sponsor_pipeline/cli.py:224:    outs = run_stage3(stage2_path=stage2_path, out_dir=out_dir, config=config)
-./src/uk_sponsor_pipeline/cli.py:225:    rprint("[green]✓ Stage 3 complete:[/green]")
-./src/uk_sponsor_pipeline/cli.py:253:            help="Override tech score threshold for Stage 3",
-./src/uk_sponsor_pipeline/cli.py:264:    """Run all pipeline stages sequentially.
-./src/uk_sponsor_pipeline/cli.py:266:    Executes: download → stage1 → stage2 → stage3
-./src/uk_sponsor_pipeline/cli.py:267:    Geographic filters apply to the final Stage 3 shortlist.
-./src/uk_sponsor_pipeline/cli.py:269:    # Stage 0: Download
-./src/uk_sponsor_pipeline/cli.py:271:        rprint("\n[bold cyan]═══ Stage 0: Download ═══[/bold cyan]")
-./src/uk_sponsor_pipeline/cli.py:277:    # Stage 1
-./src/uk_sponsor_pipeline/cli.py:278:    rprint("\n[bold cyan]═══ Stage 1: Filter & Aggregate ═══[/bold cyan]")
-./src/uk_sponsor_pipeline/cli.py:279:    stage1_result = run_stage1()
-./src/uk_sponsor_pipeline/cli.py:280:    rprint(f"[green]✓ {stage1_result.unique_orgs:,} unique organizations[/green]")
-./src/uk_sponsor_pipeline/cli.py:284:    # Stage 2
-./src/uk_sponsor_pipeline/cli.py:285:    rprint("\n[bold cyan]═══ Stage 2: Companies House Enrichment ═══[/bold cyan]")
-./src/uk_sponsor_pipeline/cli.py:286:    stage2_outs = run_stage2(config=config)
-./src/uk_sponsor_pipeline/cli.py:287:    rprint(f"[green]✓ Enriched: {stage2_outs['enriched']}[/green]")
-./src/uk_sponsor_pipeline/cli.py:289:    # Stage 3
-./src/uk_sponsor_pipeline/cli.py:290:    rprint("\n[bold cyan]═══ Stage 3: Tech Scoring & Shortlist ═══[/bold cyan]")
-./src/uk_sponsor_pipeline/cli.py:299:    stage3_outs = run_stage3(config=config)
-./src/uk_sponsor_pipeline/cli.py:302:    rprint(f"Final shortlist: {stage3_outs['shortlist']}")
-./src/uk_sponsor_pipeline/cli.py:303:    rprint(f"Explainability: {stage3_outs['explain']}")
-./tests/test_domain_scoring.py:3:from tests.support.stage2_rows import make_stage2_row
-./tests/test_domain_scoring.py:97:        row = make_stage2_row(
-./tests/test_domain_scoring.py:112:        row = make_stage2_row(
-./src/uk_sponsor_pipeline/stages/download.py:1:"""Stage wrapper for download use-case."""
-./tests/test_domain_companies_house.py:13:from uk_sponsor_pipeline.types import CompanyProfile, SearchItem, Stage1Row
-./tests/test_domain_companies_house.py:24:def _stage1_row(**overrides: str) -> Stage1Row:
-./tests/test_domain_companies_house.py:25:    row: Stage1Row = {
-./tests/test_domain_companies_house.py:37:    return validate_as(Stage1Row, merged)
-./tests/test_domain_companies_house.py:81:    base = _stage1_row()
-./tests/test_domain_companies_house.py:95:    row = _stage1_row()
-./tests/test_download.py:1:"""Tests for download stage with filesystem injection."""
-./tests/test_download.py:6:from uk_sponsor_pipeline.stages.download import download_latest
-./docs/architectural-decision-records/adr0010-stage3-tech-likelihood-scoring.md:1:# ADR 0010: Stage 3 Tech-Likelihood Scoring
-./docs/architectural-decision-records/adr0010-stage3-tech-likelihood-scoring.md:16:The scoring rules live in the domain layer (`domain/scoring.py`) and are invoked by the Stage 3 application use-case.
-./tests/test_stage3.py:1:"""Tests for Stage 3 scoring."""
-./tests/test_stage3.py:8:from tests.support.stage2_rows import make_stage2_row
-./tests/test_stage3.py:10:from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
-./tests/test_stage3.py:13:def test_stage3_geographic_filter(tmp_path: Path) -> None:
-./tests/test_stage3.py:15:        make_stage2_row(
-./tests/test_stage3.py:23:        make_stage2_row(
-./tests/test_stage3.py:33:    stage2_path = tmp_path / "stage2.csv"
-./tests/test_stage3.py:34:    df.to_csv(stage2_path, index=False)
-./tests/test_stage3.py:37:    outs = run_stage3(stage2_path=stage2_path, out_dir=tmp_path, config=config)
-./tests/test_stage3.py:43:def test_stage3_sorting_uses_numeric_match_score(tmp_path: Path) -> None:
-./tests/test_stage3.py:45:        make_stage2_row(
-./tests/test_stage3.py:51:        make_stage2_row(
-./tests/test_stage3.py:59:    stage2_path = tmp_path / "stage2.csv"
-./tests/test_stage3.py:60:    df.to_csv(stage2_path, index=False)
-./tests/test_stage3.py:62:    outs = run_stage3(stage2_path=stage2_path, out_dir=tmp_path, config=PipelineConfig())
-./tests/test_stage3.py:68:def test_stage3_requires_config() -> None:
-./tests/test_stage3.py:70:        run_stage3()
-./tests/test_integration.py:9:from uk_sponsor_pipeline.stages.stage1 import run_stage1
-./tests/test_integration.py:10:from uk_sponsor_pipeline.stages.stage2_companies_house import run_stage2
-./tests/test_integration.py:11:from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
-./tests/test_integration.py:30:    stage1 = run_stage1(
-./tests/test_integration.py:32:        out_path=Path("interim/stage1.csv"),
-./tests/test_integration.py:67:    stage2 = run_stage2(
-./tests/test_integration.py:68:        stage1_path=stage1.output_path,
-./tests/test_integration.py:83:    stage3 = run_stage3(
-./tests/test_integration.py:84:        stage2_path=stage2["enriched"],
-./tests/test_integration.py:90:    shortlist = in_memory_fs.read_csv(stage3["shortlist"])
-./tests/test_stage1.py:1:"""Tests for Stage 1 pipeline behavior."""
-./tests/test_stage1.py:9:from uk_sponsor_pipeline.stages.stage1 import run_stage1
-./tests/test_stage1.py:12:def test_stage1_filters_and_aggregates(sample_raw_csv: pd.DataFrame, tmp_path: Path) -> None:
-./tests/test_stage1.py:18:    out_path = tmp_path / "interim" / "stage1.csv"
-./tests/test_stage1.py:21:    result = run_stage1(raw_dir=raw_dir, out_path=out_path, reports_dir=reports_dir)
-./tests/test_stage1.py:33:        json.loads((reports_dir / "stage1_stats.json").read_text()),
-./docs/architectural-decision-records/adr0005-dependency-injection-for-io-and-http.md:11:Stages depend on file I/O and HTTP calls. Direct dependencies would make testing brittle and require real network access.
-./docs/architectural-decision-records/adr0005-dependency-injection-for-io-and-http.md:15:Use protocol-style interfaces (`protocols.py`) and concrete implementations (`infrastructure/`). Stages accept injected dependencies (file system, HTTP client, cache, rate limiter, circuit breaker) to keep I/O replaceable.
-./docs/architectural-decision-records/adr0005-dependency-injection-for-io-and-http.md:20:- Production uses concrete implementations without changing stage logic.
-./tests/characterisation/test_stage1_characterisation.py:1:"""Characterisation tests for Stage 1 outputs."""
-./tests/characterisation/test_stage1_characterisation.py:9:from uk_sponsor_pipeline.stages.stage1 import run_stage1
-./tests/characterisation/test_stage1_characterisation.py:12:def test_stage1_output_schema_and_stats(
-./tests/characterisation/test_stage1_characterisation.py:16:    out_path = Path("data/interim/stage1.csv")
-./tests/characterisation/test_stage1_characterisation.py:21:    result = run_stage1(
-./tests/characterisation/test_stage1_characterisation.py:29:    stats = in_memory_fs.read_json(reports_dir / "stage1_stats.json")
-./tests/characterisation/test_stage2_characterisation.py:1:"""Characterisation tests for Stage 2 outputs and error reporting."""
-./tests/characterisation/test_stage2_characterisation.py:13:from uk_sponsor_pipeline.stages.stage2_companies_house import run_stage2
-./tests/characterisation/test_stage2_characterisation.py:14:from uk_sponsor_pipeline.types import Stage2ResumeReport
-./tests/characterisation/test_stage2_characterisation.py:17:def _stage1_input_df() -> pd.DataFrame:
-./tests/characterisation/test_stage2_characterisation.py:35:def test_stage2_outputs_are_deterministic(
-./tests/characterisation/test_stage2_characterisation.py:41:    stage1_path = Path("data/interim/stage1.csv")
-./tests/characterisation/test_stage2_characterisation.py:45:    in_memory_fs.write_csv(_stage1_input_df(), stage1_path)
-./tests/characterisation/test_stage2_characterisation.py:61:    outs = run_stage2(
-./tests/characterisation/test_stage2_characterisation.py:62:        stage1_path=stage1_path,
-./tests/characterisation/test_stage2_characterisation.py:74:        Stage2ResumeReport,
-./tests/characterisation/test_stage2_characterisation.py:97:def test_stage2_search_errors_write_resume_report(in_memory_fs: InMemoryFileSystem) -> None:
-./tests/characterisation/test_stage2_characterisation.py:98:    stage1_path = Path("data/interim/stage1.csv")
-./tests/characterisation/test_stage2_characterisation.py:102:    in_memory_fs.write_csv(_stage1_input_df(), stage1_path)
-./tests/characterisation/test_stage2_characterisation.py:117:        run_stage2(
-./tests/characterisation/test_stage2_characterisation.py:118:            stage1_path=stage1_path,
-./tests/characterisation/test_stage2_characterisation.py:128:        Stage2ResumeReport,
-./tests/characterisation/test_stage2_characterisation.py:129:        in_memory_fs.read_json(out_dir / "stage2_resume_report.json"),
-./docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:1:# ADR 0008: Stage 2 Batching, Resume, and Reporting
-./docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:11:Stage 2 can take hours for large datasets and should be safe to interrupt and resume. Operators need visibility into progress and an easy way to restart.
-./docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:15:Stage 2 processes input in batches with explicit controls (`batch_start`, `batch_count`, `batch_size`). Progress is recorded to:
-./docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:16:- `stage2_checkpoint.csv` (processed orgs)
-./docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:17:- `stage2_resume_report.json` (run metadata and timing)
-./docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:21:Stage 2 is fail‑fast on authentication, rate‑limit exhaustion, circuit breaker open, and unexpected HTTP errors (including profile fetch failures). Resumable artefacts are written before exit so operators can fix the issue and continue safely.
-./docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:23:When `--no-resume` is used, Stage 2 writes outputs into a new timestamped subdirectory under the chosen output directory to avoid stale data reuse.
-./docs/architectural-decision-records/README.md:9:- `adr0003-stage-based-csv-pipeline.md`
-./docs/architectural-decision-records/README.md:14:- `adr0008-stage2-batching-resume-and-reporting.md`
-./docs/architectural-decision-records/README.md:15:- `adr0009-stage2-matching-and-audit-trail.md`
-./docs/architectural-decision-records/README.md:16:- `adr0010-stage3-tech-likelihood-scoring.md`
-./docs/architectural-decision-records/README.md:18:- `adr0012-stages-as-artefact-boundaries.md`
-./tests/characterisation/README.md:8:- Provide concrete, deterministic expectations for stage outputs and error reporting.
-./tests/characterisation/README.md:19:- `test_stage1_characterisation.py`
-./tests/characterisation/README.md:20:- `test_stage2_characterisation.py`
-./tests/characterisation/README.md:21:- `test_stage3_characterisation.py`
-./docs/architectural-decision-records/adr0009-stage2-matching-and-audit-trail.md:1:# ADR 0009: Stage 2 Matching and Audit Trail
-./docs/architectural-decision-records/adr0009-stage2-matching-and-audit-trail.md:15:Use a multi-variant query strategy with explicit scoring components. Persist the top candidates for each organisation to `stage2_candidates_top3.csv` alongside the matched/unmatched outputs. Record match scores and confidence bands in the enriched output.
-./tests/support/stage2_rows.py:1:"""Shared Stage 2 row helpers for tests."""
-./tests/support/stage2_rows.py:6:from uk_sponsor_pipeline.types import Stage2EnrichedRow
-./tests/support/stage2_rows.py:9:def make_stage2_row(**overrides: str | float) -> Stage2EnrichedRow:
-./tests/support/stage2_rows.py:10:    """Build a valid Stage2EnrichedRow with optional overrides."""
-./tests/support/stage2_rows.py:11:    row: Stage2EnrichedRow = {
-./tests/support/stage2_rows.py:40:    return validate_as(Stage2EnrichedRow, merged)
-./data/archive/20260131T201948Z/stage2_resume_report.json:5:  "stage1_path": "data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv",
-./data/archive/20260131T201948Z/stage2_resume_report.json:14:  "total_stage1_orgs": 119053,
-./data/archive/20260131T201948Z/stage2_resume_report.json:21:  "resume_command": "uv run uk-sponsor stage2 --input data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv --output-dir data/processed --resume"
-./docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:1:# ADR 0012: Stages as Artefact Boundaries, Application Orchestration
-./docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:11:The pipeline uses staged CSV outputs for auditability and resumability. However, treating stages as architectural boundaries has led to duplicated infrastructure setup, inconsistent error handling, and configuration being loaded in multiple places. We need a SOLID/DI‑aligned architecture where shared standards (observability, resilience, filesystem, HTTP, error handling) are applied uniformly, while preserving the staged artefacts that make the pipeline explainable and recoverable.
-./docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:15:- Keep staged CSV artefacts as data contracts and audit checkpoints.
-./docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:16:- Treat “stages” as conceptual labels for outputs, not architectural boundaries.
-./docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:21:- If `stages/` remains, it must be a thin delegate layer that forwards to application steps.
-./docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:25:- Auditability and resumability remain intact via staged artefacts.
-./docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:28:- Requires refactoring existing stage modules into application steps (see refactor plan).
-./docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:29:- Supersedes ADR 0003’s implication that stages are architectural boundaries.
-./docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:33:In progress: the target architecture is an `application/` use‑case layer with `stages/` acting only as delegates. Residual logic in `stages/` should continue to be moved into `application/` until `stages/` contains no business logic.
-./docs/architectural-decision-records/adr0003-stage-based-csv-pipeline.md:1:# ADR 0003: Stage-Based CSV Pipeline
-./docs/architectural-decision-records/adr0003-stage-based-csv-pipeline.md:15:Use a staged pipeline with CSV artefacts at each stage:
-./docs/architectural-decision-records/adr0003-stage-based-csv-pipeline.md:17:- Stage 1 → filtered + aggregated CSV
-./docs/architectural-decision-records/adr0003-stage-based-csv-pipeline.md:18:- Stage 2 → enriched CSVs (matched, unmatched, candidates)
-./docs/architectural-decision-records/adr0003-stage-based-csv-pipeline.md:19:- Stage 3 → scored and shortlisted CSVs
-./docs/architectural-decision-records/adr0003-stage-based-csv-pipeline.md:28:- Stages are now treated as artefact boundaries, not architectural boundaries (see ADR 0012).
-./docs/architectural-decision-records/adr0014-io-boundaries-consolidation.md:11:Incoming filesystem and network IO boundaries were spread across multiple modules (stage modules and cache helpers). This made it harder to enforce the “unknown only at IO boundaries” rule and to audit where untrusted data enters the system.
-./docs/architectural-decision-records/adr0014-io-boundaries-consolidation.md:20:Stages must use the `FileSystem` and `HttpSession` / `HttpClient` protocols rather than calling `requests` or filesystem APIs directly.
-./docs/architectural-decision-records/adr0014-io-boundaries-consolidation.md:24:Stages and application logic must not import `requests` or perform filesystem/network IO directly; they only depend on protocols.
-./tests/characterisation/test_stage3_characterisation.py:1:"""Characterisation tests for Stage 3 outputs."""
-./tests/characterisation/test_stage3_characterisation.py:11:from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
-./tests/characterisation/test_stage3_characterisation.py:12:from uk_sponsor_pipeline.types import Stage2EnrichedRow
-./tests/characterisation/test_stage3_characterisation.py:15:def _stage2_row(**overrides: str | float) -> Stage2EnrichedRow:
-./tests/characterisation/test_stage3_characterisation.py:16:    row: Stage2EnrichedRow = {
-./tests/characterisation/test_stage3_characterisation.py:45:    return validate_as(Stage2EnrichedRow, merged)
-./tests/characterisation/test_stage3_characterisation.py:48:def test_stage3_outputs_are_deterministic(in_memory_fs: InMemoryFileSystem) -> None:
-./tests/characterisation/test_stage3_characterisation.py:49:    stage2_path = Path("data/processed/stage2_enriched_companies_house.csv")
-./tests/characterisation/test_stage3_characterisation.py:54:            _stage2_row(),
-./tests/characterisation/test_stage3_characterisation.py:55:            _stage2_row(
-./tests/characterisation/test_stage3_characterisation.py:66:    in_memory_fs.write_csv(df, stage2_path)
-./tests/characterisation/test_stage3_characterisation.py:68:    outputs = run_stage3(
-./tests/characterisation/test_stage3_characterisation.py:69:        stage2_path=stage2_path,
-./tests/test_stage2.py:1:"""Tests for Stage 2 Companies House integration."""
-./tests/test_stage2.py:12:from uk_sponsor_pipeline.application import stage2_companies_house as s2
-./tests/test_stage2.py:13:from uk_sponsor_pipeline.application.stage2_companies_house import run_stage2
-./tests/test_stage2.py:24:from uk_sponsor_pipeline.types import SearchItem, Stage2ResumeReport
-./tests/test_stage2.py:129:class TestStage2AuthIntegration:
-./tests/test_stage2.py:130:    """Integration tests for Stage 2 authentication."""
-./tests/test_stage2.py:134:        # Create minimal stage1 input
-./tests/test_stage2.py:135:        stage1_csv = tmp_path / "stage1.csv"
-./tests/test_stage2.py:136:        stage1_csv.write_text(
-./tests/test_stage2.py:157:        # Run stage2 with our mock
-./tests/test_stage2.py:162:            run_stage2(
-./tests/test_stage2.py:163:                stage1_path=stage1_csv,
-./tests/test_stage2.py:177:class TestStage2CandidateOrdering:
-./tests/test_stage2.py:183:        stage1_csv = tmp_path / "stage1.csv"
-./tests/test_stage2.py:184:        stage1_csv.write_text(
-./tests/test_stage2.py:253:        outs = run_stage2(
-./tests/test_stage2.py:254:            stage1_path=stage1_csv,
-./tests/test_stage2.py:267:class TestStage2Resume:
-./tests/test_stage2.py:276:        stage1_path = Path("data/interim/stage1.csv")
-./tests/test_stage2.py:306:        in_memory_fs.write_csv(df, stage1_path)
-./tests/test_stage2.py:350:        run_stage2(
-./tests/test_stage2.py:351:            stage1_path=stage1_path,
-./tests/test_stage2.py:360:        unmatched_df = in_memory_fs.read_csv(out_dir / "stage2_unmatched.csv")
-./tests/test_stage2.py:361:        checkpoint_df = in_memory_fs.read_csv(out_dir / "stage2_checkpoint.csv")
-./tests/test_stage2.py:362:        candidates_df = in_memory_fs.read_csv(out_dir / "stage2_candidates_top3.csv")
-./tests/test_stage2.py:378:        run_stage2(
-./tests/test_stage2.py:379:            stage1_path=stage1_path,
-./tests/test_stage2.py:396:        stage1_path = Path("data/interim/stage1.csv")
-./tests/test_stage2.py:437:        in_memory_fs.write_csv(df, stage1_path)
-./tests/test_stage2.py:481:        outs = run_stage2(
-./tests/test_stage2.py:482:            stage1_path=stage1_path,
-./tests/test_stage2.py:496:            Stage2ResumeReport,
-./tests/test_stage2.py:512:class TestStage2FailFast:
-./tests/test_stage2.py:529:        stage1_path = Path("data/interim/stage1.csv")
-./tests/test_stage2.py:546:            stage1_path,
-./tests/test_stage2.py:562:            run_stage2(
-./tests/test_stage2.py:563:                stage1_path=stage1_path,
-./tests/test_stage2.py:573:def test_stage2_requires_config() -> None:
-./tests/test_stage2.py:575:        run_stage2()
-./tests/test_stage2.py:579:def test_stage2_profile_fetch_errors_fail_fast(
-./tests/test_stage2.py:584:    stage1_path = Path("data/interim/stage1.csv")
-./tests/test_stage2.py:604:        stage1_path,
-./tests/test_stage2.py:655:        run_stage2(
-./tests/test_stage2.py:656:            stage1_path=stage1_path,
-./tests/test_stage2.py:665:    assert in_memory_fs.exists(out_dir / "stage2_resume_report.json")
-./tests/test_stage2.py:666:    assert not in_memory_fs.exists(out_dir / "stage2_unmatched.csv")
-./tests/test_stage2.py:672:    stage1_csv = tmp_path / "stage1.csv"
-./tests/test_stage2.py:673:    stage1_csv.write_text(
-./tests/test_stage2.py:699:    outs = run_stage2(
-./tests/test_stage2.py:700:        stage1_path=stage1_csv,
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:33204:elasticStage Ltd,elasticstage,False,False,London,,Worker (A rating),Skilled Worker,elasticStage Ltd
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:34344:English Stage Company,english stage,False,False,London,,Worker (A rating),Skilled Worker,English Stage Company
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:34871:Erly Stage Studios Ltd,erly stage studios,False,False,Nine Elms,London,Worker (A rating),Skilled Worker,Erly Stage Studios Ltd
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:35129:Estage Group Holding LTD,estage holding,False,False,London,,Worker (A rating),Skilled Worker,Estage Group Holding LTD
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:41214:Gemstage Ltd,gemstage,False,False,London,United Kingdom,Worker (A rating),Skilled Worker,Gemstage Ltd
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:43488:GRAND STAGES & DECOR LTD,grand stages decor,False,False,London,,Worker (A rating),Skilled Worker,GRAND STAGES & DECOR LTD
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:64327:Majorstage Limited,majorstage,False,False,Northwich,,Worker (A rating),Skilled Worker,Majorstage Limited
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:73422:NEXTSTAGE EVENTS LIMITED,nextstage events,False,False,London,,Worker (A rating),Skilled Worker,NEXTSTAGE EVENTS LIMITED
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:85751:Raviga Group Limited T/A Stage Stubs and Class Manager,raviga t a stage stubs and class manager,False,False,Exminster,Devon,Worker (A rating),Skilled Worker,Raviga Group Limited T/A Stage Stubs and Class Manager
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:93030:Serious Stages Ltd,serious stages,False,False,Wells,Somerset,Worker (A rating),Skilled Worker,Serious Stages Ltd
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99106:STAGE AND LIGHT SERVICES LIMITED,stage and light services,False,False,ILFORD,,Worker (A rating),Skilled Worker,STAGE AND LIGHT SERVICES LIMITED
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99107:STAGE DOOR TENBY LTD,stage door tenby,False,False,Quorn,,Worker (A rating),Skilled Worker,STAGE DOOR TENBY LTD
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99108:Stage Enterprises Limited,stage enterprises,False,False,London,,Worker (A rating),Skilled Worker,Stage Enterprises Limited
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99109:Stage Entertainment UK Limited,stage entertainment,False,False,London,,Worker (A rating),Skilled Worker,Stage Entertainment UK Limited
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99110:Stagecoach Holdings Limited,stagecoach,False,False,Perth,,Worker (A rating),Skilled Worker,Stagecoach Holdings Limited
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99111:Stagemount Limited,stagemount,False,False,Nottingham,,Worker (A rating),Skilled Worker,Stagemount Limited
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:99422:STARTUP STAGE LIMITED,startup stage,False,False,"Wokingham, United Kingdom",,Worker (A rating),Skilled Worker,STARTUP STAGE LIMITED
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:105770:The landing stage limited,the landing stage,False,False,Birmingham,,Worker (A rating),Skilled Worker,The landing stage limited
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:113387:Vistage International (UK) Limited,vistage,False,False,Hedge End,Hampshire,Worker (A rating),Skilled Worker,Vistage International (UK) Limited
-./data/archive/20260131T201948Z/stage1_skilled_worker_A_rated_aggregated_by_org.csv:115514:WhatsOnStage Limited,whatsonstage,False,False,Hull,East Yorkshire,Worker (A rating),Skilled Worker,WhatsOnStage Limited
+README.md:9:       (CSV)             Stage1   Stage2  Stage3   (CSV)
+README.md:12:| Stage    | Input       | Output                        | What it does                                        |
+README.md:15:| stage1   | Raw CSV     | `data/interim/stage1_*.csv`   | Filters Skilled Worker + A-rated, aggregates by org |
+README.md:16:| stage2   | Stage1 CSV  | `data/processed/stage2_*.csv` | Enriches via Companies House API                    |
+README.md:17:| stage3   | Stage2 CSV  | `data/processed/stage3_*.csv` | Scores for tech-likelihood, outputs shortlist       |
+README.md:19:Stages describe artefact boundaries for audit and resume. They are not architectural boundaries; orchestration and shared standards live in the application pipeline (see `docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md`).
+README.md:50:# All stages in sequence
+README.md:53:# Or run each stage individually:
+README.md:55:uv run uk-sponsor stage1
+README.md:56:uv run uk-sponsor stage2
+README.md:57:uv run uk-sponsor stage3
+README.md:62:### Stage 2 Batching and Resume
+README.md:64:Stage 2 runs in batches by default using `CH_BATCH_SIZE`. You can control which batches run:
+README.md:68:uv run uk-sponsor stage2 --batch-count 2
+README.md:71:uv run uk-sponsor stage2 --batch-start 3 --batch-count 2
+README.md:74:uv run uk-sponsor stage2 --batch-size 50
+README.md:77:Resume data is written to `data/processed/stage2_checkpoint.csv` and
+README.md:78:`data/processed/stage2_resume_report.json` (includes overall batch range and timing).
+README.md:80:Stage 2 fails fast on authentication, rate limit, circuit breaker, or unexpected HTTP errors. Fix the issue and rerun with `--resume`; the resume report includes a ready‑made command.
+README.md:82:When running with `--no-resume`, Stage 2 writes to a new timestamped subdirectory under the output directory to avoid stale data reuse.
+README.md:90:uv run uk-sponsor stage3 --region London
+README.md:93:uv run uk-sponsor stage3 --region London
+README.md:96:uv run uk-sponsor stage3 --postcode-prefix EC --postcode-prefix SW
+README.md:99:uv run uk-sponsor stage3 --threshold 0.40
+README.md:109:The long‑term direction is an application‑owned pipeline: orchestration and step ownership live in an application layer, domain logic is pure and infrastructure is shared and injected. Staged CSVs remain as artefact boundaries for audit and resume, while `stages/` (if retained) becomes a thin delegate layer only.
+README.md:111:Observability is standardised via a shared logger factory with UTC timestamps so pipeline logs remain consistent across stages.
+README.md:123:│   ├── stage1.py
+README.md:124:│   ├── stage2_companies_house.py
+README.md:125:│   └── stage3_scoring.py
+README.md:138:├── schemas.py          # Column contracts per stage
+README.md:139:└── stages/
+README.md:141:    ├── stage1.py
+README.md:142:    ├── stage2_companies_house.py
+README.md:143:    └── stage3_scoring.py
+README.md:159:The current `stages/` modules implement pipeline steps, but the architectural direction is to move orchestration into an application layer with shared infrastructure and keep `stages/` as thin delegates (or remove it entirely). Track this in `/.agent/plans/refactor-plan.md`.
+README.md:181:Stage entry points require a `PipelineConfig` instance; environment variables are read once at the CLI entry point and passed through. For programmatic use:
+README.md:185:from uk_sponsor_pipeline.stages.stage2_companies_house import run_stage2
+README.md:186:from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
+README.md:189:run_stage2(stage1_path="data/interim/stage1.csv", out_dir="data/processed", config=config)
+README.md:190:run_stage3(stage2_path="data/processed/stage2_enriched_companies_house.csv", out_dir="data/processed", config=config)
+README.md:237:## Scoring Model (Stage 3)
+README.md:257:When running Stage 2 with `--no-resume`, outputs are written under a timestamped
+README.md:263:| `reports/stage1_stats.json`                          | Filtering statistics                          |
+README.md:264:| `data/processed/stage2_enriched_companies_house.csv` | Matched companies with CH data                |
+README.md:265:| `data/processed/stage2_unmatched.csv`                | Orgs that couldn't be matched                 |
+README.md:266:| `data/processed/stage2_candidates_top3.csv`          | Audit trail: top 3 match candidates per org   |
+README.md:267:| `data/processed/stage2_checkpoint.csv`               | Resume checkpoint of processed orgs           |
+README.md:268:| `data/processed/stage2_resume_report.json`           | Resume report for interrupted or partial runs |
+README.md:269:| `data/processed/stage3_scored.csv`                   | All companies with scores                     |
+README.md:270:| `data/processed/stage3_shortlist_tech.csv`           | Filtered shortlist                            |
+README.md:271:| `data/processed/stage3_explain.csv`                  | Score breakdown for shortlist                 |
+README.md:304:- **Companies House 401/403**: ensure `CH_API_KEY` is a valid API key and not an OAuth token; Stage 2 uses Basic Auth with the key as username and a blank password. See `docs/troubleshooting.md`.
+docs/troubleshooting.md:5:If Stage 2 fails with `401 Unauthorized` or `Invalid Authorization`:
+docs/troubleshooting.md:9:- Stage 2 uses HTTP Basic Auth with the API key as the username and a blank password.
+docs/troubleshooting.md:14:Stage 2 fails fast on authentication, rate‑limit exhaustion, circuit breaker open, or unexpected HTTP errors. This is intentional to protect the API and preserve data quality.
+docs/troubleshooting.md:18:- Check `data/processed/stage2_resume_report.json` for the exact resume command (or the run subdirectory if `--no-resume` was used).
+src/uk_sponsor_pipeline/domain/sponsor_register.py:1:"""Sponsor register domain rules for Stage 1 filtering and aggregation.
+src/uk_sponsor_pipeline/domain/sponsor_register.py:55:class Stage1StatsData:
+src/uk_sponsor_pipeline/domain/sponsor_register.py:56:    """Stage 1 statistics computed from raw and filtered rows."""
+src/uk_sponsor_pipeline/domain/sponsor_register.py:71:    """Snapshot of Stage 1 filtering and aggregation."""
+src/uk_sponsor_pipeline/domain/sponsor_register.py:75:    stats: Stage1StatsData
+src/uk_sponsor_pipeline/domain/sponsor_register.py:108:    """Filter and aggregate sponsor register rows for Stage 1.
+src/uk_sponsor_pipeline/domain/sponsor_register.py:180:    stats = Stage1StatsData(
+src/uk_sponsor_pipeline/cli.py:5:- stage1: Filter to Skilled Worker + A-rated, aggregate by org
+src/uk_sponsor_pipeline/cli.py:6:- stage2: Enrich with Companies House data
+src/uk_sponsor_pipeline/cli.py:7:- stage3: Score for tech-likelihood, produce shortlist
+src/uk_sponsor_pipeline/cli.py:8:- run-all: Execute all stages sequentially
+src/uk_sponsor_pipeline/cli.py:20:from .stages.download import DownloadResult, download_latest
+src/uk_sponsor_pipeline/cli.py:21:from .stages.stage1 import Stage1Result, run_stage1
+src/uk_sponsor_pipeline/cli.py:22:from .stages.stage2_companies_house import run_stage2
+src/uk_sponsor_pipeline/cli.py:23:from .stages.stage3_scoring import run_stage3
+src/uk_sponsor_pipeline/cli.py:31:DEFAULT_STAGE1_OUT = Path("data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv")
+src/uk_sponsor_pipeline/cli.py:33:DEFAULT_STAGE2_IN = Path("data/processed/stage2_enriched_companies_house.csv")
+src/uk_sponsor_pipeline/cli.py:71:def stage1(
+src/uk_sponsor_pipeline/cli.py:86:    ] = DEFAULT_STAGE1_OUT,
+src/uk_sponsor_pipeline/cli.py:88:    """Stage 1: Filter to Skilled Worker + A-rated and aggregate by organization."""
+src/uk_sponsor_pipeline/cli.py:89:    result: Stage1Result = run_stage1(raw_dir=raw_dir, out_path=out_path)
+src/uk_sponsor_pipeline/cli.py:90:    rprint(f"[green]✓ Stage 1 complete:[/green] {result.output_path}")
+src/uk_sponsor_pipeline/cli.py:98:def stage2(
+src/uk_sponsor_pipeline/cli.py:99:    stage1_path: Annotated[
+src/uk_sponsor_pipeline/cli.py:104:            help="Path to Stage 1 output CSV",
+src/uk_sponsor_pipeline/cli.py:106:    ] = DEFAULT_STAGE1_OUT,
+src/uk_sponsor_pipeline/cli.py:144:    """Stage 2: Enrich Stage 1 output using Companies House API.
+src/uk_sponsor_pipeline/cli.py:147:    Resume: --resume and check data/processed/stage2_resume_report.json.
+src/uk_sponsor_pipeline/cli.py:150:    outs = run_stage2(
+src/uk_sponsor_pipeline/cli.py:151:        stage1_path=stage1_path,
+src/uk_sponsor_pipeline/cli.py:159:    rprint("[green]✓ Stage 2 complete:[/green]")
+src/uk_sponsor_pipeline/cli.py:165:def stage3(
+src/uk_sponsor_pipeline/cli.py:166:    stage2_path: Annotated[
+src/uk_sponsor_pipeline/cli.py:171:            help="Path to Stage 2 enriched CSV",
+src/uk_sponsor_pipeline/cli.py:173:    ] = DEFAULT_STAGE2_IN,
+src/uk_sponsor_pipeline/cli.py:210:    """Stage 3: Score for tech-likelihood and produce shortlist.
+src/uk_sponsor_pipeline/cli.py:224:    outs = run_stage3(stage2_path=stage2_path, out_dir=out_dir, config=config)
+src/uk_sponsor_pipeline/cli.py:225:    rprint("[green]✓ Stage 3 complete:[/green]")
+src/uk_sponsor_pipeline/cli.py:253:            help="Override tech score threshold for Stage 3",
+src/uk_sponsor_pipeline/cli.py:264:    """Run all pipeline stages sequentially.
+src/uk_sponsor_pipeline/cli.py:266:    Executes: download → stage1 → stage2 → stage3
+src/uk_sponsor_pipeline/cli.py:267:    Geographic filters apply to the final Stage 3 shortlist.
+src/uk_sponsor_pipeline/cli.py:269:    # Stage 0: Download
+src/uk_sponsor_pipeline/cli.py:271:        rprint("\n[bold cyan]═══ Stage 0: Download ═══[/bold cyan]")
+src/uk_sponsor_pipeline/cli.py:277:    # Stage 1
+src/uk_sponsor_pipeline/cli.py:278:    rprint("\n[bold cyan]═══ Stage 1: Filter & Aggregate ═══[/bold cyan]")
+src/uk_sponsor_pipeline/cli.py:279:    stage1_result = run_stage1()
+src/uk_sponsor_pipeline/cli.py:280:    rprint(f"[green]✓ {stage1_result.unique_orgs:,} unique organizations[/green]")
+src/uk_sponsor_pipeline/cli.py:284:    # Stage 2
+src/uk_sponsor_pipeline/cli.py:285:    rprint("\n[bold cyan]═══ Stage 2: Companies House Enrichment ═══[/bold cyan]")
+src/uk_sponsor_pipeline/cli.py:286:    stage2_outs = run_stage2(config=config)
+src/uk_sponsor_pipeline/cli.py:287:    rprint(f"[green]✓ Enriched: {stage2_outs['enriched']}[/green]")
+src/uk_sponsor_pipeline/cli.py:289:    # Stage 3
+src/uk_sponsor_pipeline/cli.py:290:    rprint("\n[bold cyan]═══ Stage 3: Tech Scoring & Shortlist ═══[/bold cyan]")
+src/uk_sponsor_pipeline/cli.py:299:    stage3_outs = run_stage3(config=config)
+src/uk_sponsor_pipeline/cli.py:302:    rprint(f"Final shortlist: {stage3_outs['shortlist']}")
+src/uk_sponsor_pipeline/cli.py:303:    rprint(f"Explainability: {stage3_outs['explain']}")
+src/uk_sponsor_pipeline/application/stage3_scoring.py:1:"""Stage 3: Composable scoring model for tech-likelihood.
+src/uk_sponsor_pipeline/application/stage3_scoring.py:6:- Explainability output (stage3_explain.csv)
+src/uk_sponsor_pipeline/application/stage3_scoring.py:24:    STAGE2_ENRICHED_COLUMNS,
+src/uk_sponsor_pipeline/application/stage3_scoring.py:25:    STAGE3_EXPLAIN_COLUMNS,
+src/uk_sponsor_pipeline/application/stage3_scoring.py:26:    STAGE3_SCORED_COLUMNS,
+src/uk_sponsor_pipeline/application/stage3_scoring.py:29:from ..types import Stage2EnrichedRow
+src/uk_sponsor_pipeline/application/stage3_scoring.py:33:    row: Stage2EnrichedRow,
+src/uk_sponsor_pipeline/application/stage3_scoring.py:65:        validate_as(Stage2EnrichedRow, row.to_dict()), region, postcodes
+src/uk_sponsor_pipeline/application/stage3_scoring.py:69:def run_stage3(
+src/uk_sponsor_pipeline/application/stage3_scoring.py:70:    stage2_path: str | Path = "data/processed/stage2_enriched_companies_house.csv",
+src/uk_sponsor_pipeline/application/stage3_scoring.py:75:    """Stage 3: Score companies for tech-likelihood and produce shortlist.
+src/uk_sponsor_pipeline/application/stage3_scoring.py:78:        stage2_path: Path to Stage 2 enriched CSV.
+src/uk_sponsor_pipeline/application/stage3_scoring.py:93:    logger = get_logger("uk_sponsor_pipeline.stage3")
+src/uk_sponsor_pipeline/application/stage3_scoring.py:94:    stage2_path = Path(stage2_path)
+src/uk_sponsor_pipeline/application/stage3_scoring.py:98:    df = fs.read_csv(stage2_path).fillna("")
+src/uk_sponsor_pipeline/application/stage3_scoring.py:100:        list(df.columns), frozenset(STAGE2_ENRICHED_COLUMNS), "Stage 2 enriched output"
+src/uk_sponsor_pipeline/application/stage3_scoring.py:111:        features_list.append(calculate_features(validate_as(Stage2EnrichedRow, row.to_dict())))
+src/uk_sponsor_pipeline/application/stage3_scoring.py:125:    validate_columns(list(df.columns), frozenset(STAGE3_SCORED_COLUMNS), "Stage 3 scored output")
+src/uk_sponsor_pipeline/application/stage3_scoring.py:128:    scored_path = out_dir / "stage3_scored.csv"
+src/uk_sponsor_pipeline/application/stage3_scoring.py:148:    shortlist_path = out_dir / "stage3_shortlist_tech.csv"
+src/uk_sponsor_pipeline/application/stage3_scoring.py:154:        list(shortlist.columns), frozenset(STAGE3_EXPLAIN_COLUMNS), "Stage 3 shortlist"
+src/uk_sponsor_pipeline/application/stage3_scoring.py:156:    explain_df = shortlist[list(STAGE3_EXPLAIN_COLUMNS)]
+src/uk_sponsor_pipeline/application/stage3_scoring.py:157:    explain_path = out_dir / "stage3_explain.csv"
+src/uk_sponsor_pipeline/observability/logging.py:6:    logger = get_logger("uk_sponsor_pipeline.stage1")
+tests/domain/test_companies_house.py:13:from uk_sponsor_pipeline.types import CompanyProfile, SearchItem, Stage1Row
+tests/domain/test_companies_house.py:24:def _stage1_row(**overrides: str) -> Stage1Row:
+tests/domain/test_companies_house.py:25:    row: Stage1Row = {
+tests/domain/test_companies_house.py:37:    return validate_as(Stage1Row, merged)
+tests/domain/test_companies_house.py:81:    base = _stage1_row()
+tests/domain/test_companies_house.py:95:    row = _stage1_row()
+src/uk_sponsor_pipeline/application/stage1.py:1:"""Stage 1: Filter to Skilled Worker + A-rated and aggregate by organisation.
+src/uk_sponsor_pipeline/application/stage1.py:24:from ..schemas import RAW_REQUIRED_COLUMNS, STAGE1_OUTPUT_COLUMNS, validate_columns
+src/uk_sponsor_pipeline/application/stage1.py:28:class Stage1Result:
+src/uk_sponsor_pipeline/application/stage1.py:29:    """Result of Stage 1 processing."""
+src/uk_sponsor_pipeline/application/stage1.py:39:class Stage1Stats:
+src/uk_sponsor_pipeline/application/stage1.py:40:    """Statistics from Stage 1 processing."""
+src/uk_sponsor_pipeline/application/stage1.py:96:def run_stage1(
+src/uk_sponsor_pipeline/application/stage1.py:98:    out_path: str | Path = "data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv",
+src/uk_sponsor_pipeline/application/stage1.py:101:) -> Stage1Result:
+src/uk_sponsor_pipeline/application/stage1.py:102:    """Stage 1: Filter to Skilled Worker + A-rated and aggregate to org level.
+src/uk_sponsor_pipeline/application/stage1.py:111:        Stage1Result with paths and counts.
+src/uk_sponsor_pipeline/application/stage1.py:114:    logger = get_logger("uk_sponsor_pipeline.stage1")
+src/uk_sponsor_pipeline/application/stage1.py:164:    agg = pd.DataFrame(aggregated_rows, columns=STAGE1_OUTPUT_COLUMNS)
+src/uk_sponsor_pipeline/application/stage1.py:165:    validate_columns(list(agg.columns), frozenset(STAGE1_OUTPUT_COLUMNS), "Stage 1 output")
+src/uk_sponsor_pipeline/application/stage1.py:170:    stats = Stage1Stats(
+src/uk_sponsor_pipeline/application/stage1.py:185:    stats_path = reports_dir / "stage1_stats.json"
+src/uk_sponsor_pipeline/application/stage1.py:202:    return Stage1Result(
+src/uk_sponsor_pipeline/domain/scoring.py:5:    from uk_sponsor_pipeline.types import Stage2EnrichedRow
+src/uk_sponsor_pipeline/domain/scoring.py:7:    row: Stage2EnrichedRow = {
+src/uk_sponsor_pipeline/domain/scoring.py:46:from ..types import Stage2EnrichedRow
+src/uk_sponsor_pipeline/domain/scoring.py:246:def calculate_features(row: Stage2EnrichedRow) -> ScoringFeatures:
+src/uk_sponsor_pipeline/schemas.py:1:"""Schema definitions for pipeline stage inputs and outputs.
+src/uk_sponsor_pipeline/schemas.py:3:These define the expected columns at each stage boundary, enabling validation
+src/uk_sponsor_pipeline/schemas.py:20:# Stage 1 output: filtered and aggregated sponsors
+src/uk_sponsor_pipeline/schemas.py:21:STAGE1_OUTPUT_COLUMNS = (
+src/uk_sponsor_pipeline/schemas.py:33:# Stage 2 output: enriched with Companies House data
+src/uk_sponsor_pipeline/schemas.py:34:STAGE2_ENRICHED_COLUMNS = (
+src/uk_sponsor_pipeline/schemas.py:35:    *STAGE1_OUTPUT_COLUMNS,
+src/uk_sponsor_pipeline/schemas.py:55:STAGE2_UNMATCHED_COLUMNS = (
+src/uk_sponsor_pipeline/schemas.py:56:    *STAGE1_OUTPUT_COLUMNS,
+src/uk_sponsor_pipeline/schemas.py:64:STAGE2_CANDIDATES_COLUMNS = (
+src/uk_sponsor_pipeline/schemas.py:81:# Stage 3 output: scored for tech-likelihood
+src/uk_sponsor_pipeline/schemas.py:82:STAGE3_SCORED_COLUMNS = (
+src/uk_sponsor_pipeline/schemas.py:83:    *STAGE2_ENRICHED_COLUMNS,
+src/uk_sponsor_pipeline/schemas.py:93:STAGE3_EXPLAIN_COLUMNS = (
+src/uk_sponsor_pipeline/schemas.py:108:def validate_columns(df_columns: list[str], required: frozenset[str], stage_name: str) -> None:
+src/uk_sponsor_pipeline/schemas.py:114:        stage_name: Name of stage for error messages.
+src/uk_sponsor_pipeline/schemas.py:121:        raise ValueError(f"{stage_name}: Missing required columns: {sorted(missing)}")
+src/uk_sponsor_pipeline/stages/stage3_scoring.py:1:"""Stage wrapper for Stage 3 scoring use-case."""
+src/uk_sponsor_pipeline/stages/stage3_scoring.py:5:from ..application.stage3_scoring import run_stage3
+src/uk_sponsor_pipeline/stages/stage3_scoring.py:20:    "run_stage3",
+src/uk_sponsor_pipeline/types.py:7:Stage1Row = TypedDict(
+src/uk_sponsor_pipeline/types.py:8:    "Stage1Row",
+src/uk_sponsor_pipeline/types.py:59:Stage2CandidateRow = TypedDict(
+src/uk_sponsor_pipeline/types.py:60:    "Stage2CandidateRow",
+src/uk_sponsor_pipeline/types.py:79:Stage2UnmatchedRow = TypedDict(
+src/uk_sponsor_pipeline/types.py:80:    "Stage2UnmatchedRow",
+src/uk_sponsor_pipeline/types.py:99:Stage2EnrichedRow = TypedDict(
+src/uk_sponsor_pipeline/types.py:100:    "Stage2EnrichedRow",
+src/uk_sponsor_pipeline/types.py:139:class Stage2ResumeReport(TypedDict):
+src/uk_sponsor_pipeline/types.py:140:    """Stage 2 resume report shape."""
+src/uk_sponsor_pipeline/types.py:148:    stage1_path: str
+src/uk_sponsor_pipeline/types.py:154:    total_stage1_orgs: int
+src/uk_sponsor_pipeline/types.py:166:Stage3ScoredRow = TypedDict(
+src/uk_sponsor_pipeline/types.py:167:    "Stage3ScoredRow",
+src/uk_sponsor_pipeline/types.py:205:Stage3ExplainRow = TypedDict(
+src/uk_sponsor_pipeline/types.py:206:    "Stage3ExplainRow",
+src/uk_sponsor_pipeline/types.py:228:Stage3ShortlistRow = Stage3ScoredRow
+docs/architectural-decision-records/adr0013-strict-internal-typing.md:25:- Additional type definitions for structured data (e.g., stage rows and API payloads).
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:1:"""Stage 2: Companies House enrichment with improved matching and resumability.
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:49:    STAGE1_OUTPUT_COLUMNS,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:50:    STAGE2_CANDIDATES_COLUMNS,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:51:    STAGE2_ENRICHED_COLUMNS,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:52:    STAGE2_UNMATCHED_COLUMNS,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:59:    Stage1Row,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:60:    Stage2CandidateRow,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:61:    Stage2EnrichedRow,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:62:    Stage2ResumeReport,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:63:    Stage2UnmatchedRow,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:67:STAGE2_CHECKPOINT_COLUMNS = ("Organisation Name",)
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:72:    "run_stage2",
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:104:    validate_columns(list(coerced.columns), frozenset(columns), "Stage 2 output")
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:114:def _coerce_stage1_row(raw: dict[str, object]) -> Stage1Row:
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:128:def _coerce_stage1_rows(raw_rows: list[dict[str, object]]) -> list[Stage1Row]:
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:129:    return [_coerce_stage1_row(row) for row in raw_rows]
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:135:    stage1_path: Path,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:140:    total_stage1_orgs: int,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:154:) -> Stage2ResumeReport:
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:164:        f"uv run uk-sponsor stage2 --input {stage1_path} --output-dir {out_dir} --resume"
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:174:        "stage1_path": str(stage1_path),
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:180:        "total_stage1_orgs": total_stage1_orgs,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:193:def run_stage2(
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:194:    stage1_path: str | Path = "data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv",
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:205:    """Stage 2: Enrich Stage 1 orgs with Companies House search + profile.
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:208:        stage1_path: Path to Stage 1 output CSV.
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:237:    stage1_path = Path(stage1_path)
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:242:    logger = get_logger("uk_sponsor_pipeline.stage2")
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:248:    out_enriched = out_dir / "stage2_enriched_companies_house.csv"
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:249:    out_unmatched = out_dir / "stage2_unmatched.csv"
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:250:    out_candidates = out_dir / "stage2_candidates_top3.csv"
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:251:    out_checkpoint = out_dir / "stage2_checkpoint.csv"
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:252:    out_resume_report = out_dir / "stage2_resume_report.json"
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:258:    df = fs.read_csv(stage1_path).fillna("")
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:259:    validate_columns(list(df.columns), frozenset(STAGE1_OUTPUT_COLUMNS), "Stage 1 output")
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:260:    total_stage1_orgs = len(df)
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:306:    rows = _coerce_stage1_rows(raw_rows)
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:315:        math.ceil(total_stage1_orgs / batch_size_value) if total_stage1_orgs else 0
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:347:    batch_enriched: list[Stage2EnrichedRow] = []
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:348:    batch_unmatched: list[Stage2UnmatchedRow] = []
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:349:    batch_candidates: list[Stage2CandidateRow] = []
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:356:        _append_csv(fs, pd.DataFrame(batch_enriched), out_enriched, STAGE2_ENRICHED_COLUMNS)
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:357:        _append_csv(fs, pd.DataFrame(batch_unmatched), out_unmatched, STAGE2_UNMATCHED_COLUMNS)
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:362:            STAGE2_CANDIDATES_COLUMNS,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:368:            STAGE2_CHECKPOINT_COLUMNS,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:488:            enriched_df = _coerce_output_columns(enriched_df, STAGE2_ENRICHED_COLUMNS)
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:493:            enriched_df = pd.DataFrame(columns=STAGE2_ENRICHED_COLUMNS)
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:497:            unmatched_df = _coerce_output_columns(unmatched_df, STAGE2_UNMATCHED_COLUMNS)
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:502:            unmatched_df = pd.DataFrame(columns=STAGE2_UNMATCHED_COLUMNS)
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:506:            candidates_df = _coerce_output_columns(candidates_df, STAGE2_CANDIDATES_COLUMNS)
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:514:            candidates_df = pd.DataFrame(columns=STAGE2_CANDIDATES_COLUMNS)
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:544:        remaining = max(0, total_stage1_orgs - processed_total)
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:547:            stage1_path=stage1_path,
+src/uk_sponsor_pipeline/application/stage2_companies_house.py:552:            total_stage1_orgs=total_stage1_orgs,
+src/uk_sponsor_pipeline/domain/companies_house.py:24:    Stage1Row,
+src/uk_sponsor_pipeline/domain/companies_house.py:25:    Stage2CandidateRow,
+src/uk_sponsor_pipeline/domain/companies_house.py:26:    Stage2EnrichedRow,
+src/uk_sponsor_pipeline/domain/companies_house.py:27:    Stage2UnmatchedRow,
+src/uk_sponsor_pipeline/domain/companies_house.py:138:def build_candidate_row(*, org: str, cand: CandidateMatch, rank: int) -> Stage2CandidateRow:
+src/uk_sponsor_pipeline/domain/companies_house.py:140:    row: Stage2CandidateRow = {
+src/uk_sponsor_pipeline/domain/companies_house.py:159:def build_unmatched_row(*, row: Stage1Row, best_match: CandidateMatch | None) -> Stage2UnmatchedRow:
+src/uk_sponsor_pipeline/domain/companies_house.py:161:    out: Stage2UnmatchedRow = {
+src/uk_sponsor_pipeline/domain/companies_house.py:174:    row: Stage1Row,
+src/uk_sponsor_pipeline/domain/companies_house.py:177:) -> Stage2UnmatchedRow:
+src/uk_sponsor_pipeline/domain/companies_house.py:179:    out: Stage2UnmatchedRow = {
+src/uk_sponsor_pipeline/domain/companies_house.py:192:    row: Stage1Row,
+src/uk_sponsor_pipeline/domain/companies_house.py:195:) -> Stage2EnrichedRow:
+src/uk_sponsor_pipeline/domain/companies_house.py:200:    out: Stage2EnrichedRow = {
+tests/support/stage2_rows.py:1:"""Shared Stage 2 row helpers for tests."""
+tests/support/stage2_rows.py:6:from uk_sponsor_pipeline.types import Stage2EnrichedRow
+tests/support/stage2_rows.py:9:def make_stage2_row(**overrides: str | float) -> Stage2EnrichedRow:
+tests/support/stage2_rows.py:10:    """Build a valid Stage2EnrichedRow with optional overrides."""
+tests/support/stage2_rows.py:11:    row: Stage2EnrichedRow = {
+tests/support/stage2_rows.py:40:    return validate_as(Stage2EnrichedRow, merged)
+src/uk_sponsor_pipeline/stages/download.py:1:"""Stage wrapper for download use-case."""
+tests/domain/test_scoring.py:3:from tests.support.stage2_rows import make_stage2_row
+tests/domain/test_scoring.py:97:        row = make_stage2_row(
+tests/domain/test_scoring.py:112:        row = make_stage2_row(
+tests/application/test_stage1.py:1:"""Tests for Stage 1 pipeline behavior."""
+tests/application/test_stage1.py:9:from uk_sponsor_pipeline.stages.stage1 import run_stage1
+tests/application/test_stage1.py:12:def test_stage1_filters_and_aggregates(sample_raw_csv: pd.DataFrame, tmp_path: Path) -> None:
+tests/application/test_stage1.py:18:    out_path = tmp_path / "interim" / "stage1.csv"
+tests/application/test_stage1.py:21:    result = run_stage1(raw_dir=raw_dir, out_path=out_path, reports_dir=reports_dir)
+tests/application/test_stage1.py:33:        json.loads((reports_dir / "stage1_stats.json").read_text()),
+docs/architectural-decision-records/README.md:9:- `adr0003-stage-based-csv-pipeline.md`
+docs/architectural-decision-records/README.md:14:- `adr0008-stage2-batching-resume-and-reporting.md`
+docs/architectural-decision-records/README.md:15:- `adr0009-stage2-matching-and-audit-trail.md`
+docs/architectural-decision-records/README.md:16:- `adr0010-stage3-tech-likelihood-scoring.md`
+docs/architectural-decision-records/README.md:18:- `adr0012-stages-as-artefact-boundaries.md`
+src/uk_sponsor_pipeline/stages/stage1.py:1:"""Stage wrapper for Stage 1 use-case."""
+src/uk_sponsor_pipeline/stages/stage1.py:5:from ..application.stage1 import Stage1Result, Stage1Stats, run_stage1
+src/uk_sponsor_pipeline/stages/stage1.py:7:__all__ = ["Stage1Result", "Stage1Stats", "run_stage1"]
+tests/cli/test_cli.py:14:def test_cli_stage3_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+tests/cli/test_cli.py:26:    def fake_run_stage3(stage2_path: str, out_dir: str, config: PipelineConfig) -> dict[str, str]:
+tests/cli/test_cli.py:30:    monkeypatch.setattr(cli, "run_stage3", fake_run_stage3)
+tests/cli/test_cli.py:35:            "stage3",
+tests/cli/test_cli.py:51:def test_cli_stage3_rejects_multiple_regions(monkeypatch: pytest.MonkeyPatch) -> None:
+tests/cli/test_cli.py:61:    result = runner.invoke(cli.app, ["stage3", "--region", "London", "--region", "Leeds"])
+tests/cli/test_cli.py:68:    calls = {"stage1": 0, "stage2": 0, "stage3": 0}
+tests/cli/test_cli.py:70:    def fake_stage1(*args: object, **kwargs: object) -> SimpleNamespace:
+tests/cli/test_cli.py:71:        calls["stage1"] += 1
+tests/cli/test_cli.py:74:    def fake_stage2(*args: object, **kwargs: object) -> dict[str, str]:
+tests/cli/test_cli.py:75:        calls["stage2"] += 1
+tests/cli/test_cli.py:78:    def fake_stage3(*args: object, **kwargs: object) -> dict[str, str]:
+tests/cli/test_cli.py:79:        calls["stage3"] += 1
+tests/cli/test_cli.py:94:    monkeypatch.setattr(cli, "run_stage1", fake_stage1)
+tests/cli/test_cli.py:95:    monkeypatch.setattr(cli, "run_stage2", fake_stage2)
+tests/cli/test_cli.py:96:    monkeypatch.setattr(cli, "run_stage3", fake_stage3)
+tests/cli/test_cli.py:101:    assert calls == {"stage1": 1, "stage2": 1, "stage3": 1}
+tests/application/test_stage3_scoring.py:1:"""Tests for Stage 3 scoring."""
+tests/application/test_stage3_scoring.py:8:from tests.support.stage2_rows import make_stage2_row
+tests/application/test_stage3_scoring.py:10:from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
+tests/application/test_stage3_scoring.py:13:def test_stage3_geographic_filter(tmp_path: Path) -> None:
+tests/application/test_stage3_scoring.py:15:        make_stage2_row(
+tests/application/test_stage3_scoring.py:23:        make_stage2_row(
+tests/application/test_stage3_scoring.py:33:    stage2_path = tmp_path / "stage2.csv"
+tests/application/test_stage3_scoring.py:34:    df.to_csv(stage2_path, index=False)
+tests/application/test_stage3_scoring.py:37:    outs = run_stage3(stage2_path=stage2_path, out_dir=tmp_path, config=config)
+tests/application/test_stage3_scoring.py:43:def test_stage3_sorting_uses_numeric_match_score(tmp_path: Path) -> None:
+tests/application/test_stage3_scoring.py:45:        make_stage2_row(
+tests/application/test_stage3_scoring.py:51:        make_stage2_row(
+tests/application/test_stage3_scoring.py:59:    stage2_path = tmp_path / "stage2.csv"
+tests/application/test_stage3_scoring.py:60:    df.to_csv(stage2_path, index=False)
+tests/application/test_stage3_scoring.py:62:    outs = run_stage3(stage2_path=stage2_path, out_dir=tmp_path, config=PipelineConfig())
+tests/application/test_stage3_scoring.py:68:def test_stage3_requires_config() -> None:
+tests/application/test_stage3_scoring.py:70:        run_stage3()
+tests/integration/test_integration.py:9:from uk_sponsor_pipeline.stages.stage1 import run_stage1
+tests/integration/test_integration.py:10:from uk_sponsor_pipeline.stages.stage2_companies_house import run_stage2
+tests/integration/test_integration.py:11:from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
+tests/integration/test_integration.py:30:    stage1 = run_stage1(
+tests/integration/test_integration.py:32:        out_path=Path("interim/stage1.csv"),
+tests/integration/test_integration.py:67:    stage2 = run_stage2(
+tests/integration/test_integration.py:68:        stage1_path=stage1.output_path,
+tests/integration/test_integration.py:83:    stage3 = run_stage3(
+tests/integration/test_integration.py:84:        stage2_path=stage2["enriched"],
+tests/integration/test_integration.py:90:    shortlist = in_memory_fs.read_csv(stage3["shortlist"])
+docs/architectural-decision-records/adr0010-stage3-tech-likelihood-scoring.md:1:# ADR 0010: Stage 3 Tech-Likelihood Scoring
+docs/architectural-decision-records/adr0010-stage3-tech-likelihood-scoring.md:16:The scoring rules live in the domain layer (`domain/scoring.py`) and are invoked by the Stage 3 application use-case.
+docs/architectural-decision-records/adr0005-dependency-injection-for-io-and-http.md:11:Stages depend on file I/O and HTTP calls. Direct dependencies would make testing brittle and require real network access.
+docs/architectural-decision-records/adr0005-dependency-injection-for-io-and-http.md:15:Use protocol-style interfaces (`protocols.py`) and concrete implementations (`infrastructure/`). Stages accept injected dependencies (file system, HTTP client, cache, rate limiter, circuit breaker) to keep I/O replaceable.
+docs/architectural-decision-records/adr0005-dependency-injection-for-io-and-http.md:20:- Production uses concrete implementations without changing stage logic.
+src/uk_sponsor_pipeline/stages/stage2_companies_house.py:1:"""Stage wrapper for Stage 2 Companies House use-case."""
+src/uk_sponsor_pipeline/stages/stage2_companies_house.py:5:from ..application.stage2_companies_house import CandidateMatch, MatchScore, run_stage2
+src/uk_sponsor_pipeline/stages/stage2_companies_house.py:7:__all__ = ["CandidateMatch", "MatchScore", "run_stage2"]
+docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:1:# ADR 0008: Stage 2 Batching, Resume, and Reporting
+docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:11:Stage 2 can take hours for large datasets and should be safe to interrupt and resume. Operators need visibility into progress and an easy way to restart.
+docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:15:Stage 2 processes input in batches with explicit controls (`batch_start`, `batch_count`, `batch_size`). Progress is recorded to:
+docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:16:- `stage2_checkpoint.csv` (processed orgs)
+docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:17:- `stage2_resume_report.json` (run metadata and timing)
+docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:21:Stage 2 is fail‑fast on authentication, rate‑limit exhaustion, circuit breaker open, and unexpected HTTP errors (including profile fetch failures). Resumable artefacts are written before exit so operators can fix the issue and continue safely.
+docs/architectural-decision-records/adr0008-stage2-batching-resume-and-reporting.md:23:When `--no-resume` is used, Stage 2 writes outputs into a new timestamped subdirectory under the chosen output directory to avoid stale data reuse.
+tests/application/test_stage2_companies_house.py:1:"""Tests for Stage 2 Companies House integration."""
+tests/application/test_stage2_companies_house.py:11:from uk_sponsor_pipeline.application import stage2_companies_house as s2
+tests/application/test_stage2_companies_house.py:12:from uk_sponsor_pipeline.application.stage2_companies_house import run_stage2
+tests/application/test_stage2_companies_house.py:26:from uk_sponsor_pipeline.types import SearchItem, Stage2ResumeReport
+tests/application/test_stage2_companies_house.py:29:class TestStage2AuthIntegration:
+tests/application/test_stage2_companies_house.py:30:    """Integration tests for Stage 2 authentication."""
+tests/application/test_stage2_companies_house.py:34:        # Create minimal stage1 input
+tests/application/test_stage2_companies_house.py:35:        stage1_csv = tmp_path / "stage1.csv"
+tests/application/test_stage2_companies_house.py:36:        stage1_csv.write_text(
+tests/application/test_stage2_companies_house.py:57:        # Run stage2 with our mock
+tests/application/test_stage2_companies_house.py:62:            run_stage2(
+tests/application/test_stage2_companies_house.py:63:                stage1_path=stage1_csv,
+tests/application/test_stage2_companies_house.py:77:class TestStage2CandidateOrdering:
+tests/application/test_stage2_companies_house.py:83:        stage1_csv = tmp_path / "stage1.csv"
+tests/application/test_stage2_companies_house.py:84:        stage1_csv.write_text(
+tests/application/test_stage2_companies_house.py:153:        outs = run_stage2(
+tests/application/test_stage2_companies_house.py:154:            stage1_path=stage1_csv,
+tests/application/test_stage2_companies_house.py:167:class TestStage2Resume:
+tests/application/test_stage2_companies_house.py:176:        stage1_path = Path("data/interim/stage1.csv")
+tests/application/test_stage2_companies_house.py:206:        in_memory_fs.write_csv(df, stage1_path)
+tests/application/test_stage2_companies_house.py:250:        run_stage2(
+tests/application/test_stage2_companies_house.py:251:            stage1_path=stage1_path,
+tests/application/test_stage2_companies_house.py:260:        unmatched_df = in_memory_fs.read_csv(out_dir / "stage2_unmatched.csv")
+tests/application/test_stage2_companies_house.py:261:        checkpoint_df = in_memory_fs.read_csv(out_dir / "stage2_checkpoint.csv")
+tests/application/test_stage2_companies_house.py:262:        candidates_df = in_memory_fs.read_csv(out_dir / "stage2_candidates_top3.csv")
+tests/application/test_stage2_companies_house.py:278:        run_stage2(
+tests/application/test_stage2_companies_house.py:279:            stage1_path=stage1_path,
+tests/application/test_stage2_companies_house.py:296:        stage1_path = Path("data/interim/stage1.csv")
+tests/application/test_stage2_companies_house.py:337:        in_memory_fs.write_csv(df, stage1_path)
+tests/application/test_stage2_companies_house.py:381:        outs = run_stage2(
+tests/application/test_stage2_companies_house.py:382:            stage1_path=stage1_path,
+tests/application/test_stage2_companies_house.py:396:            Stage2ResumeReport,
+tests/application/test_stage2_companies_house.py:412:class TestStage2FailFast:
+tests/application/test_stage2_companies_house.py:429:        stage1_path = Path("data/interim/stage1.csv")
+tests/application/test_stage2_companies_house.py:446:            stage1_path,
+tests/application/test_stage2_companies_house.py:462:            run_stage2(
+tests/application/test_stage2_companies_house.py:463:                stage1_path=stage1_path,
+tests/application/test_stage2_companies_house.py:473:def test_stage2_requires_config() -> None:
+tests/application/test_stage2_companies_house.py:475:        run_stage2()
+tests/application/test_stage2_companies_house.py:479:def test_stage2_profile_fetch_errors_fail_fast(
+tests/application/test_stage2_companies_house.py:484:    stage1_path = Path("data/interim/stage1.csv")
+tests/application/test_stage2_companies_house.py:504:        stage1_path,
+tests/application/test_stage2_companies_house.py:555:        run_stage2(
+tests/application/test_stage2_companies_house.py:556:            stage1_path=stage1_path,
+tests/application/test_stage2_companies_house.py:565:    assert in_memory_fs.exists(out_dir / "stage2_resume_report.json")
+tests/application/test_stage2_companies_house.py:566:    assert not in_memory_fs.exists(out_dir / "stage2_unmatched.csv")
+tests/application/test_stage2_companies_house.py:572:    stage1_csv = tmp_path / "stage1.csv"
+tests/application/test_stage2_companies_house.py:573:    stage1_csv.write_text(
+tests/application/test_stage2_companies_house.py:599:    outs = run_stage2(
+tests/application/test_stage2_companies_house.py:600:        stage1_path=stage1_csv,
+docs/architectural-decision-records/adr0014-io-boundaries-consolidation.md:11:Incoming filesystem and network IO boundaries were spread across multiple modules (stage modules and cache helpers). This made it harder to enforce the “unknown only at IO boundaries” rule and to audit where untrusted data enters the system.
+docs/architectural-decision-records/adr0014-io-boundaries-consolidation.md:20:Stages must use the `FileSystem` and `HttpSession` / `HttpClient` protocols rather than calling `requests` or filesystem APIs directly.
+docs/architectural-decision-records/adr0014-io-boundaries-consolidation.md:24:Stages and application logic must not import `requests` or perform filesystem/network IO directly; they only depend on protocols.
+docs/architectural-decision-records/adr0003-stage-based-csv-pipeline.md:1:# ADR 0003: Stage-Based CSV Pipeline
+docs/architectural-decision-records/adr0003-stage-based-csv-pipeline.md:15:Use a staged pipeline with CSV artefacts at each stage:
+docs/architectural-decision-records/adr0003-stage-based-csv-pipeline.md:17:- Stage 1 → filtered + aggregated CSV
+docs/architectural-decision-records/adr0003-stage-based-csv-pipeline.md:18:- Stage 2 → enriched CSVs (matched, unmatched, candidates)
+docs/architectural-decision-records/adr0003-stage-based-csv-pipeline.md:19:- Stage 3 → scored and shortlisted CSVs
+docs/architectural-decision-records/adr0003-stage-based-csv-pipeline.md:28:- Stages are now treated as artefact boundaries, not architectural boundaries (see ADR 0012).
+tests/characterisation/README.md:8:- Provide concrete, deterministic expectations for stage outputs and error reporting.
+tests/characterisation/README.md:19:- `test_stage1_characterisation.py`
+tests/characterisation/README.md:20:- `test_stage2_characterisation.py`
+tests/characterisation/README.md:21:- `test_stage3_characterisation.py`
+tests/characterisation/test_stage2_characterisation.py:1:"""Characterisation tests for Stage 2 outputs and error reporting."""
+tests/characterisation/test_stage2_characterisation.py:12:from uk_sponsor_pipeline.schemas import STAGE2_CANDIDATES_COLUMNS, STAGE2_ENRICHED_COLUMNS
+tests/characterisation/test_stage2_characterisation.py:13:from uk_sponsor_pipeline.stages.stage2_companies_house import run_stage2
+tests/characterisation/test_stage2_characterisation.py:14:from uk_sponsor_pipeline.types import Stage2ResumeReport
+tests/characterisation/test_stage2_characterisation.py:17:def _stage1_input_df() -> pd.DataFrame:
+tests/characterisation/test_stage2_characterisation.py:35:def test_stage2_outputs_are_deterministic(
+tests/characterisation/test_stage2_characterisation.py:41:    stage1_path = Path("data/interim/stage1.csv")
+tests/characterisation/test_stage2_characterisation.py:45:    in_memory_fs.write_csv(_stage1_input_df(), stage1_path)
+tests/characterisation/test_stage2_characterisation.py:61:    outs = run_stage2(
+tests/characterisation/test_stage2_characterisation.py:62:        stage1_path=stage1_path,
+tests/characterisation/test_stage2_characterisation.py:74:        Stage2ResumeReport,
+tests/characterisation/test_stage2_characterisation.py:78:    assert list(enriched_df.columns) == list(STAGE2_ENRICHED_COLUMNS)
+tests/characterisation/test_stage2_characterisation.py:83:    assert list(candidates_df.columns) == list(STAGE2_CANDIDATES_COLUMNS)
+tests/characterisation/test_stage2_characterisation.py:97:def test_stage2_search_errors_write_resume_report(in_memory_fs: InMemoryFileSystem) -> None:
+tests/characterisation/test_stage2_characterisation.py:98:    stage1_path = Path("data/interim/stage1.csv")
+tests/characterisation/test_stage2_characterisation.py:102:    in_memory_fs.write_csv(_stage1_input_df(), stage1_path)
+tests/characterisation/test_stage2_characterisation.py:117:        run_stage2(
+tests/characterisation/test_stage2_characterisation.py:118:            stage1_path=stage1_path,
+tests/characterisation/test_stage2_characterisation.py:128:        Stage2ResumeReport,
+tests/characterisation/test_stage2_characterisation.py:129:        in_memory_fs.read_json(out_dir / "stage2_resume_report.json"),
+tests/characterisation/test_stage1_characterisation.py:1:"""Characterisation tests for Stage 1 outputs."""
+tests/characterisation/test_stage1_characterisation.py:8:from uk_sponsor_pipeline.schemas import STAGE1_OUTPUT_COLUMNS
+tests/characterisation/test_stage1_characterisation.py:9:from uk_sponsor_pipeline.stages.stage1 import run_stage1
+tests/characterisation/test_stage1_characterisation.py:12:def test_stage1_output_schema_and_stats(
+tests/characterisation/test_stage1_characterisation.py:16:    out_path = Path("data/interim/stage1.csv")
+tests/characterisation/test_stage1_characterisation.py:21:    result = run_stage1(
+tests/characterisation/test_stage1_characterisation.py:26:    assert list(output_df.columns) == list(STAGE1_OUTPUT_COLUMNS)
+tests/characterisation/test_stage1_characterisation.py:29:    stats = in_memory_fs.read_json(reports_dir / "stage1_stats.json")
+tests/application/test_download.py:1:"""Tests for download stage with filesystem injection."""
+tests/application/test_download.py:6:from uk_sponsor_pipeline.stages.download import download_latest
+src/uk_sponsor_pipeline/config.py:14:    """Immutable configuration object for all pipeline stages.
+src/uk_sponsor_pipeline/config.py:34:    # Stage 3 scoring
+src/uk_sponsor_pipeline/config.py:37:    # Geographic filters (applied in Stage 3)
+tests/characterisation/test_stage3_characterisation.py:1:"""Characterisation tests for Stage 3 outputs."""
+tests/characterisation/test_stage3_characterisation.py:10:from uk_sponsor_pipeline.schemas import STAGE3_EXPLAIN_COLUMNS, STAGE3_SCORED_COLUMNS
+tests/characterisation/test_stage3_characterisation.py:11:from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
+tests/characterisation/test_stage3_characterisation.py:12:from uk_sponsor_pipeline.types import Stage2EnrichedRow
+tests/characterisation/test_stage3_characterisation.py:15:def _stage2_row(**overrides: str | float) -> Stage2EnrichedRow:
+tests/characterisation/test_stage3_characterisation.py:16:    row: Stage2EnrichedRow = {
+tests/characterisation/test_stage3_characterisation.py:45:    return validate_as(Stage2EnrichedRow, merged)
+tests/characterisation/test_stage3_characterisation.py:48:def test_stage3_outputs_are_deterministic(in_memory_fs: InMemoryFileSystem) -> None:
+tests/characterisation/test_stage3_characterisation.py:49:    stage2_path = Path("data/processed/stage2_enriched_companies_house.csv")
+tests/characterisation/test_stage3_characterisation.py:54:            _stage2_row(),
+tests/characterisation/test_stage3_characterisation.py:55:            _stage2_row(
+tests/characterisation/test_stage3_characterisation.py:66:    in_memory_fs.write_csv(df, stage2_path)
+tests/characterisation/test_stage3_characterisation.py:68:    outputs = run_stage3(
+tests/characterisation/test_stage3_characterisation.py:69:        stage2_path=stage2_path,
+tests/characterisation/test_stage3_characterisation.py:79:    assert list(scored_df.columns) == list(STAGE3_SCORED_COLUMNS)
+tests/characterisation/test_stage3_characterisation.py:82:    assert list(shortlist_df.columns) == list(STAGE3_SCORED_COLUMNS)
+tests/characterisation/test_stage3_characterisation.py:85:    assert list(explain_df.columns) == list(STAGE3_EXPLAIN_COLUMNS)
+docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:1:# ADR 0012: Stages as Artefact Boundaries, Application Orchestration
+docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:11:The pipeline uses staged CSV outputs for auditability and resumability. However, treating stages as architectural boundaries has led to duplicated infrastructure setup, inconsistent error handling, and configuration being loaded in multiple places. We need a SOLID/DI‑aligned architecture where shared standards (observability, resilience, filesystem, HTTP, error handling) are applied uniformly, while preserving the staged artefacts that make the pipeline explainable and recoverable.
+docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:15:- Keep staged CSV artefacts as data contracts and audit checkpoints.
+docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:16:- Treat “stages” as conceptual labels for outputs, not architectural boundaries.
+docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:21:- If `stages/` remains, it must be a thin delegate layer that forwards to application steps.
+docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:25:- Auditability and resumability remain intact via staged artefacts.
+docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:28:- Requires refactoring existing stage modules into application steps (see refactor plan).
+docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:29:- Supersedes ADR 0003’s implication that stages are architectural boundaries.
+docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md:33:In progress: the target architecture is an `application/` use‑case layer with `stages/` acting only as delegates. Residual logic in `stages/` should continue to be moved into `application/` until `stages/` contains no business logic.
+docs/architectural-decision-records/adr0009-stage2-matching-and-audit-trail.md:1:# ADR 0009: Stage 2 Matching and Audit Trail
+docs/architectural-decision-records/adr0009-stage2-matching-and-audit-trail.md:15:Use a multi-variant query strategy with explicit scoring components. Persist the top candidates for each organisation to `stage2_candidates_top3.csv` alongside the matched/unmatched outputs. Record match scores and confidence bands in the enriched output.

@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
-from requests.auth import HTTPBasicAuth
 
 from tests.fakes import FakeHttpClient, InMemoryFileSystem
 from uk_sponsor_pipeline.application import stage2_companies_house as s2
@@ -18,112 +17,13 @@ from uk_sponsor_pipeline.domain.companies_house import (
     NormalizeFn,
     SimilarityFn,
 )
-from uk_sponsor_pipeline.exceptions import AuthenticationError, CircuitBreakerOpen, RateLimitError
-from uk_sponsor_pipeline.infrastructure import CachedHttpClient, CircuitBreaker, RateLimiter
+from uk_sponsor_pipeline.exceptions import (
+    AuthenticationError,
+    CircuitBreakerOpen,
+    RateLimitError,
+)
 from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
 from uk_sponsor_pipeline.types import SearchItem, Stage2ResumeReport
-
-
-class TestCachedHttpClientAuth:
-    """Tests for CachedHttpClient auth header passing."""
-
-    def test_session_headers_are_used(self) -> None:
-        """Verify that session.get is invoked when using CachedHttpClient."""
-        import requests
-
-        # Create a mock session
-        mock_session = MagicMock(spec=requests.Session)
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"items": []}
-        mock_session.get.return_value = mock_response
-
-        # Add auth to session
-        api_key = "test-key-123"
-        mock_session.auth = HTTPBasicAuth(api_key, "")
-
-        # Create cache, rate limiter, and circuit breaker
-        cache = MagicMock()
-        cache.get.return_value = None  # Cache miss
-        rate_limiter = RateLimiter(max_rpm=600, min_delay_seconds=0)
-        circuit_breaker = CircuitBreaker(threshold=5)
-
-        client = CachedHttpClient(
-            session=mock_session,
-            cache=cache,
-            rate_limiter=rate_limiter,
-            circuit_breaker=circuit_breaker,
-        )
-
-        # Make a request
-        client.get_json("https://api.example.com/test", "cache_key")
-
-        # Verify session.get was called (which uses session headers)
-        mock_session.get.assert_called_once()
-        call_args = mock_session.get.call_args
-        assert call_args[0][0] == "https://api.example.com/test"
-
-
-class TestHttpClientWithErrors:
-    """Tests for HTTP client error handling."""
-
-    def test_401_raises_auth_error_immediately(self) -> None:
-        """Verify that 401 errors raise AuthenticationError immediately."""
-        import requests
-
-        mock_session = MagicMock(spec=requests.Session)
-        mock_response = MagicMock()
-        mock_response.status_code = 401
-        mock_session.get.return_value = mock_response
-
-        cache = MagicMock()
-        cache.get.return_value = None
-        rate_limiter = RateLimiter(max_rpm=600, min_delay_seconds=0)
-        circuit_breaker = CircuitBreaker(threshold=5)
-
-        client = CachedHttpClient(
-            session=mock_session,
-            cache=cache,
-            rate_limiter=rate_limiter,
-            circuit_breaker=circuit_breaker,
-        )
-
-        # Should raise AuthenticationError, not HTTPError
-        with pytest.raises(AuthenticationError):
-            client.get_json("https://api.example.com/test", "cache_key")
-
-        # Should only make ONE request
-        assert mock_session.get.call_count == 1
-
-    def test_403_raises_auth_error_immediately(self) -> None:
-        """Verify that 403 Forbidden (IP ban) raises AuthenticationError immediately."""
-        import requests
-
-        mock_session = MagicMock(spec=requests.Session)
-        mock_response = MagicMock()
-        mock_response.status_code = 403
-        mock_session.get.return_value = mock_response
-
-        cache = MagicMock()
-        cache.get.return_value = None
-        rate_limiter = RateLimiter(max_rpm=600, min_delay_seconds=0)
-        circuit_breaker = CircuitBreaker(threshold=5)
-
-        client = CachedHttpClient(
-            session=mock_session,
-            cache=cache,
-            rate_limiter=rate_limiter,
-            circuit_breaker=circuit_breaker,
-        )
-
-        # Should raise AuthenticationError, not HTTPError
-        with pytest.raises(AuthenticationError) as exc_info:
-            client.get_json("https://api.example.com/test", "cache_key")
-
-        # Should only make ONE request
-        assert mock_session.get.call_count == 1
-        # Error message should mention 403
-        assert "403" in str(exc_info.value)
 
 
 class TestStage2AuthIntegration:

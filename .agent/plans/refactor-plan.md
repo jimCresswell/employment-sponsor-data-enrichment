@@ -21,7 +21,7 @@ This document is the **single source of truth** for the refactor. Assume no othe
 
 - Phase 0–4 are complete and gated.
 - Phase 5 (Domain Extraction: Scoring) is complete and gated.
-- Phase 6 is optional; Phase 7 is the final cleanup/docs audit phase.
+- Phase 6 is optional; Phase 7 is the near-term docs/ADR audit; Phase 11 is the final cleanup/docs audit phase.
 - Domain is the core: domain code must not import application, CLI, stages, or infrastructure.
 
 ## Target End State (Acceptance Criteria)
@@ -64,10 +64,11 @@ These criteria define the final, measurable outcomes for this plan:
 ## Remaining Work Summary (Fresh Session Checklist)
 
 - Phase 6 (optional): consolidate use‑cases into `application/pipeline.py`.
-- Phase 7: rename tests to match new module layout, remove characterisation scaffolding, finish docs/ADR polish.
+- Phase 7: docs/ADR audit + test renames (current structure); keep scaffolding tests.
 - Phase 8: location aliases (London/Manchester) and wiring into geographic filtering.
 - Phase 9: remove stage terminology across the repo with semantic replacements.
 - Phase 10: split ETL transforms from usage/query logic with independent usage execution.
+- Phase 11: final tidy up (remove scaffolding tests, final docs/ADR/terminology sweep).
 
 ## Current State and Decisions (2026-02-01)
 
@@ -441,10 +442,10 @@ If `stages/` remains, each function must be a pure delegate to the application s
 - Gates: `format → typecheck → lint → test → coverage`.
 - Status: ⏳ Pending (optional consolidation).
 
-### Phase 7 — Docs + ADR Audit
+### Phase 7 — Docs + ADR Audit (Now)
 
-- Add/adjust ADRs for new boundaries + observability.
-- Update README structure section and cross-references.
+- Add/adjust ADRs for new boundaries + observability (only for changes completed so far).
+- Update README structure section and cross-references to match current code.
 - Rename test files to match new module structure:
   - `test_stage2.py` → `test_domain_companies_house.py` (or mirror: `tests/domain/test_companies_house.py`)
   - `test_infrastructure.py` → split into `test_infrastructure_http.py`, `test_infrastructure_resilience.py`, etc.
@@ -471,10 +472,10 @@ If `stages/` remains, each function must be a pure delegate to the application s
   ```
 
 - DoD:
-  - Docs and ADRs match code structure.
-  - Test files renamed to match module structure.
+  - Docs and ADRs match current code structure.
+  - Test files renamed to match current module structure.
   - `import-linter` rules in place and passing via `uv run lint`.
-  - Scaffolding characterisation tests removed.
+  - Scaffolding characterisation tests remain until Phase 11 completes.
 - Gates: `format → typecheck → lint → test → coverage`.
 - Status: ⏳ Pending.
 
@@ -483,7 +484,7 @@ If `stages/` remains, each function must be a pure delegate to the application s
 - Create a location aliases file (e.g. `data/reference/location_aliases.json`) with canonical locations and
   their alias sets (names, regions, localities, postcode prefixes).
 - Add domain-level logic to resolve a user location to a canonical profile and expand filters.
-- Wire Stage 3 geographic filtering to use the expanded profile:
+- Wire geographic filtering to use the expanded profile (this logic moves to the usage layer in Phase 10):
   - Region/locality matching uses aliases
   - Postcode matching uses defined prefixes (outward codes)
 - TDD: unit tests for profile resolution and matching (no network).
@@ -493,6 +494,30 @@ If `stages/` remains, each function must be a pure delegate to the application s
   - Location aliases exist for London and Manchester in a canonical file.
   - Unit tests cover profile resolution and matching.
   - Stage 3 geographic filtering uses aliases (region/locality/postcode prefixes).
+- Status: ⏳ Pending.
+
+### Phase 8.5 — Configurable Companies House Source (API or File)
+
+Assumption: sponsor register remains a file-based extract. Companies House source becomes configurable:
+API (current) or file-based (new). File-based inputs must be fetched/cleaned similarly to the sponsor
+register file (schema validation + deterministic artefact output).
+
+- Add configuration to select Companies House source (`api` or `file`) and capture file path/URL.
+- Introduce a Companies House extract protocol (application layer) with two implementations:
+  - API source (current behaviour).
+  - File source: fetch if remote, validate, and normalise into the same IO contracts as API outputs.
+- This selection is part of the transform/enrichment boundary (not usage), and should remain invisible to domain logic.
+- Update CLI/env loading to select source once at entry point and pass through config.
+- Add tests:
+  - API source remains unchanged.
+  - File source loads, validates, and produces equivalent IO contracts.
+  - Invalid source selection fails fast with a clear error.
+- Update README and ADRs to document the configurable source and required inputs.
+- Gates: `format → typecheck → lint → test → coverage`.
+- Acceptance criteria:
+  - Switching source from API to file is a config-only change.
+  - File-based source produces the same typed IO shapes as API source.
+  - No application/domain code branches on source type beyond the extract boundary.
 - Status: ⏳ Pending.
 
 ### Phase 9 — Remove Stage Terminology (Semantic Renames)
@@ -513,7 +538,7 @@ If `stages/` remains, each function must be a pure delegate to the application s
 ### Phase 10 — ETL Transform vs Usage Separation
 
 - Split Stage 3 into explicit Transform and Usage steps:
-  - Transform: score and write `stage3_scored.csv` only.
+  - Transform: score and write `companies_scored.csv` only.
   - Usage: filter by region/postcodes/location profiles and write shortlist/explain outputs.
 - Introduce an application usage module (e.g. `application/usage.py`) with pure selection logic.
 - Keep domain scoring pure and shared; usage must not own scoring.
@@ -525,6 +550,18 @@ If `stages/` remains, each function must be a pure delegate to the application s
   - A usage command can run without recomputing scoring.
   - Scored artefacts are produced without filters; usage filters are applied in a separate step.
   - All usage selection logic lives outside domain scoring and does not mutate transform artefacts.
+- Status: ⏳ Pending.
+
+### Phase 11 — Final Tidy Up (Docs + Scaffolding Removal)
+
+- Remove scaffolding characterisation tests once Phases 7–10 are complete and stable.
+- Re-audit ADRs and README references for semantic naming consistency (no “stage” terminology).
+- Final pass on module docstrings and usage examples to ensure alignment with CLI and artefact names.
+- DoD:
+  - No scaffolding tests remain; permanent regression/contract tests cover the behaviour.
+  - `rg -n "stage"` in `src/`, `tests/`, `README.md`, and `docs/` returns no matches.
+  - Docs and ADRs are fully aligned with the final module structure and CLI names.
+- Gates: `format → typecheck → lint → test → coverage`.
 - Status: ⏳ Pending.
 
 ## Acceptance Criteria

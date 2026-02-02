@@ -18,3 +18,4 @@ This directory contains the ADRs for the UK Sponsor → Tech Hiring Pipeline.
 - `adr0012-stages-as-artefact-boundaries.md`
 - `adr0013-strict-internal-typing.md`
 - `adr0014-io-boundaries-consolidation.md`
+- `adr0015-observability-logging.md`

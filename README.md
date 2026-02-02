@@ -143,9 +143,17 @@ src/uk_sponsor_pipeline/
     └── stage3_scoring.py
 
 tests/
-├── conftest.py         # Pytest fixtures and fakes
-├── test_domain_sponsor_register.py
-└── test_normalization.py
+├── application/
+├── cli/
+├── config/
+├── devtools/
+├── domain/
+├── infrastructure/
+├── integration/
+├── network/
+├── observability/
+├── protocols/
+└── conftest.py         # Pytest fixtures and fakes
 ```
 
 The current `stages/` modules implement pipeline steps, but the architectural direction is to move orchestration into an application layer with shared infrastructure and keep `stages/` as thin delegates (or remove it entirely). Track this in `/.agent/plans/refactor-plan.md`.
@@ -157,16 +165,16 @@ Dependency injection keeps I/O and external services swappable for tests:
 ```python
 # protocols.py - defines the interface
 class HttpClient(Protocol):
-    def get_json(self, url: str, cache_key: str) -> dict[str, Any]: ...
+    def get_json(self, url: str, cache_key: str) -> Mapping[str, object]: ...
 
 # infrastructure/http.py - production implementation
 class CachedHttpClient:
-    def get_json(self, url: str, cache_key: str) -> dict[str, Any]:
+    def get_json(self, url: str, cache_key: str) -> Mapping[str, object]:
         # Real HTTP + caching logic
 
 # tests/fakes/http.py - test implementation
 class FakeHttpClient:
-    def get_json(self, url: str, cache_key: str) -> dict[str, Any]:
+    def get_json(self, url: str, cache_key: str) -> Mapping[str, object]:
         return self.responses.get(cache_key, {})
 ```
 
@@ -196,10 +204,10 @@ uv run test
 uv run test -v
 
 # Specific test file
-uv run test tests/test_normalization.py
+uv run test tests/domain/test_organisation_identity.py
 
 # Specific test class
-uv run test tests/test_stage3.py::TestScoreFromSic
+uv run test tests/domain/test_scoring.py::TestScoreFromSic
 
 # With coverage (fails if below 85%)
 uv run coverage
