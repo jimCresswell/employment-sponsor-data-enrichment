@@ -3,7 +3,7 @@
 Usage example:
     from uk_sponsor_pipeline.observability.logging import get_logger
 
-    logger = get_logger("uk_sponsor_pipeline.stage1")
+    logger = get_logger("uk_sponsor_pipeline.transform_register")
     logger.info("Processing %s rows", row_count)
 """
 

@@ -1,4 +1,4 @@
-"""Tests for Stage 2 Companies House integration."""
+"""Tests for Transform enrich Companies House integration."""
 
 from datetime import datetime, tzinfo
 from pathlib import Path
@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 
 from tests.fakes import FakeHttpClient, InMemoryFileSystem
-from uk_sponsor_pipeline.application import stage2_companies_house as s2
-from uk_sponsor_pipeline.application.stage2_companies_house import run_stage2
+from uk_sponsor_pipeline.application import transform_enrich as s2
+from uk_sponsor_pipeline.application.transform_enrich import run_transform_enrich
 from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.domain.companies_house import (
     CandidateMatch,
@@ -23,17 +23,17 @@ from uk_sponsor_pipeline.exceptions import (
     RateLimitError,
 )
 from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
-from uk_sponsor_pipeline.types import SearchItem, Stage2ResumeReport
+from uk_sponsor_pipeline.types import SearchItem, TransformEnrichResumeReport
 
 
-class TestStage2AuthIntegration:
-    """Integration tests for Stage 2 authentication."""
+class TestTransformEnrichAuthIntegration:
+    """Integration tests for Transform enrich authentication."""
 
     def test_api_key_is_passed_to_session(self, tmp_path: Path) -> None:
         """Verify the API key from config is correctly added to session headers."""
-        # Create minimal stage1 input
-        stage1_csv = tmp_path / "stage1.csv"
-        stage1_csv.write_text(
+        # Create minimal transform_register input
+        transform_register_csv = tmp_path / "sponsor_register_filtered.csv"
+        transform_register_csv.write_text(
             "Organisation Name,org_name_normalized,has_multiple_towns,has_multiple_counties,"
             "Town/City,County,Type & Rating,Route,raw_name_variants\n"
             "Test Company Ltd,test company,False,False,London,Greater London,"
@@ -54,13 +54,13 @@ class TestStage2AuthIntegration:
         mock_http = MagicMock()
         mock_http.get_json.return_value = {"items": []}
 
-        # Run stage2 with our mock
+        # Run transform_enrich with our mock
         out_dir = tmp_path / "out"
         cache_dir = tmp_path / "cache"
 
         try:
-            run_stage2(
-                stage1_path=stage1_csv,
+            run_transform_enrich(
+                register_path=transform_register_csv,
                 out_dir=out_dir,
                 cache_dir=cache_dir,
                 config=config,
@@ -74,14 +74,14 @@ class TestStage2AuthIntegration:
         assert mock_http.get_json.called
 
 
-class TestStage2CandidateOrdering:
+class TestTransformEnrichCandidateOrdering:
     """Tests for candidate ranking across multiple query variants."""
 
     def test_candidates_sorted_across_queries(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        stage1_csv = tmp_path / "stage1.csv"
-        stage1_csv.write_text(
+        transform_register_csv = tmp_path / "sponsor_register_filtered.csv"
+        transform_register_csv.write_text(
             "Organisation Name,org_name_normalized,has_multiple_towns,has_multiple_counties,"
             "Town/City,County,Type & Rating,Route,raw_name_variants\n"
             "Acme Ltd,acme,False,False,London,Greater London,A rating,Skilled Worker,Acme Ltd\n"
@@ -150,8 +150,8 @@ class TestStage2CandidateOrdering:
         monkeypatch.setattr(s2, "score_candidates", fake_score_candidates)
 
         out_dir = tmp_path / "out"
-        outs = run_stage2(
-            stage1_path=stage1_csv,
+        outs = run_transform_enrich(
+            register_path=transform_register_csv,
             out_dir=out_dir,
             cache_dir=tmp_path / "cache",
             config=config,
@@ -164,7 +164,7 @@ class TestStage2CandidateOrdering:
         assert top_score == 0.7
 
 
-class TestStage2Resume:
+class TestTransformEnrichResume:
     """Tests for batching, incremental output, and resume logic."""
 
     def test_resume_skips_processed_orgs(
@@ -173,7 +173,7 @@ class TestStage2Resume:
         fake_http_client: FakeHttpClient,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        stage1_path = Path("data/interim/stage1.csv")
+        register_path = Path("data/interim/sponsor_register_filtered.csv")
         out_dir = Path("data/processed")
         cache_dir = Path("data/cache/companies_house")
 
@@ -203,7 +203,7 @@ class TestStage2Resume:
                 },
             ]
         )
-        in_memory_fs.write_csv(df, stage1_path)
+        in_memory_fs.write_csv(df, register_path)
 
         config = PipelineConfig(
             ch_api_key="test-key",
@@ -247,8 +247,8 @@ class TestStage2Resume:
 
         monkeypatch.setattr(s2, "score_candidates", fake_score_candidates)
 
-        run_stage2(
-            stage1_path=stage1_path,
+        run_transform_enrich(
+            register_path=register_path,
             out_dir=out_dir,
             cache_dir=cache_dir,
             config=config,
@@ -257,9 +257,9 @@ class TestStage2Resume:
             fs=in_memory_fs,
         )
 
-        unmatched_df = in_memory_fs.read_csv(out_dir / "stage2_unmatched.csv")
-        checkpoint_df = in_memory_fs.read_csv(out_dir / "stage2_checkpoint.csv")
-        candidates_df = in_memory_fs.read_csv(out_dir / "stage2_candidates_top3.csv")
+        unmatched_df = in_memory_fs.read_csv(out_dir / "companies_house_unmatched.csv")
+        checkpoint_df = in_memory_fs.read_csv(out_dir / "companies_house_checkpoint.csv")
+        candidates_df = in_memory_fs.read_csv(out_dir / "companies_house_candidates_top3.csv")
 
         assert len(unmatched_df) == 2
         assert len(checkpoint_df) == 2
@@ -275,8 +275,8 @@ class TestStage2Resume:
 
         failing_http = FailingHttp()
 
-        run_stage2(
-            stage1_path=stage1_path,
+        run_transform_enrich(
+            register_path=register_path,
             out_dir=out_dir,
             cache_dir=cache_dir,
             config=config,
@@ -293,7 +293,7 @@ class TestStage2Resume:
         fake_http_client: FakeHttpClient,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        stage1_path = Path("data/interim/stage1.csv")
+        register_path = Path("data/interim/sponsor_register_filtered.csv")
         out_dir = Path("data/processed")
         cache_dir = Path("data/cache/companies_house")
 
@@ -334,7 +334,7 @@ class TestStage2Resume:
                 },
             ]
         )
-        in_memory_fs.write_csv(df, stage1_path)
+        in_memory_fs.write_csv(df, register_path)
 
         config = PipelineConfig(
             ch_api_key="test-key",
@@ -378,8 +378,8 @@ class TestStage2Resume:
 
         monkeypatch.setattr(s2, "score_candidates", fake_score_candidates)
 
-        outs = run_stage2(
-            stage1_path=stage1_path,
+        outs = run_transform_enrich(
+            register_path=register_path,
             out_dir=out_dir,
             cache_dir=cache_dir,
             config=config,
@@ -393,7 +393,7 @@ class TestStage2Resume:
         checkpoint_df = in_memory_fs.read_csv(outs["checkpoint"])
         unmatched_df = in_memory_fs.read_csv(outs["unmatched"])
         report = validate_as(
-            Stage2ResumeReport,
+            TransformEnrichResumeReport,
             in_memory_fs.read_json(outs["resume_report"]),
         )
 
@@ -409,7 +409,7 @@ class TestStage2Resume:
         assert report["run_duration_seconds"] >= 0
 
 
-class TestStage2FailFast:
+class TestTransformEnrichFailFast:
     """Ensure fatal search errors stop the run and can be resumed later."""
 
     @pytest.mark.parametrize(
@@ -426,7 +426,7 @@ class TestStage2FailFast:
         exc_type: type[Exception],
         exc_args: tuple[object, ...],
     ) -> None:
-        stage1_path = Path("data/interim/stage1.csv")
+        register_path = Path("data/interim/sponsor_register_filtered.csv")
         in_memory_fs.write_csv(
             pd.DataFrame(
                 [
@@ -443,7 +443,7 @@ class TestStage2FailFast:
                     }
                 ]
             ),
-            stage1_path,
+            register_path,
         )
 
         class FailingHttp:
@@ -459,8 +459,8 @@ class TestStage2FailFast:
         )
 
         with pytest.raises(exc_type):
-            run_stage2(
-                stage1_path=stage1_path,
+            run_transform_enrich(
+                register_path=register_path,
                 out_dir=Path("data/processed"),
                 cache_dir=Path("data/cache"),
                 config=config,
@@ -470,18 +470,18 @@ class TestStage2FailFast:
             )
 
 
-def test_stage2_requires_config() -> None:
+def test_transform_enrich_requires_config() -> None:
     with pytest.raises(RuntimeError) as exc_info:
-        run_stage2()
+        run_transform_enrich()
     assert "PipelineConfig" in str(exc_info.value)
 
 
-def test_stage2_profile_fetch_errors_fail_fast(
+def test_transform_enrich_profile_fetch_errors_fail_fast(
     in_memory_fs: InMemoryFileSystem,
     fake_http_client: FakeHttpClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    stage1_path = Path("data/interim/stage1.csv")
+    register_path = Path("data/interim/sponsor_register_filtered.csv")
     out_dir = Path("data/processed")
     cache_dir = Path("data/cache")
 
@@ -501,7 +501,7 @@ def test_stage2_profile_fetch_errors_fail_fast(
                 }
             ]
         ),
-        stage1_path,
+        register_path,
     )
 
     config = PipelineConfig(
@@ -552,8 +552,8 @@ def test_stage2_profile_fetch_errors_fail_fast(
     monkeypatch.setattr(s2, "score_candidates", fake_score_candidates)
 
     with pytest.raises(RuntimeError, match="profile fetch failed"):
-        run_stage2(
-            stage1_path=stage1_path,
+        run_transform_enrich(
+            register_path=register_path,
             out_dir=out_dir,
             cache_dir=cache_dir,
             config=config,
@@ -562,15 +562,15 @@ def test_stage2_profile_fetch_errors_fail_fast(
             fs=in_memory_fs,
         )
 
-    assert in_memory_fs.exists(out_dir / "stage2_resume_report.json")
-    assert not in_memory_fs.exists(out_dir / "stage2_unmatched.csv")
+    assert in_memory_fs.exists(out_dir / "companies_house_resume_report.json")
+    assert not in_memory_fs.exists(out_dir / "companies_house_unmatched.csv")
 
 
 def test_resume_false_writes_to_new_output_dir(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    stage1_csv = tmp_path / "stage1.csv"
-    stage1_csv.write_text(
+    transform_register_csv = tmp_path / "sponsor_register_filtered.csv"
+    transform_register_csv.write_text(
         "Organisation Name,org_name_normalized,has_multiple_towns,has_multiple_counties,"
         "Town/City,County,Type & Rating,Route,raw_name_variants\n"
         "Acme Ltd,acme,False,False,London,Greater London,A rating,Skilled Worker,Acme Ltd\n"
@@ -596,8 +596,8 @@ def test_resume_false_writes_to_new_output_dir(
             return {"items": []}
 
     out_dir = tmp_path / "out"
-    outs = run_stage2(
-        stage1_path=stage1_csv,
+    outs = run_transform_enrich(
+        register_path=transform_register_csv,
         out_dir=out_dir,
         cache_dir=tmp_path / "cache",
         config=config,
@@ -609,8 +609,8 @@ def test_resume_false_writes_to_new_output_dir(
     assert outs["enriched"].parent.name == "run_20260201_120000"
 
 
-def test_stage2_file_source_uses_local_payload(in_memory_fs: InMemoryFileSystem) -> None:
-    stage1_path = Path("data/interim/stage1.csv")
+def test_transform_enrich_file_source_uses_local_payload(in_memory_fs: InMemoryFileSystem) -> None:
+    register_path = Path("data/interim/sponsor_register_filtered.csv")
     in_memory_fs.write_csv(
         pd.DataFrame(
             [
@@ -627,7 +627,7 @@ def test_stage2_file_source_uses_local_payload(in_memory_fs: InMemoryFileSystem)
                 }
             ]
         ),
-        stage1_path,
+        register_path,
     )
 
     ch_file_path = Path("data/reference/companies_house.json")
@@ -681,8 +681,8 @@ def test_stage2_file_source_uses_local_payload(in_memory_fs: InMemoryFileSystem)
         ch_source_path=str(ch_file_path),
     )
 
-    outs = run_stage2(
-        stage1_path=stage1_path,
+    outs = run_transform_enrich(
+        register_path=register_path,
         out_dir=Path("data/processed"),
         config=config,
         fs=in_memory_fs,
@@ -694,8 +694,8 @@ def test_stage2_file_source_uses_local_payload(in_memory_fs: InMemoryFileSystem)
     assert enriched_df.loc[0, "ch_company_number"] == "12345678"
 
 
-def test_stage2_invalid_source_type_raises(in_memory_fs: InMemoryFileSystem) -> None:
-    stage1_path = Path("data/interim/stage1.csv")
+def test_transform_enrich_invalid_source_type_raises(in_memory_fs: InMemoryFileSystem) -> None:
+    register_path = Path("data/interim/sponsor_register_filtered.csv")
     in_memory_fs.write_csv(
         pd.DataFrame(
             [
@@ -712,7 +712,7 @@ def test_stage2_invalid_source_type_raises(in_memory_fs: InMemoryFileSystem) -> 
                 }
             ]
         ),
-        stage1_path,
+        register_path,
     )
 
     config = PipelineConfig(
@@ -721,4 +721,4 @@ def test_stage2_invalid_source_type_raises(in_memory_fs: InMemoryFileSystem) -> 
     )
 
     with pytest.raises(ValueError):
-        run_stage2(stage1_path=stage1_path, config=config, fs=in_memory_fs)
+        run_transform_enrich(register_path=register_path, config=config, fs=in_memory_fs)

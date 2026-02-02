@@ -1,11 +1,11 @@
 """CLI for UK Sponsor Pipeline.
 
 Commands:
-- download: Fetch latest sponsor register from GOV.UK
-- stage1: Filter to Skilled Worker + A-rated, aggregate by org
-- stage2: Enrich with Companies House data
-- stage3: Score for tech-likelihood, produce shortlist
-- run-all: Execute all stages sequentially
+- extract: Fetch latest sponsor register from GOV.UK
+- transform-register: Filter to Skilled Worker + A-rated, aggregate by org
+- transform-enrich: Enrich with Companies House data
+- transform-score: Score for tech-likelihood, produce shortlist
+- run-all: Execute all steps sequentially
 """
 
 from __future__ import annotations
@@ -16,21 +16,21 @@ from typing import Annotated
 import typer
 from rich import print as rprint
 
+from .application.extract import ExtractResult, extract_register
+from .application.transform_enrich import run_transform_enrich
+from .application.transform_register import TransformRegisterResult, run_transform_register
+from .application.transform_score import run_transform_score
 from .config import PipelineConfig
-from .stages.download import DownloadResult, download_latest
-from .stages.stage1 import Stage1Result, run_stage1
-from .stages.stage2_companies_house import run_stage2
-from .stages.stage3_scoring import run_stage3
 
 app = typer.Typer(
     add_completion=False,
-    help="UK sponsor register pipeline: download → filter → enrich → score → shortlist",
+    help="UK sponsor register pipeline: extract → transform → enrich → score → shortlist",
 )
 
 DEFAULT_RAW_DIR = Path("data/raw")
-DEFAULT_STAGE1_OUT = Path("data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv")
+DEFAULT_REGISTER_OUT = Path("data/interim/sponsor_register_filtered.csv")
 DEFAULT_PROCESSED_DIR = Path("data/processed")
-DEFAULT_STAGE2_IN = Path("data/processed/stage2_enriched_companies_house.csv")
+DEFAULT_ENRICHED_IN = Path("data/processed/companies_house_enriched.csv")
 
 
 def _single_region(region: list[str] | None) -> str | None:
@@ -42,7 +42,7 @@ def _single_region(region: list[str] | None) -> str | None:
 
 
 @app.command()
-def download(
+def extract(
     url: Annotated[
         str | None,
         typer.Option(
@@ -60,15 +60,15 @@ def download(
         ),
     ] = DEFAULT_RAW_DIR,
 ) -> None:
-    """Download the latest sponsor register CSV from GOV.UK."""
-    result: DownloadResult = download_latest(url_override=url, data_dir=data_dir)
+    """Extract the latest sponsor register CSV from GOV.UK."""
+    result: ExtractResult = extract_register(url_override=url, data_dir=data_dir)
     rprint(f"[green]✓ Downloaded:[/green] {result.output_path}")
     rprint(f"  Hash: {result.sha256_hash[:16]}...")
     rprint(f"  Valid schema: {result.schema_valid}")
 
 
-@app.command()
-def stage1(
+@app.command(name="transform-register")
+def transform_register(
     raw_dir: Annotated[
         Path,
         typer.Option(
@@ -83,27 +83,27 @@ def stage1(
             "-o",
             help="Output path for filtered/aggregated CSV",
         ),
-    ] = DEFAULT_STAGE1_OUT,
+    ] = DEFAULT_REGISTER_OUT,
 ) -> None:
-    """Stage 1: Filter to Skilled Worker + A-rated and aggregate by organization."""
-    result: Stage1Result = run_stage1(raw_dir=raw_dir, out_path=out_path)
-    rprint(f"[green]✓ Stage 1 complete:[/green] {result.output_path}")
+    """Transform register: filter to Skilled Worker + A-rated and aggregate by organisation."""
+    result: TransformRegisterResult = run_transform_register(raw_dir=raw_dir, out_path=out_path)
+    rprint(f"[green]✓ Transform register complete:[/green] {result.output_path}")
     rprint(
         f"  {result.total_raw_rows:,} raw → {result.filtered_rows:,} filtered → "
         f"{result.unique_orgs:,} unique orgs"
     )
 
 
-@app.command()
-def stage2(
-    stage1_path: Annotated[
+@app.command(name="transform-enrich")
+def transform_enrich(
+    register_path: Annotated[
         Path,
         typer.Option(
             "--input",
             "-i",
-            help="Path to Stage 1 output CSV",
+            help="Path to register transform output CSV",
         ),
-    ] = DEFAULT_STAGE1_OUT,
+    ] = DEFAULT_REGISTER_OUT,
     out_dir: Annotated[
         Path,
         typer.Option(
@@ -141,14 +141,14 @@ def stage2(
         ),
     ] = None,
 ) -> None:
-    """Stage 2: Enrich Stage 1 output using Companies House API.
+    """Transform enrich: enrich register output using Companies House data.
 
     Batching: use --batch-start/--batch-count/--batch-size.
-    Resume: --resume and check data/processed/stage2_resume_report.json.
+    Resume: --resume and check data/processed/companies_house_resume_report.json.
     """
     config = PipelineConfig.from_env()
-    outs = run_stage2(
-        stage1_path=stage1_path,
+    outs = run_transform_enrich(
+        register_path=register_path,
         out_dir=out_dir,
         resume=resume,
         batch_start=batch_start,
@@ -156,21 +156,21 @@ def stage2(
         batch_size=batch_size,
         config=config,
     )
-    rprint("[green]✓ Stage 2 complete:[/green]")
+    rprint("[green]✓ Transform enrich complete:[/green]")
     for k, v in outs.items():
         rprint(f"  {k}: {v}")
 
 
-@app.command()
-def stage3(
-    stage2_path: Annotated[
+@app.command(name="transform-score")
+def transform_score(
+    enriched_path: Annotated[
         Path,
         typer.Option(
             "--input",
             "-i",
-            help="Path to Stage 2 enriched CSV",
+            help="Path to enriched Companies House CSV",
         ),
-    ] = DEFAULT_STAGE2_IN,
+    ] = DEFAULT_ENRICHED_IN,
     out_dir: Annotated[
         Path,
         typer.Option(
@@ -207,7 +207,7 @@ def stage3(
         ),
     ] = None,
 ) -> None:
-    """Stage 3: Score for tech-likelihood and produce shortlist.
+    """Transform score: score for tech-likelihood and produce shortlist.
 
     Supports geographic filtering with --region and --postcode-prefix options.
     """
@@ -221,8 +221,8 @@ def stage3(
             geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
         )
 
-    outs = run_stage3(stage2_path=stage2_path, out_dir=out_dir, config=config)
-    rprint("[green]✓ Stage 3 complete:[/green]")
+    outs = run_transform_score(enriched_path=enriched_path, out_dir=out_dir, config=config)
+    rprint("[green]✓ Transform score complete:[/green]")
     for k, v in outs.items():
         rprint(f"  {k}: {v}")
 
@@ -250,7 +250,7 @@ def run_all(
         typer.Option(
             "--threshold",
             "-t",
-            help="Override tech score threshold for Stage 3",
+            help="Override tech score threshold for scoring",
         ),
     ] = None,
     skip_download: Annotated[
@@ -261,33 +261,33 @@ def run_all(
         ),
     ] = False,
 ) -> None:
-    """Run all pipeline stages sequentially.
+    """Run all pipeline steps sequentially.
 
-    Executes: download → stage1 → stage2 → stage3
-    Geographic filters apply to the final Stage 3 shortlist.
+    Executes: extract → transform-register → transform-enrich → transform-score
+    Geographic filters apply to the final shortlist.
     """
-    # Stage 0: Download
+    # Extract
     if not skip_download:
-        rprint("\n[bold cyan]═══ Stage 0: Download ═══[/bold cyan]")
-        download_result = download_latest()
+        rprint("\n[bold cyan]═══ Extract: Register CSV ═══[/bold cyan]")
+        download_result = extract_register()
         rprint(f"[green]✓ Downloaded:[/green] {download_result.output_path}")
     else:
         rprint("[yellow]Skipping download (--skip-download)[/yellow]")
 
-    # Stage 1
-    rprint("\n[bold cyan]═══ Stage 1: Filter & Aggregate ═══[/bold cyan]")
-    stage1_result = run_stage1()
-    rprint(f"[green]✓ {stage1_result.unique_orgs:,} unique organizations[/green]")
+    # Transform register
+    rprint("\n[bold cyan]═══ Transform: Register ═══[/bold cyan]")
+    register_result = run_transform_register()
+    rprint(f"[green]✓ {register_result.unique_orgs:,} unique organisations[/green]")
 
     config = PipelineConfig.from_env()
 
-    # Stage 2
-    rprint("\n[bold cyan]═══ Stage 2: Companies House Enrichment ═══[/bold cyan]")
-    stage2_outs = run_stage2(config=config)
-    rprint(f"[green]✓ Enriched: {stage2_outs['enriched']}[/green]")
+    # Transform enrich
+    rprint("\n[bold cyan]═══ Transform: Companies House Enrich ═══[/bold cyan]")
+    enrich_outs = run_transform_enrich(config=config)
+    rprint(f"[green]✓ Enriched: {enrich_outs['enriched']}[/green]")
 
-    # Stage 3
-    rprint("\n[bold cyan]═══ Stage 3: Tech Scoring & Shortlist ═══[/bold cyan]")
+    # Transform score
+    rprint("\n[bold cyan]═══ Transform: Score & Shortlist ═══[/bold cyan]")
 
     if threshold is not None or region or postcode_prefix:
         config = config.with_overrides(
@@ -296,8 +296,8 @@ def run_all(
             geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
         )
 
-    stage3_outs = run_stage3(config=config)
+    score_outs = run_transform_score(config=config)
 
     rprint("\n[bold green]═══ Pipeline Complete ═══[/bold green]")
-    rprint(f"Final shortlist: {stage3_outs['shortlist']}")
-    rprint(f"Explainability: {stage3_outs['explain']}")
+    rprint(f"Final shortlist: {score_outs['shortlist']}")
+    rprint(f"Explainability: {score_outs['explain']}")

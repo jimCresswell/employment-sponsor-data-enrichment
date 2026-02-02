@@ -1,6 +1,6 @@
-"""Schema definitions for pipeline stage inputs and outputs.
+"""Schema definitions for pipeline step inputs and outputs.
 
-These define the expected columns at each stage boundary, enabling validation
+These define the expected columns at each step boundary, enabling validation
 and clear documentation of data contracts.
 """
 
@@ -17,8 +17,8 @@ RAW_REQUIRED_COLUMNS = frozenset(
     ]
 )
 
-# Stage 1 output: filtered and aggregated sponsors
-STAGE1_OUTPUT_COLUMNS = (
+# Transform register output: filtered and aggregated sponsors
+TRANSFORM_REGISTER_OUTPUT_COLUMNS = (
     "Organisation Name",
     "org_name_normalized",
     "has_multiple_towns",
@@ -30,9 +30,9 @@ STAGE1_OUTPUT_COLUMNS = (
     "raw_name_variants",  # pipe-separated list of original name variants
 )
 
-# Stage 2 output: enriched with Companies House data
-STAGE2_ENRICHED_COLUMNS = (
-    *STAGE1_OUTPUT_COLUMNS,
+# Transform enrich output: enriched with Companies House data
+TRANSFORM_ENRICH_OUTPUT_COLUMNS = (
+    *TRANSFORM_REGISTER_OUTPUT_COLUMNS,
     "match_status",
     "match_score",
     "match_confidence",  # high | medium | low
@@ -52,8 +52,8 @@ STAGE2_ENRICHED_COLUMNS = (
     "ch_address_postcode",
 )
 
-STAGE2_UNMATCHED_COLUMNS = (
-    *STAGE1_OUTPUT_COLUMNS,
+TRANSFORM_ENRICH_UNMATCHED_COLUMNS = (
+    *TRANSFORM_REGISTER_OUTPUT_COLUMNS,
     "match_status",
     "match_error",
     "best_candidate_score",
@@ -61,7 +61,7 @@ STAGE2_UNMATCHED_COLUMNS = (
     "best_candidate_company_number",
 )
 
-STAGE2_CANDIDATES_COLUMNS = (
+TRANSFORM_ENRICH_CANDIDATES_COLUMNS = (
     "Organisation Name",
     "rank",
     "candidate_company_number",
@@ -78,9 +78,9 @@ STAGE2_CANDIDATES_COLUMNS = (
     "query_used",
 )
 
-# Stage 3 output: scored for tech-likelihood
-STAGE3_SCORED_COLUMNS = (
-    *STAGE2_ENRICHED_COLUMNS,
+# Transform score output: scored for tech-likelihood
+TRANSFORM_SCORE_OUTPUT_COLUMNS = (
+    *TRANSFORM_ENRICH_OUTPUT_COLUMNS,
     "sic_tech_score",
     "is_active_score",
     "company_age_score",
@@ -90,7 +90,7 @@ STAGE3_SCORED_COLUMNS = (
     "role_fit_bucket",  # strong | possible | unlikely
 )
 
-STAGE3_EXPLAIN_COLUMNS = (
+TRANSFORM_SCORE_EXPLAIN_COLUMNS = (
     "Organisation Name",
     "ch_company_number",
     "ch_company_name",
@@ -105,17 +105,17 @@ STAGE3_EXPLAIN_COLUMNS = (
 )
 
 
-def validate_columns(df_columns: list[str], required: frozenset[str], stage_name: str) -> None:
+def validate_columns(df_columns: list[str], required: frozenset[str], step_name: str) -> None:
     """Validate that DataFrame has required columns.
 
     Args:
         df_columns: List of column names from DataFrame.
         required: Set of required column names.
-        stage_name: Name of stage for error messages.
+        step_name: Name of step for error messages.
 
     Raises:
         ValueError: If required columns are missing.
     """
     missing = required - set(df_columns)
     if missing:
-        raise ValueError(f"{stage_name}: Missing required columns: {sorted(missing)}")
+        raise ValueError(f"{step_name}: Missing required columns: {sorted(missing)}")

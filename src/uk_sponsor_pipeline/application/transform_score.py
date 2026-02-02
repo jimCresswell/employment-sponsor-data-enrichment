@@ -1,9 +1,9 @@
-"""Stage 3: Composable scoring model for tech-likelihood.
+"""Transform score: composable scoring model for tech-likelihood.
 
 Improvements over original:
 - Multi-feature additive scoring model
 - Transparent feature contributions
-- Explainability output (stage3_explain.csv)
+- Explainability output (companies_explain.csv)
 - Geographic filtering support
 - Location alias profiles for region/locality/postcode matching
 - Configurable thresholds via CLI/env
@@ -29,12 +29,12 @@ from ..infrastructure.io.validation import parse_location_aliases, validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem
 from ..schemas import (
-    STAGE2_ENRICHED_COLUMNS,
-    STAGE3_EXPLAIN_COLUMNS,
-    STAGE3_SCORED_COLUMNS,
+    TRANSFORM_ENRICH_OUTPUT_COLUMNS,
+    TRANSFORM_SCORE_EXPLAIN_COLUMNS,
+    TRANSFORM_SCORE_OUTPUT_COLUMNS,
     validate_columns,
 )
-from ..types import Stage2EnrichedRow
+from ..types import TransformEnrichRow
 
 
 def _load_location_profiles(path: Path, fs: FileSystem) -> list[LocationProfile]:
@@ -48,19 +48,19 @@ def _load_location_profiles(path: Path, fs: FileSystem) -> list[LocationProfile]
 
 
 def _matches_geographic_filter_row(row: pd.Series[str], geo_filter: GeoFilter) -> bool:
-    return domain_matches_geo_filter(validate_as(Stage2EnrichedRow, row.to_dict()), geo_filter)
+    return domain_matches_geo_filter(validate_as(TransformEnrichRow, row.to_dict()), geo_filter)
 
 
-def run_stage3(
-    stage2_path: str | Path = "data/processed/stage2_enriched_companies_house.csv",
+def run_transform_score(
+    enriched_path: str | Path = "data/processed/companies_house_enriched.csv",
     out_dir: str | Path = "data/processed",
     config: PipelineConfig | None = None,
     fs: FileSystem | None = None,
 ) -> dict[str, Path]:
-    """Stage 3: Score companies for tech-likelihood and produce shortlist.
+    """Transform enrich outputs into scores and a shortlist.
 
     Args:
-        stage2_path: Path to Stage 2 enriched CSV.
+        enriched_path: Path to enriched Companies House CSV.
         out_dir: Directory for output files.
         config: Pipeline configuration (required; load at entry point).
         fs: Optional filesystem for testing.
@@ -75,14 +75,16 @@ def run_stage3(
         )
 
     fs = fs or LocalFileSystem()
-    logger = get_logger("uk_sponsor_pipeline.stage3")
-    stage2_path = Path(stage2_path)
+    logger = get_logger("uk_sponsor_pipeline.transform_score")
+    enriched_path = Path(enriched_path)
     out_dir = Path(out_dir)
     fs.mkdir(out_dir, parents=True)
 
-    df = fs.read_csv(stage2_path).fillna("")
+    df = fs.read_csv(enriched_path).fillna("")
     validate_columns(
-        list(df.columns), frozenset(STAGE2_ENRICHED_COLUMNS), "Stage 2 enriched output"
+        list(df.columns),
+        frozenset(TRANSFORM_ENRICH_OUTPUT_COLUMNS),
+        "Transform enrich output",
     )
 
     # Ensure match_score is numeric for correct sorting
@@ -93,7 +95,7 @@ def run_stage3(
     # Calculate features for each row
     features_list: list[ScoringFeatures] = []
     for _, row in df.iterrows():
-        features_list.append(calculate_features(validate_as(Stage2EnrichedRow, row.to_dict())))
+        features_list.append(calculate_features(validate_as(TransformEnrichRow, row.to_dict())))
 
     # Add feature columns to DataFrame
     df["sic_tech_score"] = [f.sic_tech_score for f in features_list]
@@ -107,10 +109,12 @@ def run_stage3(
     # Sort by score (numeric match_score ensures stable tie-breaking)
     df = df.sort_values(["role_fit_score", "match_score"], ascending=[False, False])
 
-    validate_columns(list(df.columns), frozenset(STAGE3_SCORED_COLUMNS), "Stage 3 scored output")
+    validate_columns(
+        list(df.columns), frozenset(TRANSFORM_SCORE_OUTPUT_COLUMNS), "Transform score output"
+    )
 
     # Full scored output
-    scored_path = out_dir / "stage3_scored.csv"
+    scored_path = out_dir / "companies_scored.csv"
     fs.write_csv(df, scored_path)
     logger.info("Scored: %s", scored_path)
 
@@ -135,16 +139,18 @@ def run_stage3(
         shortlist = shortlist[geo_mask]
         logger.info("Geographic filter: %s companies match", int(geo_mask.sum()))
 
-    shortlist_path = out_dir / "stage3_shortlist_tech.csv"
+    shortlist_path = out_dir / "companies_shortlist.csv"
     fs.write_csv(shortlist, shortlist_path)
     logger.info("Shortlist: %s (%s companies)", shortlist_path, len(shortlist))
 
     # Explainability output
     validate_columns(
-        list(shortlist.columns), frozenset(STAGE3_EXPLAIN_COLUMNS), "Stage 3 shortlist"
+        list(shortlist.columns),
+        frozenset(TRANSFORM_SCORE_EXPLAIN_COLUMNS),
+        "Shortlist output",
     )
-    explain_df = shortlist[list(STAGE3_EXPLAIN_COLUMNS)]
-    explain_path = out_dir / "stage3_explain.csv"
+    explain_df = shortlist[list(TRANSFORM_SCORE_EXPLAIN_COLUMNS)]
+    explain_path = out_dir / "companies_explain.csv"
     fs.write_csv(explain_df, explain_path)
     logger.info("Explainability: %s", explain_path)
 

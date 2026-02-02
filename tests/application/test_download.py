@@ -1,12 +1,12 @@
-"""Tests for download stage with filesystem injection."""
+"""Tests for extract step with filesystem injection."""
 
 from pathlib import Path
 
 from tests.fakes import InMemoryFileSystem
-from uk_sponsor_pipeline.stages.download import download_latest
+from uk_sponsor_pipeline.application.extract import extract_register
 
 
-def test_download_with_in_memory_fs(in_memory_fs: InMemoryFileSystem) -> None:
+def test_extract_with_in_memory_fs(in_memory_fs: InMemoryFileSystem) -> None:
     csv_content = (
         b"Organisation Name,Town/City,County,Type & Rating,Route\n"
         b"Acme Ltd,London,Greater London,A rating,Skilled Worker\n"
@@ -36,7 +36,7 @@ def test_download_with_in_memory_fs(in_memory_fs: InMemoryFileSystem) -> None:
 
     session = DummySession(DummyResponse(csv_content))
 
-    result = download_latest(
+    result = extract_register(
         url_override="https://example.com/register.csv",
         data_dir="data/raw",
         reports_dir="reports",
@@ -45,7 +45,7 @@ def test_download_with_in_memory_fs(in_memory_fs: InMemoryFileSystem) -> None:
     )
 
     assert in_memory_fs.read_bytes(result.output_path) == csv_content
-    manifest = in_memory_fs.read_json(Path("reports") / "download_manifest.json")
+    manifest = in_memory_fs.read_json(Path("reports") / "extract_manifest.json")
     assert isinstance(manifest.get("schema_valid"), bool)
     assert isinstance(manifest.get("asset_url"), str)
     assert manifest["schema_valid"] is True

@@ -1,4 +1,4 @@
-"""Sponsor register domain rules for Stage 1 filtering and aggregation.
+"""Sponsor register domain rules for register filtering and aggregation.
 
 Usage example:
     from uk_sponsor_pipeline.domain.organisation_identity import normalize_org_name
@@ -52,8 +52,8 @@ class AggregatedOrganisation:
 
 
 @dataclass(frozen=True)
-class Stage1StatsData:
-    """Stage 1 statistics computed from raw and filtered rows."""
+class RegisterStatsData:
+    """Register statistics computed from raw and filtered rows."""
 
     total_raw_rows: int
     skilled_worker_rows: int
@@ -68,11 +68,11 @@ class Stage1StatsData:
 
 @dataclass(frozen=True)
 class SponsorRegisterSnapshot:
-    """Snapshot of Stage 1 filtering and aggregation."""
+    """Snapshot of register filtering and aggregation."""
 
     filtered_rows: list[RawSponsorRow]
     aggregated: list[AggregatedOrganisation]
-    stats: Stage1StatsData
+    stats: RegisterStatsData
 
 
 def _clean_value(value: str) -> str:
@@ -105,7 +105,7 @@ def _is_a_rated(type_rating: str) -> bool:
 def build_sponsor_register_snapshot(
     rows: Iterable[RawSponsorRow], *, normalize_fn: NormalizeFn
 ) -> SponsorRegisterSnapshot:
-    """Filter and aggregate sponsor register rows for Stage 1.
+    """Filter and aggregate sponsor register rows for the register transform.
 
     Args:
         rows: Raw sponsor register rows.
@@ -177,7 +177,7 @@ def build_sponsor_register_snapshot(
     unique_orgs_normalized = len(aggregated)
     duplicates_merged = unique_orgs_raw - unique_orgs_normalized
 
-    stats = Stage1StatsData(
+    stats = RegisterStatsData(
         total_raw_rows=total_raw_rows,
         skilled_worker_rows=skilled_worker_rows,
         a_rated_rows=a_rated_rows,

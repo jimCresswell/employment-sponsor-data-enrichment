@@ -1,14 +1,14 @@
-"""Shared Stage 2 row helpers for tests."""
+"""Shared enrich row helpers for tests."""
 
 from __future__ import annotations
 
 from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
-from uk_sponsor_pipeline.types import Stage2EnrichedRow
+from uk_sponsor_pipeline.types import TransformEnrichRow
 
 
-def make_stage2_row(**overrides: str | float) -> Stage2EnrichedRow:
-    """Build a valid Stage2EnrichedRow with optional overrides."""
-    row: Stage2EnrichedRow = {
+def make_enrich_row(**overrides: str | float) -> TransformEnrichRow:
+    """Build a valid TransformEnrichRow with optional overrides."""
+    row: TransformEnrichRow = {
         "Organisation Name": "Acme Ltd",
         "org_name_normalized": "acme",
         "has_multiple_towns": "False",
@@ -37,4 +37,4 @@ def make_stage2_row(**overrides: str | float) -> Stage2EnrichedRow:
         "ch_address_postcode": "EC1A 1BB",
     }
     merged = {**row, **overrides}
-    return validate_as(Stage2EnrichedRow, merged)
+    return validate_as(TransformEnrichRow, merged)

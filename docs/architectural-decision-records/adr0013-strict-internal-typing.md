@@ -22,7 +22,7 @@ The pipeline ingests untrusted data from disk (CSV/JSON) and the network (Compan
 
 - Clearer internal contracts and safer refactors.
 - More explicit validation code at boundaries.
-- Additional type definitions for structured data (e.g., stage rows and API payloads).
+- Additional type definitions for structured data (e.g., transform rows and API payloads).
 
 ## Enforcement Options
 

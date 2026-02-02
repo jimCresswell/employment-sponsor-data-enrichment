@@ -5,18 +5,18 @@ A data pipeline that transforms the UK Home Office sponsor register into a short
 ## Pipeline Overview
 
 ```text
-GOV.UK Sponsor Register → Filter → Enrich → Score → Shortlist
-       (CSV)             Stage1   Stage2  Stage3   (CSV)
+GOV.UK Sponsor Register → Transform Register → Transform Enrich → Transform Score → Shortlist
+       (CSV)                    (CSV)               (CSV)              (CSV)
 ```
 
-| Stage    | Input       | Output                        | What it does                                        |
-| -------- | ----------- | ----------------------------- | --------------------------------------------------- |
-| download | GOV.UK page | `data/raw/*.csv`              | Scrapes page, downloads CSV, validates schema       |
-| stage1   | Raw CSV     | `data/interim/stage1_*.csv`   | Filters Skilled Worker + A-rated, aggregates by org |
-| stage2   | Stage1 CSV  | `data/processed/stage2_*.csv` | Enriches via Companies House API                    |
-| stage3   | Stage2 CSV  | `data/processed/stage3_*.csv` | Scores for tech-likelihood, outputs shortlist       |
+| Step               | Input       | Output                                      | What it does                                        |
+| ------------------ | ----------- | ------------------------------------------- | --------------------------------------------------- |
+| extract            | GOV.UK page | `data/raw/*.csv`                            | Scrapes page, downloads CSV, validates schema       |
+| transform-register | Raw CSV     | `data/interim/sponsor_register_filtered.csv` | Filters Skilled Worker + A-rated, aggregates by org |
+| transform-enrich   | Register CSV | `data/processed/companies_house_*.csv`     | Enriches via Companies House API                    |
+| transform-score    | Enriched CSV | `data/processed/companies_*.csv`           | Scores for tech-likelihood, outputs shortlist       |
 
-Stages describe artefact boundaries for audit and resume. They are not architectural boundaries; orchestration and shared standards live in the application pipeline (see `docs/architectural-decision-records/adr0012-stages-as-artefact-boundaries.md`).
+Steps describe artefact boundaries for audit and resume. They are not architectural boundaries; orchestration and shared standards live in the application pipeline (see `docs/architectural-decision-records/adr0012-artefact-boundaries-and-orchestration.md`).
 
 ## Quick Start
 
@@ -47,43 +47,43 @@ cp .env.example .env
 ### Run the Full Pipeline
 
 ```bash
-# All stages in sequence
+# All steps in sequence
 uv run uk-sponsor run-all
 
-# Or run each stage individually:
-uv run uk-sponsor download
-uv run uk-sponsor stage1
-uv run uk-sponsor stage2
-uv run uk-sponsor stage3
+# Or run each step individually:
+uv run uk-sponsor extract
+uv run uk-sponsor transform-register
+uv run uk-sponsor transform-enrich
+uv run uk-sponsor transform-score
 ```
 
 `uv run <command>` executes tools inside the project environment.
 
-### Stage 2 Batching and Resume
+### Transform Enrich Batching and Resume
 
-Stage 2 runs in batches by default using `CH_BATCH_SIZE`. You can control which batches run:
+Transform Enrich runs in batches by default using `CH_BATCH_SIZE`. You can control which batches run:
 
 ```bash
 # Run only the first 2 batches (after resume filtering)
-uv run uk-sponsor stage2 --batch-count 2
+uv run uk-sponsor transform-enrich --batch-count 2
 
 # Start at batch 3 and run 2 batches
-uv run uk-sponsor stage2 --batch-start 3 --batch-count 2
+uv run uk-sponsor transform-enrich --batch-start 3 --batch-count 2
 
 # Override batch size for this run
-uv run uk-sponsor stage2 --batch-size 50
+uv run uk-sponsor transform-enrich --batch-size 50
 ```
 
-Resume data is written to `data/processed/stage2_checkpoint.csv` and
-`data/processed/stage2_resume_report.json` (includes overall batch range and timing).
+Resume data is written to `data/processed/companies_house_checkpoint.csv` and
+`data/processed/companies_house_resume_report.json` (includes overall batch range and timing).
 
-Stage 2 fails fast on authentication, rate limit, circuit breaker, or unexpected HTTP errors. Fix the issue and rerun with `--resume`; the resume report includes a ready‑made command.
+Transform Enrich fails fast on authentication, rate limit, circuit breaker, or unexpected HTTP errors. Fix the issue and rerun with `--resume`; the resume report includes a ready‑made command.
 
-When running with `--no-resume`, Stage 2 writes to a new timestamped subdirectory under the output directory to avoid stale data reuse.
+When running with `--no-resume`, Transform Enrich writes to a new timestamped subdirectory under the output directory to avoid stale data reuse.
 
 ### Companies House Source (API or File)
 
-By default Stage 2 uses the Companies House API. To use a file source instead, set:
+By default Transform Enrich uses the Companies House API. To use a file source instead, set:
 
 ```bash
 export CH_SOURCE_TYPE=file
@@ -137,16 +137,16 @@ Filter the final shortlist by region or postcode (single region only):
 
 ```bash
 # Filter to London companies only
-uv run uk-sponsor stage3 --region London
+uv run uk-sponsor transform-score --region London
 
 # Single region only
-uv run uk-sponsor stage3 --region London
+uv run uk-sponsor transform-score --region London
 
 # Postcode prefix filtering
-uv run uk-sponsor stage3 --postcode-prefix EC --postcode-prefix SW
+uv run uk-sponsor transform-score --postcode-prefix EC --postcode-prefix SW
 
 # Adjust score threshold (default: 0.55)
-uv run uk-sponsor stage3 --threshold 0.40
+uv run uk-sponsor transform-score --threshold 0.40
 
 # Full pipeline with filters
 uv run uk-sponsor run-all --region London --threshold 0.50
@@ -160,9 +160,9 @@ Location aliases live in `data/reference/location_aliases.json` and expand regio
 
 ### Architecture Direction
 
-The long‑term direction is an application‑owned pipeline: orchestration and step ownership live in an application layer, domain logic is pure and infrastructure is shared and injected. Staged CSVs remain as artefact boundaries for audit and resume, while `stages/` (if retained) becomes a thin delegate layer only.
+The long‑term direction is an application‑owned pipeline: orchestration and step ownership live in an application layer, domain logic is pure and infrastructure is shared and injected. CSV artefacts remain as audit and resume boundaries.
 
-Observability is standardised via a shared logger factory with UTC timestamps so pipeline logs remain consistent across stages.
+Observability is standardised via a shared logger factory with UTC timestamps so pipeline logs remain consistent across steps.
 
 ### Project Structure
 
@@ -174,10 +174,10 @@ src/uk_sponsor_pipeline/
 ├── protocols.py        # Interface-style contracts
 ├── application/        # Use-case orchestration
 │   ├── companies_house_source.py
-│   ├── download.py
-│   ├── stage1.py
-│   ├── stage2_companies_house.py
-│   └── stage3_scoring.py
+│   ├── extract.py
+│   ├── transform_register.py
+│   ├── transform_enrich.py
+│   └── transform_score.py
 ├── infrastructure/     # Concrete implementations (DI pattern)
 │   ├── io/
 │   │   ├── filesystem.py
@@ -191,12 +191,7 @@ src/uk_sponsor_pipeline/
 │   ├── scoring.py
 │   └── sponsor_register.py
 ├── observability/      # Shared logging helpers
-├── schemas.py          # Column contracts per stage
-└── stages/
-    ├── download.py
-    ├── stage1.py
-    ├── stage2_companies_house.py
-    └── stage3_scoring.py
+├── schemas.py          # Column contracts per step
 
 tests/
 ├── application/
@@ -212,7 +207,7 @@ tests/
 └── conftest.py         # Pytest fixtures and fakes
 ```
 
-The current `stages/` modules implement pipeline steps, but the architectural direction is to move orchestration into an application layer with shared infrastructure and keep `stages/` as thin delegates (or remove it entirely). Track this in `/.agent/plans/refactor-plan.md`.
+Application modules implement pipeline steps; the CLI invokes them directly. Track the refactor in `/.agent/plans/refactor-plan.md`.
 
 ### Dependency Injection
 
@@ -234,16 +229,24 @@ class FakeHttpClient:
         return self.responses.get(cache_key, {})
 ```
 
-Stage entry points require a `PipelineConfig` instance; environment variables are read once at the CLI entry point and passed through. For programmatic use:
+Application entry points require a `PipelineConfig` instance; environment variables are read once at the CLI entry point and passed through. For programmatic use:
 
 ```python
 from uk_sponsor_pipeline.config import PipelineConfig
-from uk_sponsor_pipeline.stages.stage2_companies_house import run_stage2
-from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
+from uk_sponsor_pipeline.application.transform_enrich import run_transform_enrich
+from uk_sponsor_pipeline.application.transform_score import run_transform_score
 
 config = PipelineConfig.from_env()
-run_stage2(stage1_path="data/interim/stage1.csv", out_dir="data/processed", config=config)
-run_stage3(stage2_path="data/processed/stage2_enriched_companies_house.csv", out_dir="data/processed", config=config)
+run_transform_enrich(
+    register_path="data/interim/sponsor_register_filtered.csv",
+    out_dir="data/processed",
+    config=config,
+)
+run_transform_score(
+    enriched_path="data/processed/companies_house_enriched.csv",
+    out_dir="data/processed",
+    config=config,
+)
 ```
 
 Test doubles live in `tests/fakes/`; `tests/conftest.py` provides fixtures that instantiate them.
@@ -290,7 +293,7 @@ uv run check
 
 `uv run lint` is the single lint entry point. It currently runs ruff; import‑linter will be added here as part of the refactor plan.
 
-## Scoring Model (Stage 3)
+## Scoring Model (Transform Score)
 
 Companies are scored on multiple features:
 
@@ -310,21 +313,23 @@ Companies are scored on multiple features:
 
 ## Output Files
 
-When running Stage 2 with `--no-resume`, outputs are written under a timestamped
+When running Transform Enrich with `--no-resume`, outputs are written under a timestamped
 subdirectory of `data/processed/` (paths below reflect the default `--resume` behaviour).
 
 | File                                                 | Description                                   |
 | ---------------------------------------------------- | --------------------------------------------- |
-| `reports/download_manifest.json`                     | Download metadata with SHA256 hash            |
-| `reports/stage1_stats.json`                          | Filtering statistics                          |
-| `data/processed/stage2_enriched_companies_house.csv` | Matched companies with CH data                |
-| `data/processed/stage2_unmatched.csv`                | Orgs that couldn't be matched                 |
-| `data/processed/stage2_candidates_top3.csv`          | Audit trail: top 3 match candidates per org   |
-| `data/processed/stage2_checkpoint.csv`               | Resume checkpoint of processed orgs           |
-| `data/processed/stage2_resume_report.json`           | Resume report for interrupted or partial runs |
-| `data/processed/stage3_scored.csv`                   | All companies with scores                     |
-| `data/processed/stage3_shortlist_tech.csv`           | Filtered shortlist                            |
-| `data/processed/stage3_explain.csv`                  | Score breakdown for shortlist                 |
+| `reports/extract_manifest.json`                       | Download metadata with SHA256 hash            |
+| `reports/register_stats.json`                         | Filtering statistics                          |
+| `data/raw/*.csv`                                      | Extracted sponsor register CSV                |
+| `data/interim/sponsor_register_filtered.csv`          | Filtered and aggregated sponsor register      |
+| `data/processed/companies_house_enriched.csv`         | Matched companies with CH data                |
+| `data/processed/companies_house_unmatched.csv`        | Orgs that couldn't be matched                 |
+| `data/processed/companies_house_candidates_top3.csv`  | Audit trail: top 3 match candidates per org   |
+| `data/processed/companies_house_checkpoint.csv`       | Resume checkpoint of processed orgs           |
+| `data/processed/companies_house_resume_report.json`   | Resume report for interrupted or partial runs |
+| `data/processed/companies_scored.csv`                 | All companies with scores                     |
+| `data/processed/companies_shortlist.csv`              | Filtered shortlist                            |
+| `data/processed/companies_explain.csv`                | Score breakdown for shortlist                 |
 
 ## Contributing
 
@@ -357,7 +362,7 @@ Notes:
 
 ## Troubleshooting
 
-- **Companies House 401/403**: ensure `CH_API_KEY` is a valid API key and not an OAuth token; Stage 2 uses Basic Auth with the key as username and a blank password. See `docs/troubleshooting.md`.
+- **Companies House 401/403**: ensure `CH_API_KEY` is a valid API key and not an OAuth token; Transform Enrich uses Basic Auth with the key as username and a blank password. See `docs/troubleshooting.md`.
 
 ## Future Work
 

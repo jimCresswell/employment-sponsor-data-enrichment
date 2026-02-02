@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-Stage 2 currently depends on the Companies House API for search and profile data. For reproducibility, offline runs, and controlled fixtures, we need a file-based source that produces the same validated IO shapes as the API while preserving the current behaviour by default.
+Transform Enrich currently depends on the Companies House API for search and profile data. For reproducibility, offline runs, and controlled fixtures, we need a file-based source that produces the same validated IO shapes as the API while preserving the current behaviour by default.
 
 ## Decision
 

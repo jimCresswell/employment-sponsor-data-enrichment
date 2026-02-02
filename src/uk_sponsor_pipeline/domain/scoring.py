@@ -2,9 +2,9 @@
 
 Usage example:
     from uk_sponsor_pipeline.domain.scoring import calculate_features
-    from uk_sponsor_pipeline.types import Stage2EnrichedRow
+    from uk_sponsor_pipeline.types import TransformEnrichRow
 
-    row: Stage2EnrichedRow = {
+    row: TransformEnrichRow = {
         "Organisation Name": "Acme Ltd",
         "org_name_normalized": "acme",
         "has_multiple_towns": "False",
@@ -43,7 +43,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 
-from ..types import Stage2EnrichedRow
+from ..types import TransformEnrichRow
 
 # SIC code mappings for tech signals (prefix → score)
 TECH_SIC_PREFIXES = {
@@ -243,7 +243,7 @@ def score_name_keywords(name: str) -> float:
     return score
 
 
-def calculate_features(row: Stage2EnrichedRow) -> ScoringFeatures:
+def calculate_features(row: TransformEnrichRow) -> ScoringFeatures:
     """Calculate all scoring features for a company row."""
     sics = parse_sic_list(row["ch_sic_codes"])
     status = row["ch_company_status"].lower()

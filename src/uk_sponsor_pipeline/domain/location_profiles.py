@@ -31,7 +31,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from ..io_contracts import LocationProfileIO
-from ..types import Stage2EnrichedRow
+from ..types import TransformEnrichRow
 
 
 @dataclass(frozen=True)
@@ -118,7 +118,7 @@ def build_geo_filter(
     )
 
 
-def matches_geo_filter(row: Stage2EnrichedRow, geo_filter: GeoFilter) -> bool:
+def matches_geo_filter(row: TransformEnrichRow, geo_filter: GeoFilter) -> bool:
     if geo_filter.is_empty():
         return True
 

@@ -1,4 +1,4 @@
-# ADR 0010: Stage 3 Tech-Likelihood Scoring
+# ADR 0010: Transform Score Tech-Likelihood Scoring
 
 Date: 2026-02-01
 
@@ -13,7 +13,7 @@ The pipeline needs an explainable mechanism to rank companies by likelihood of h
 ## Decision
 
 Use a multi-feature scoring model based on Companies House profile data and name heuristics. Features include SIC codes, company status, company age, company type, and name keywords. The model outputs a numeric score and a bucketed classification (strong/possible/unlikely).
-The scoring rules live in the domain layer (`domain/scoring.py`) and are invoked by the Stage 3 application use-case.
+The scoring rules live in the domain layer (`domain/scoring.py`) and are invoked by the Transform Score application use-case.
 
 ## Consequences
 

@@ -1,4 +1,4 @@
-# ADR 0009: Stage 2 Matching and Audit Trail
+# ADR 0009: Transform Enrich Matching and Audit Trail
 
 Date: 2026-02-01
 
@@ -12,7 +12,7 @@ Sponsor register names are noisy. Matching to Companies House requires a transpa
 
 ## Decision
 
-Use a multi-variant query strategy with explicit scoring components. Persist the top candidates for each organisation to `stage2_candidates_top3.csv` alongside the matched/unmatched outputs. Record match scores and confidence bands in the enriched output.
+Use a multi-variant query strategy with explicit scoring components. Persist the top candidates for each organisation to `companies_house_candidates_top3.csv` alongside the matched/unmatched outputs. Record match scores and confidence bands in the enriched output.
 
 ## Consequences
 

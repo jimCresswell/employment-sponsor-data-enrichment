@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TypedDict
 
-Stage1Row = TypedDict(
-    "Stage1Row",
+TransformRegisterRow = TypedDict(
+    "TransformRegisterRow",
     {
         "Organisation Name": str,
         "org_name_normalized": str,
@@ -56,8 +56,8 @@ class CompanyProfile(TypedDict):
     registered_office_address: RegisteredOfficeAddress
 
 
-Stage2CandidateRow = TypedDict(
-    "Stage2CandidateRow",
+TransformEnrichCandidateRow = TypedDict(
+    "TransformEnrichCandidateRow",
     {
         "Organisation Name": str,
         "rank": int,
@@ -76,8 +76,8 @@ Stage2CandidateRow = TypedDict(
     },
 )
 
-Stage2UnmatchedRow = TypedDict(
-    "Stage2UnmatchedRow",
+TransformEnrichUnmatchedRow = TypedDict(
+    "TransformEnrichUnmatchedRow",
     {
         "Organisation Name": str,
         "org_name_normalized": str,
@@ -96,8 +96,8 @@ Stage2UnmatchedRow = TypedDict(
     },
 )
 
-Stage2EnrichedRow = TypedDict(
-    "Stage2EnrichedRow",
+TransformEnrichRow = TypedDict(
+    "TransformEnrichRow",
     {
         "Organisation Name": str,
         "org_name_normalized": str,
@@ -136,8 +136,8 @@ class BatchRange(TypedDict):
     end: int
 
 
-class Stage2ResumeReport(TypedDict):
-    """Stage 2 resume report shape."""
+class TransformEnrichResumeReport(TypedDict):
+    """Transform enrich resume report shape."""
 
     status: str
     error_message: str
@@ -145,13 +145,13 @@ class Stage2ResumeReport(TypedDict):
     run_started_at_utc: str
     run_finished_at_utc: str
     run_duration_seconds: float
-    stage1_path: str
+    register_path: str
     out_dir: str
     batch_size: int
     batch_start: int
     batch_count: int | None
     batch_range: BatchRange | None
-    total_stage1_orgs: int
+    total_register_orgs: int
     total_unprocessed_at_start: int
     total_batches_at_start: int
     total_batches_overall: int
@@ -163,8 +163,8 @@ class Stage2ResumeReport(TypedDict):
     resume_command: str
 
 
-Stage3ScoredRow = TypedDict(
-    "Stage3ScoredRow",
+TransformScoreRow = TypedDict(
+    "TransformScoreRow",
     {
         "Organisation Name": str,
         "org_name_normalized": str,
@@ -202,8 +202,8 @@ Stage3ScoredRow = TypedDict(
     },
 )
 
-Stage3ExplainRow = TypedDict(
-    "Stage3ExplainRow",
+TransformScoreExplainRow = TypedDict(
+    "TransformScoreExplainRow",
     {
         "Organisation Name": str,
         "match_status": str,
@@ -225,4 +225,4 @@ Stage3ExplainRow = TypedDict(
     },
 )
 
-Stage3ShortlistRow = Stage3ScoredRow
+TransformScoreShortlistRow = TransformScoreRow

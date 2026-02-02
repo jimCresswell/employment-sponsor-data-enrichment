@@ -1,19 +1,22 @@
-"""Characterisation tests for Stage 3 outputs."""
+"""Characterisation tests for Transform score outputs."""
 
 from pathlib import Path
 
 import pandas as pd
 
 from tests.fakes import InMemoryFileSystem
+from uk_sponsor_pipeline.application.transform_score import run_transform_score
 from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
-from uk_sponsor_pipeline.schemas import STAGE3_EXPLAIN_COLUMNS, STAGE3_SCORED_COLUMNS
-from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
-from uk_sponsor_pipeline.types import Stage2EnrichedRow
+from uk_sponsor_pipeline.schemas import (
+    TRANSFORM_SCORE_EXPLAIN_COLUMNS,
+    TRANSFORM_SCORE_OUTPUT_COLUMNS,
+)
+from uk_sponsor_pipeline.types import TransformEnrichRow
 
 
-def _stage2_row(**overrides: str | float) -> Stage2EnrichedRow:
-    row: Stage2EnrichedRow = {
+def _transform_enrich_row(**overrides: str | float) -> TransformEnrichRow:
+    row: TransformEnrichRow = {
         "Organisation Name": "Acme Ltd",
         "org_name_normalized": "acme",
         "has_multiple_towns": "False",
@@ -42,17 +45,17 @@ def _stage2_row(**overrides: str | float) -> Stage2EnrichedRow:
         "ch_address_postcode": "EC1A 1BB",
     }
     merged = {**row, **overrides}
-    return validate_as(Stage2EnrichedRow, merged)
+    return validate_as(TransformEnrichRow, merged)
 
 
-def test_stage3_outputs_are_deterministic(in_memory_fs: InMemoryFileSystem) -> None:
-    stage2_path = Path("data/processed/stage2_enriched_companies_house.csv")
+def test_transform_score_outputs_are_deterministic(in_memory_fs: InMemoryFileSystem) -> None:
+    enriched_path = Path("data/processed/companies_house_enriched.csv")
     out_dir = Path("data/processed")
 
     df = pd.DataFrame(
         [
-            _stage2_row(),
-            _stage2_row(
+            _transform_enrich_row(),
+            _transform_enrich_row(
                 **{
                     "Organisation Name": "Care Services Ltd",
                     "org_name_normalized": "care services",
@@ -63,10 +66,10 @@ def test_stage3_outputs_are_deterministic(in_memory_fs: InMemoryFileSystem) -> N
             ),
         ]
     )
-    in_memory_fs.write_csv(df, stage2_path)
+    in_memory_fs.write_csv(df, enriched_path)
 
-    outputs = run_stage3(
-        stage2_path=stage2_path,
+    outputs = run_transform_score(
+        enriched_path=enriched_path,
         out_dir=out_dir,
         config=PipelineConfig(),
         fs=in_memory_fs,
@@ -76,11 +79,11 @@ def test_stage3_outputs_are_deterministic(in_memory_fs: InMemoryFileSystem) -> N
     shortlist_df = in_memory_fs.read_csv(outputs["shortlist"])
     explain_df = in_memory_fs.read_csv(outputs["explain"])
 
-    assert list(scored_df.columns) == list(STAGE3_SCORED_COLUMNS)
+    assert list(scored_df.columns) == list(TRANSFORM_SCORE_OUTPUT_COLUMNS)
     assert scored_df.loc[0, "Organisation Name"] == "Acme Ltd"
 
-    assert list(shortlist_df.columns) == list(STAGE3_SCORED_COLUMNS)
+    assert list(shortlist_df.columns) == list(TRANSFORM_SCORE_OUTPUT_COLUMNS)
     assert shortlist_df["Organisation Name"].tolist() == ["Acme Ltd"]
 
-    assert list(explain_df.columns) == list(STAGE3_EXPLAIN_COLUMNS)
+    assert list(explain_df.columns) == list(TRANSFORM_SCORE_EXPLAIN_COLUMNS)
     assert explain_df["Organisation Name"].tolist() == ["Acme Ltd"]

@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 @dataclass(frozen=True)
 class PipelineConfig:
-    """Immutable configuration object for all pipeline stages.
+    """Immutable configuration object for all pipeline steps.
 
     Load from environment with `PipelineConfig.from_env()` or construct directly for testing.
     """
@@ -33,10 +33,10 @@ class PipelineConfig:
     ch_source_type: str = "api"
     ch_source_path: str = ""
 
-    # Stage 3 scoring
+    # Scoring
     tech_score_threshold: float = 0.55
 
-    # Geographic filters (applied in Stage 3)
+    # Geographic filters (applied during scoring)
     geo_filter_region: str | None = None
     geo_filter_postcodes: tuple[str, ...] = field(default_factory=tuple)
     location_aliases_path: str = "data/reference/location_aliases.json"

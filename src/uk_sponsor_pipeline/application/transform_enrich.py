@@ -1,4 +1,4 @@
-"""Stage 2: Companies House enrichment with improved matching and resumability.
+"""Transform enrich: Companies House enrichment with improved matching and resumability.
 
 Improvements over original:
 - Multi-query strategy using query variants
@@ -39,28 +39,28 @@ from ..infrastructure.io.validation import validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem, HttpClient, HttpSession
 from ..schemas import (
-    STAGE1_OUTPUT_COLUMNS,
-    STAGE2_CANDIDATES_COLUMNS,
-    STAGE2_ENRICHED_COLUMNS,
-    STAGE2_UNMATCHED_COLUMNS,
+    TRANSFORM_ENRICH_CANDIDATES_COLUMNS,
+    TRANSFORM_ENRICH_OUTPUT_COLUMNS,
+    TRANSFORM_ENRICH_UNMATCHED_COLUMNS,
+    TRANSFORM_REGISTER_OUTPUT_COLUMNS,
     validate_columns,
 )
 from ..types import (
     BatchRange,
-    Stage1Row,
-    Stage2CandidateRow,
-    Stage2EnrichedRow,
-    Stage2ResumeReport,
-    Stage2UnmatchedRow,
+    TransformEnrichCandidateRow,
+    TransformEnrichResumeReport,
+    TransformEnrichRow,
+    TransformEnrichUnmatchedRow,
+    TransformRegisterRow,
 )
 from .companies_house_source import CompaniesHouseSource, build_companies_house_source
 
-STAGE2_CHECKPOINT_COLUMNS = ("Organisation Name",)
+TRANSFORM_ENRICH_CHECKPOINT_COLUMNS = ("Organisation Name",)
 
 __all__ = [
     "CandidateMatch",
     "MatchScore",
-    "run_stage2",
+    "run_transform_enrich",
 ]
 
 
@@ -80,7 +80,7 @@ def _append_csv(fs: FileSystem, df: pd.DataFrame, path: Path, columns: tuple[str
     if df.empty:
         return
     coerced = _coerce_output_columns(df, columns)
-    validate_columns(list(coerced.columns), frozenset(columns), "Stage 2 output")
+    validate_columns(list(coerced.columns), frozenset(columns), "Transform enrich output")
     fs.append_csv(coerced, path)
 
 
@@ -90,7 +90,7 @@ def _as_str(value: object) -> str:
     return ""
 
 
-def _coerce_stage1_row(raw: dict[str, object]) -> Stage1Row:
+def _coerce_register_row(raw: dict[str, object]) -> TransformRegisterRow:
     return {
         "Organisation Name": _as_str(raw.get("Organisation Name")),
         "org_name_normalized": _as_str(raw.get("org_name_normalized")),
@@ -104,19 +104,19 @@ def _coerce_stage1_row(raw: dict[str, object]) -> Stage1Row:
     }
 
 
-def _coerce_stage1_rows(raw_rows: list[dict[str, object]]) -> list[Stage1Row]:
-    return [_coerce_stage1_row(row) for row in raw_rows]
+def _coerce_register_rows(raw_rows: list[dict[str, object]]) -> list[TransformRegisterRow]:
+    return [_coerce_register_row(row) for row in raw_rows]
 
 
 def _build_resume_report(
     *,
     status: str,
-    stage1_path: Path,
+    register_path: Path,
     out_dir: Path,
     batch_size: int,
     batch_start: int,
     batch_count: int | None,
-    total_stage1_orgs: int,
+    total_register_orgs: int,
     total_unprocessed_at_start: int,
     total_batches_at_start: int,
     total_batches_overall: int,
@@ -130,7 +130,7 @@ def _build_resume_report(
     run_finished_at_utc: datetime,
     run_duration_seconds: float,
     error_message: str | None = None,
-) -> Stage2ResumeReport:
+) -> TransformEnrichResumeReport:
     batch_range: BatchRange | None = None
     if selected_batches:
         batch_range = {"start": batch_start, "end": batch_start + selected_batches - 1}
@@ -140,7 +140,8 @@ def _build_resume_report(
         overall_batch_range = {"start": overall_batch_start, "end": overall_batch_end}
 
     resume_command = (
-        f"uv run uk-sponsor stage2 --input {stage1_path} --output-dir {out_dir} --resume"
+        "uv run uk-sponsor transform-enrich "
+        f"--input {register_path} --output-dir {out_dir} --resume"
     )
 
     return {
@@ -150,13 +151,13 @@ def _build_resume_report(
         "run_started_at_utc": run_started_at_utc.isoformat(),
         "run_finished_at_utc": run_finished_at_utc.isoformat(),
         "run_duration_seconds": round(run_duration_seconds, 3),
-        "stage1_path": str(stage1_path),
+        "register_path": str(register_path),
         "out_dir": str(out_dir),
         "batch_size": batch_size,
         "batch_start": batch_start,
         "batch_count": batch_count,
         "batch_range": batch_range,
-        "total_stage1_orgs": total_stage1_orgs,
+        "total_register_orgs": total_register_orgs,
         "total_unprocessed_at_start": total_unprocessed_at_start,
         "total_batches_at_start": total_batches_at_start,
         "total_batches_overall": total_batches_overall,
@@ -169,8 +170,8 @@ def _build_resume_report(
     }
 
 
-def run_stage2(
-    stage1_path: str | Path = "data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv",
+def run_transform_enrich(
+    register_path: str | Path = "data/interim/sponsor_register_filtered.csv",
     out_dir: str | Path = "data/processed",
     cache_dir: str | Path = "data/cache/companies_house",
     config: PipelineConfig | None = None,
@@ -182,10 +183,10 @@ def run_stage2(
     batch_count: int | None = None,
     batch_size: int | None = None,
 ) -> dict[str, Path]:
-    """Stage 2: Enrich Stage 1 orgs with Companies House search + profile.
+    """Transform register orgs with Companies House search + profile.
 
     Args:
-        stage1_path: Path to Stage 1 output CSV.
+        register_path: Path to register transform output CSV.
         out_dir: Directory for output files.
         cache_dir: Directory for API response cache.
         config: Pipeline configuration (required; load at entry point).
@@ -214,30 +215,34 @@ def run_stage2(
         raise RuntimeError("Missing CH_API_KEY. Set it in .env or environment variables.")
 
     fs = fs or LocalFileSystem()
-    stage1_path = Path(stage1_path)
+    register_path = Path(register_path)
     out_dir = Path(out_dir)
     cache_dir = Path(cache_dir)
 
     # Output paths
-    logger = get_logger("uk_sponsor_pipeline.stage2")
+    logger = get_logger("uk_sponsor_pipeline.transform_enrich")
     if not resume:
         out_dir = out_dir / _run_dir_name(datetime.now(UTC))
         logger.info("Resume disabled; writing to new output directory: %s", out_dir)
     fs.mkdir(out_dir, parents=True)
 
-    out_enriched = out_dir / "stage2_enriched_companies_house.csv"
-    out_unmatched = out_dir / "stage2_unmatched.csv"
-    out_candidates = out_dir / "stage2_candidates_top3.csv"
-    out_checkpoint = out_dir / "stage2_checkpoint.csv"
-    out_resume_report = out_dir / "stage2_resume_report.json"
+    out_enriched = out_dir / "companies_house_enriched.csv"
+    out_unmatched = out_dir / "companies_house_unmatched.csv"
+    out_candidates = out_dir / "companies_house_candidates_top3.csv"
+    out_checkpoint = out_dir / "companies_house_checkpoint.csv"
+    out_resume_report = out_dir / "companies_house_resume_report.json"
 
     # Load input
     run_started_at_utc = datetime.now(UTC)
     run_started_perf = time.perf_counter()
 
-    df = fs.read_csv(stage1_path).fillna("")
-    validate_columns(list(df.columns), frozenset(STAGE1_OUTPUT_COLUMNS), "Stage 1 output")
-    total_stage1_orgs = len(df)
+    df = fs.read_csv(register_path).fillna("")
+    validate_columns(
+        list(df.columns),
+        frozenset(TRANSFORM_REGISTER_OUTPUT_COLUMNS),
+        "Transform register output",
+    )
+    total_register_orgs = len(df)
 
     # Normalize batching inputs
     batch_size_value = batch_size if batch_size is not None else config.ch_batch_size
@@ -290,7 +295,7 @@ def run_stage2(
 
     # Process organizations in batches
     raw_rows = validate_as(list[dict[str, object]], df.to_dict(orient="records"))
-    rows = _coerce_stage1_rows(raw_rows)
+    rows = _coerce_register_rows(raw_rows)
     to_process_all = [
         (idx, row)
         for idx, row in enumerate(rows)
@@ -299,7 +304,7 @@ def run_stage2(
     total_unprocessed = len(to_process_all)
     total_batches = math.ceil(total_unprocessed / batch_size_value) if total_unprocessed else 0
     total_batches_overall = (
-        math.ceil(total_stage1_orgs / batch_size_value) if total_stage1_orgs else 0
+        math.ceil(total_register_orgs / batch_size_value) if total_register_orgs else 0
     )
     start_index = (batch_start - 1) * batch_size_value
     end_index = start_index + (batch_count * batch_size_value) if batch_count else total_unprocessed
@@ -331,28 +336,33 @@ def run_stage2(
         total_batches_overall,
     )
 
-    batch_enriched: list[Stage2EnrichedRow] = []
-    batch_unmatched: list[Stage2UnmatchedRow] = []
-    batch_candidates: list[Stage2CandidateRow] = []
+    batch_enriched: list[TransformEnrichRow] = []
+    batch_unmatched: list[TransformEnrichUnmatchedRow] = []
+    batch_candidates: list[TransformEnrichCandidateRow] = []
     batch_processed: list[str] = []
     processed_in_run = 0
 
     def flush_batch() -> None:
         if not batch_processed:
             return
-        _append_csv(fs, pd.DataFrame(batch_enriched), out_enriched, STAGE2_ENRICHED_COLUMNS)
-        _append_csv(fs, pd.DataFrame(batch_unmatched), out_unmatched, STAGE2_UNMATCHED_COLUMNS)
+        _append_csv(fs, pd.DataFrame(batch_enriched), out_enriched, TRANSFORM_ENRICH_OUTPUT_COLUMNS)
+        _append_csv(
+            fs,
+            pd.DataFrame(batch_unmatched),
+            out_unmatched,
+            TRANSFORM_ENRICH_UNMATCHED_COLUMNS,
+        )
         _append_csv(
             fs,
             pd.DataFrame(batch_candidates),
             out_candidates,
-            STAGE2_CANDIDATES_COLUMNS,
+            TRANSFORM_ENRICH_CANDIDATES_COLUMNS,
         )
         _append_csv(
             fs,
             pd.DataFrame({"Organisation Name": batch_processed}),
             out_checkpoint,
-            STAGE2_CHECKPOINT_COLUMNS,
+            TRANSFORM_ENRICH_CHECKPOINT_COLUMNS,
         )
         batch_enriched.clear()
         batch_unmatched.clear()
@@ -458,25 +468,27 @@ def run_stage2(
         # Finalise outputs: dedupe + sort for deterministic results
         if fs.exists(out_enriched):
             enriched_df = fs.read_csv(out_enriched).fillna("")
-            enriched_df = _coerce_output_columns(enriched_df, STAGE2_ENRICHED_COLUMNS)
+            enriched_df = _coerce_output_columns(enriched_df, TRANSFORM_ENRICH_OUTPUT_COLUMNS)
             enriched_df = enriched_df.drop_duplicates(subset=["Organisation Name"], keep="first")
             enriched_df = enriched_df.sort_values("Organisation Name")
             fs.write_csv(enriched_df, out_enriched)
         else:
-            enriched_df = pd.DataFrame(columns=STAGE2_ENRICHED_COLUMNS)
+            enriched_df = pd.DataFrame(columns=TRANSFORM_ENRICH_OUTPUT_COLUMNS)
 
         if fs.exists(out_unmatched):
             unmatched_df = fs.read_csv(out_unmatched).fillna("")
-            unmatched_df = _coerce_output_columns(unmatched_df, STAGE2_UNMATCHED_COLUMNS)
+            unmatched_df = _coerce_output_columns(unmatched_df, TRANSFORM_ENRICH_UNMATCHED_COLUMNS)
             unmatched_df = unmatched_df.drop_duplicates(subset=["Organisation Name"], keep="first")
             unmatched_df = unmatched_df.sort_values("Organisation Name")
             fs.write_csv(unmatched_df, out_unmatched)
         else:
-            unmatched_df = pd.DataFrame(columns=STAGE2_UNMATCHED_COLUMNS)
+            unmatched_df = pd.DataFrame(columns=TRANSFORM_ENRICH_UNMATCHED_COLUMNS)
 
         if fs.exists(out_candidates):
             candidates_df = fs.read_csv(out_candidates).fillna("")
-            candidates_df = _coerce_output_columns(candidates_df, STAGE2_CANDIDATES_COLUMNS)
+            candidates_df = _coerce_output_columns(
+                candidates_df, TRANSFORM_ENRICH_CANDIDATES_COLUMNS
+            )
             candidates_df["rank"] = pd.to_numeric(candidates_df["rank"], errors="coerce").fillna(0)
             candidates_df = candidates_df.drop_duplicates(
                 subset=["Organisation Name", "rank", "candidate_company_number"], keep="first"
@@ -484,7 +496,7 @@ def run_stage2(
             candidates_df = candidates_df.sort_values(["Organisation Name", "rank"])
             fs.write_csv(candidates_df, out_candidates)
         else:
-            candidates_df = pd.DataFrame(columns=STAGE2_CANDIDATES_COLUMNS)
+            candidates_df = pd.DataFrame(columns=TRANSFORM_ENRICH_CANDIDATES_COLUMNS)
 
         if fs.exists(out_checkpoint):
             checkpoint_df = fs.read_csv(out_checkpoint).fillna("")
@@ -514,15 +526,15 @@ def run_stage2(
             checkpoint_df = fs.read_csv(out_checkpoint).fillna("")
             if "Organisation Name" in checkpoint_df.columns:
                 processed_total = len(set(checkpoint_df["Organisation Name"].tolist()))
-        remaining = max(0, total_stage1_orgs - processed_total)
+        remaining = max(0, total_register_orgs - processed_total)
         report = _build_resume_report(
             status=status,
-            stage1_path=stage1_path,
+            register_path=register_path,
             out_dir=out_dir,
             batch_size=batch_size_value,
             batch_start=batch_start,
             batch_count=batch_count,
-            total_stage1_orgs=total_stage1_orgs,
+            total_register_orgs=total_register_orgs,
             total_unprocessed_at_start=total_unprocessed,
             total_batches_at_start=total_batches,
             total_batches_overall=total_batches_overall,

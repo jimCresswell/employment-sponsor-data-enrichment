@@ -1,4 +1,4 @@
-"""Companies House data sources for Stage 2 enrichment.
+"""Companies House data sources for enrichment.
 
 Usage example:
     from uk_sponsor_pipeline.application.companies_house_source import (

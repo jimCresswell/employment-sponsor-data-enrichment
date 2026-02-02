@@ -1,6 +1,6 @@
 """Tests for location profile matching and expansion."""
 
-from tests.support.stage2_rows import make_stage2_row
+from tests.support.transform_enrich_rows import make_enrich_row
 from uk_sponsor_pipeline.domain.location_profiles import (
     GeoFilter,
     LocationProfile,
@@ -56,7 +56,7 @@ def test_matches_geo_filter_uses_locality_alias() -> None:
         )
     ]
     geo = build_geo_filter("Manchester", tuple(), profiles)
-    row = make_stage2_row(
+    row = make_enrich_row(
         **{
             "Organisation Name": "Salford Tech",
             "ch_address_locality": "Salford",

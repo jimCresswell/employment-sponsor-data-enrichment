@@ -1,4 +1,4 @@
-"""Stage 1: Filter to Skilled Worker + A-rated and aggregate by organisation.
+"""Transform register: filter to Skilled Worker + A-rated and aggregate by organisation.
 
 Improvements over original:
 - Adds org_name_normalized for matching
@@ -21,12 +21,12 @@ from ..infrastructure import LocalFileSystem
 from ..infrastructure.io.validation import validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem
-from ..schemas import RAW_REQUIRED_COLUMNS, STAGE1_OUTPUT_COLUMNS, validate_columns
+from ..schemas import RAW_REQUIRED_COLUMNS, TRANSFORM_REGISTER_OUTPUT_COLUMNS, validate_columns
 
 
 @dataclass
-class Stage1Result:
-    """Result of Stage 1 processing."""
+class TransformRegisterResult:
+    """Result of register transform processing."""
 
     output_path: Path
     stats_path: Path
@@ -36,8 +36,8 @@ class Stage1Result:
 
 
 @dataclass
-class Stage1Stats:
-    """Statistics from Stage 1 processing."""
+class TransformRegisterStats:
+    """Statistics from register transform processing."""
 
     input_file: str
     total_raw_rows: int
@@ -93,13 +93,13 @@ def _join_sorted(values: Iterable[str]) -> str:
     return " | ".join(sorted(set(cleaned)))
 
 
-def run_stage1(
+def run_transform_register(
     raw_dir: str | Path = "data/raw",
-    out_path: str | Path = "data/interim/stage1_skilled_worker_A_rated_aggregated_by_org.csv",
+    out_path: str | Path = "data/interim/sponsor_register_filtered.csv",
     reports_dir: str | Path = "reports",
     fs: FileSystem | None = None,
-) -> Stage1Result:
-    """Stage 1: Filter to Skilled Worker + A-rated and aggregate to org level.
+) -> TransformRegisterResult:
+    """Transform register to Skilled Worker + A-rated and aggregate to org level.
 
     Args:
         raw_dir: Directory containing raw CSV files.
@@ -108,10 +108,10 @@ def run_stage1(
         fs: Optional filesystem for testing.
 
     Returns:
-        Stage1Result with paths and counts.
+        TransformRegisterResult with paths and counts.
     """
     fs = fs or LocalFileSystem()
-    logger = get_logger("uk_sponsor_pipeline.stage1")
+    logger = get_logger("uk_sponsor_pipeline.transform_register")
     raw_dir = Path(raw_dir)
     out_path = Path(out_path)
     reports_dir = Path(reports_dir)
@@ -124,7 +124,7 @@ def run_stage1(
     else:
         candidates = fs.list_files(raw_dir, "*.csv")
     if not candidates:
-        raise RuntimeError(f"No raw CSV found in {raw_dir}. Run `uk-sponsor download` first.")
+        raise RuntimeError(f"No raw CSV found in {raw_dir}. Run `uk-sponsor extract` first.")
 
     in_path = max(candidates, key=fs.mtime)
     logger.info("Reading: %s", in_path)
@@ -161,13 +161,17 @@ def run_stage1(
             }
         )
 
-    agg = pd.DataFrame(aggregated_rows, columns=STAGE1_OUTPUT_COLUMNS)
-    validate_columns(list(agg.columns), frozenset(STAGE1_OUTPUT_COLUMNS), "Stage 1 output")
+    agg = pd.DataFrame(aggregated_rows, columns=TRANSFORM_REGISTER_OUTPUT_COLUMNS)
+    validate_columns(
+        list(agg.columns),
+        frozenset(TRANSFORM_REGISTER_OUTPUT_COLUMNS),
+        "Transform register output",
+    )
 
     fs.write_csv(agg, out_path)
     logger.info("Output: %s (%s unique organisations)", out_path, f"{len(agg):,}")
 
-    stats = Stage1Stats(
+    stats = TransformRegisterStats(
         input_file=str(in_path),
         total_raw_rows=snapshot.stats.total_raw_rows,
         skilled_worker_rows=snapshot.stats.skilled_worker_rows,
@@ -182,7 +186,7 @@ def run_stage1(
     )
 
     # Write stats
-    stats_path = reports_dir / "stage1_stats.json"
+    stats_path = reports_dir / "register_stats.json"
     stats_dict = {
         "input_file": stats.input_file,
         "total_raw_rows": stats.total_raw_rows,
@@ -199,7 +203,7 @@ def run_stage1(
     fs.write_json(stats_dict, stats_path)
     logger.info("Stats: %s", stats_path)
 
-    return Stage1Result(
+    return TransformRegisterResult(
         output_path=out_path,
         stats_path=stats_path,
         total_raw_rows=snapshot.stats.total_raw_rows,

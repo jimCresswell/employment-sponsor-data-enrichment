@@ -10,7 +10,7 @@ from uk_sponsor_pipeline.domain.companies_house import (
     score_candidates,
 )
 from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
-from uk_sponsor_pipeline.types import CompanyProfile, SearchItem, Stage1Row
+from uk_sponsor_pipeline.types import CompanyProfile, SearchItem, TransformRegisterRow
 
 
 def _normalize(value: str) -> str:
@@ -21,8 +21,8 @@ def _similarity(a: str, b: str) -> float:
     return 0.8 if a and b else 0.0
 
 
-def _stage1_row(**overrides: str) -> Stage1Row:
-    row: Stage1Row = {
+def _transform_register_row(**overrides: str) -> TransformRegisterRow:
+    row: TransformRegisterRow = {
         "Organisation Name": "Acme",
         "org_name_normalized": "acme",
         "has_multiple_towns": "False",
@@ -34,7 +34,7 @@ def _stage1_row(**overrides: str) -> Stage1Row:
         "raw_name_variants": "Acme",
     }
     merged = {**row, **overrides}
-    return validate_as(Stage1Row, merged)
+    return validate_as(TransformRegisterRow, merged)
 
 
 def test_score_candidates_applies_bonuses() -> None:
@@ -78,7 +78,7 @@ def test_build_candidate_row_rounds_scores() -> None:
 def test_build_rows_for_unmatched_and_profile_error() -> None:
     score = MatchScore(0.6, 0.5, 0.05, 0.03, 0.02)
     cand = CandidateMatch("123", "Acme", "active", "London", "Greater London", "EC1", score, "Acme")
-    base = _stage1_row()
+    base = _transform_register_row()
 
     unmatched = build_unmatched_row(row=base, best_match=cand)
     assert unmatched["match_status"] == "unmatched"
@@ -92,7 +92,7 @@ def test_build_rows_for_unmatched_and_profile_error() -> None:
 def test_build_enriched_row_maps_profile() -> None:
     score = MatchScore(0.9, 0.6, 0.1, 0.1, 0.1)
     cand = CandidateMatch("123", "Acme", "active", "London", "Greater London", "EC1", score, "Acme")
-    row = _stage1_row()
+    row = _transform_register_row()
     profile: CompanyProfile = {
         "company_name": "ACME LTD",
         "company_status": "active",

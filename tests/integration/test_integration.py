@@ -5,10 +5,10 @@ from pathlib import Path
 import pandas as pd
 
 from tests.fakes import FakeHttpClient, InMemoryFileSystem
+from uk_sponsor_pipeline.application.transform_enrich import run_transform_enrich
+from uk_sponsor_pipeline.application.transform_register import run_transform_register
+from uk_sponsor_pipeline.application.transform_score import run_transform_score
 from uk_sponsor_pipeline.config import PipelineConfig
-from uk_sponsor_pipeline.stages.stage1 import run_stage1
-from uk_sponsor_pipeline.stages.stage2_companies_house import run_stage2
-from uk_sponsor_pipeline.stages.stage3_scoring import run_stage3
 
 
 def test_pipeline_end_to_end_in_memory(
@@ -27,9 +27,9 @@ def test_pipeline_end_to_end_in_memory(
     )
     in_memory_fs.write_csv(raw_df, raw_path)
 
-    stage1 = run_stage1(
+    register_result = run_transform_register(
         raw_dir=raw_dir,
-        out_path=Path("interim/stage1.csv"),
+        out_path=Path("interim/sponsor_register_filtered.csv"),
         reports_dir=Path("reports"),
         fs=in_memory_fs,
     )
@@ -64,8 +64,8 @@ def test_pipeline_end_to_end_in_memory(
         },
     }
 
-    stage2 = run_stage2(
-        stage1_path=stage1.output_path,
+    enrich_outs = run_transform_enrich(
+        register_path=register_result.output_path,
         out_dir=Path("processed"),
         cache_dir=Path("cache"),
         config=PipelineConfig(
@@ -80,12 +80,12 @@ def test_pipeline_end_to_end_in_memory(
         fs=in_memory_fs,
     )
 
-    stage3 = run_stage3(
-        stage2_path=stage2["enriched"],
+    score_outs = run_transform_score(
+        enriched_path=enrich_outs["enriched"],
         out_dir=Path("processed"),
         config=PipelineConfig(tech_score_threshold=0.0),
         fs=in_memory_fs,
     )
 
-    shortlist = in_memory_fs.read_csv(stage3["shortlist"])
+    shortlist = in_memory_fs.read_csv(score_outs["shortlist"])
     assert shortlist["Organisation Name"].tolist() == ["Acme Ltd"]

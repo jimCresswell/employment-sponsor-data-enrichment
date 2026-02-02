@@ -5,7 +5,7 @@ These tests lock down current behaviour during refactors. They are intentionally
 ## Purpose
 
 - Prevent accidental behavioural changes while refactoring.
-- Provide concrete, deterministic expectations for stage outputs and error reporting.
+- Provide concrete, deterministic expectations for transform outputs and error reporting.
 - Act as temporary scaffolding; remove once the target module is stabilised and covered by the refactor tests.
 
 ## Removal Criteria
@@ -16,6 +16,6 @@ These tests lock down current behaviour during refactors. They are intentionally
 
 ## Files
 
-- `test_stage1_characterisation.py`
-- `test_stage2_characterisation.py`
-- `test_stage3_characterisation.py`
+- `test_transform_register_characterisation.py`
+- `test_transform_enrich_characterisation.py`
+- `test_transform_score_characterisation.py`

@@ -1,4 +1,4 @@
-"""Download use-case: fetch latest sponsor register CSV from GOV.UK."""
+"""Extract use-case: fetch latest sponsor register CSV from GOV.UK."""
 
 from __future__ import annotations
 
@@ -28,8 +28,8 @@ PREFERRED_PATTERNS = [
 
 
 @dataclass
-class DownloadResult:
-    """Result of download operation."""
+class ExtractResult:
+    """Result of extract operation."""
 
     output_path: Path
     asset_url: str
@@ -106,14 +106,14 @@ def _validate_csv_schema(content: bytes) -> bool:
         return False
 
 
-def download_latest(
+def extract_register(
     url_override: str | None = None,
     data_dir: str | Path = "data/raw",
     reports_dir: str | Path = "reports",
     session: HttpSession | None = None,
     fs: FileSystem | None = None,
-) -> DownloadResult:
-    """Download the latest sponsor register CSV from GOV.UK.
+) -> ExtractResult:
+    """Extract the latest sponsor register CSV from GOV.UK.
 
     Args:
         url_override: Direct URL to CSV (bypasses page scraping).
@@ -123,7 +123,7 @@ def download_latest(
         fs: Optional filesystem for testing.
 
     Returns:
-        DownloadResult with path, hash, and validation status.
+        ExtractResult with path, hash, and validation status.
 
     Raises:
         RuntimeError: If no CSV link found or download fails.
@@ -178,9 +178,9 @@ def download_latest(
         "sha256_hash": sha256_hash,
         "schema_valid": schema_valid,
     }
-    fs.write_json(manifest, reports_dir / "download_manifest.json")
+    fs.write_json(manifest, reports_dir / "extract_manifest.json")
 
-    result = DownloadResult(
+    result = ExtractResult(
         output_path=out_path,
         asset_url=asset_url,
         sha256_hash=sha256_hash,

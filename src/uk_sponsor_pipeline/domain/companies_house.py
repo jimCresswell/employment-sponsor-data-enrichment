@@ -21,10 +21,10 @@ from dataclasses import dataclass
 from ..types import (
     CompanyProfile,
     SearchItem,
-    Stage1Row,
-    Stage2CandidateRow,
-    Stage2EnrichedRow,
-    Stage2UnmatchedRow,
+    TransformEnrichCandidateRow,
+    TransformEnrichRow,
+    TransformEnrichUnmatchedRow,
+    TransformRegisterRow,
 )
 
 SimilarityFn = Callable[[str, str], float]
@@ -135,9 +135,11 @@ def score_candidates(
     return out
 
 
-def build_candidate_row(*, org: str, cand: CandidateMatch, rank: int) -> Stage2CandidateRow:
+def build_candidate_row(
+    *, org: str, cand: CandidateMatch, rank: int
+) -> TransformEnrichCandidateRow:
     """Build a candidate audit row."""
-    row: Stage2CandidateRow = {
+    row: TransformEnrichCandidateRow = {
         "Organisation Name": org,
         "rank": rank,
         "candidate_company_number": cand.company_number,
@@ -156,9 +158,11 @@ def build_candidate_row(*, org: str, cand: CandidateMatch, rank: int) -> Stage2C
     return row
 
 
-def build_unmatched_row(*, row: Stage1Row, best_match: CandidateMatch | None) -> Stage2UnmatchedRow:
+def build_unmatched_row(
+    *, row: TransformRegisterRow, best_match: CandidateMatch | None
+) -> TransformEnrichUnmatchedRow:
     """Build an unmatched row for audit."""
-    out: Stage2UnmatchedRow = {
+    out: TransformEnrichUnmatchedRow = {
         **row,
         "match_status": "unmatched",
         "best_candidate_score": round(best_match.score.total, 4) if best_match else "",
@@ -171,12 +175,12 @@ def build_unmatched_row(*, row: Stage1Row, best_match: CandidateMatch | None) ->
 
 def build_profile_error_row(
     *,
-    row: Stage1Row,
+    row: TransformRegisterRow,
     best_match: CandidateMatch,
     error: Exception,
-) -> Stage2UnmatchedRow:
+) -> TransformEnrichUnmatchedRow:
     """Build a profile error row for audit."""
-    out: Stage2UnmatchedRow = {
+    out: TransformEnrichUnmatchedRow = {
         **row,
         "match_status": "profile_error",
         "best_candidate_score": round(best_match.score.total, 4),
@@ -189,15 +193,15 @@ def build_profile_error_row(
 
 def build_enriched_row(
     *,
-    row: Stage1Row,
+    row: TransformRegisterRow,
     best_match: CandidateMatch,
     profile: CompanyProfile,
-) -> Stage2EnrichedRow:
+) -> TransformEnrichRow:
     """Build an enriched row from profile details."""
     sic = profile.get("sic_codes") or []
     ro = profile.get("registered_office_address") or {}
 
-    out: Stage2EnrichedRow = {
+    out: TransformEnrichRow = {
         **row,
         "match_status": "matched",
         "match_score": round(best_match.score.total, 4),

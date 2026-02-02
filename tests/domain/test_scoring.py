@@ -1,6 +1,6 @@
 """Tests for domain scoring logic."""
 
-from tests.support.stage2_rows import make_stage2_row
+from tests.support.transform_enrich_rows import make_enrich_row
 from uk_sponsor_pipeline.domain.scoring import (
     ScoringFeatures,
     calculate_features,
@@ -94,7 +94,7 @@ class TestCalculateFeatures:
     """Tests for full feature calculation."""
 
     def test_tech_company(self) -> None:
-        row = make_stage2_row(
+        row = make_enrich_row(
             **{
                 "ch_sic_codes": "62020",
                 "ch_company_status": "active",
@@ -109,7 +109,7 @@ class TestCalculateFeatures:
         assert features.bucket == "strong"
 
     def test_non_tech_company(self) -> None:
-        row = make_stage2_row(
+        row = make_enrich_row(
             **{
                 "ch_sic_codes": "87100",  # Care home
                 "ch_company_status": "active",
