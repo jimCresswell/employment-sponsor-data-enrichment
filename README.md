@@ -22,7 +22,7 @@ Steps describe artefact boundaries for audit and resume. They are not architectu
 
 ### Prerequisites
 
-- Python 3.13+
+- Python 3.14+
 - [uv](https://github.com/astral-sh/uv) (fast Python package manager)
 - Companies House API key ([register free](https://developer.company-information.service.gov.uk/))
 
@@ -357,6 +357,7 @@ uv run pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
 Notes:
+
 - `uv run check` runs the mutating formatter (`ruff format`) first.
 - Git hooks run `format-check` (non-mutating) before the other gates.
 

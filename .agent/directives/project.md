@@ -16,18 +16,18 @@ Produce a reproducible, auditable shortlist of UK sponsor‑licensed companies l
 
 ## Principles
 
-- Reproducible runs with stable, staged artefacts.
-- Clear audit trail at every stage.
+- Reproducible runs with stable artefacts at each step.
+- Clear audit trail at every step.
 - Fail fast with helpful errors; no silent failures.
 - No compatibility layers; remove legacy paths.
 - Tests are fully network‑isolated.
 
 ## Pipeline Summary (High Level)
 
-1. **download** → fetch latest GOV.UK sponsor register data.
-2. **stage1** → filter Skilled Worker + A‑rated and aggregate by organisation.
-3. **stage2** → enrich with Companies House data using reliable, rate‑limited access.
-4. **stage3** → score for tech‑likelihood and produce a shortlist with explainability.
+1. **extract** → fetch latest GOV.UK sponsor register data.
+2. **transform-register** → filter Skilled Worker + A‑rated and aggregate by organisation.
+3. **transform-enrich** → enrich with Companies House data using reliable, rate‑limited access.
+4. **transform-score** → score for tech‑likelihood and produce a shortlist with explainability.
 
 ## Non‑Goals
 

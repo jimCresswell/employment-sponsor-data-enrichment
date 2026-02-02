@@ -1,9 +1,9 @@
-# Tooling Update Plan (Python 3.13+) — `uv` + Hatchling (Entry Point)
+# Tooling Update Plan (Python 3.14+) — `uv` + Hatchling (Entry Point)
 
 This is the **entry-point plan** for updating tooling in this repository.
 It is authoritative for a new session and should be read first, then followed in order.
 
-This repo is a **Python CLI tool** targeting **Python 3.13+**, distributed via `pip install`.
+This repo is a **Python CLI tool** targeting **Python 3.14+**, distributed via `pip install`.
 Tooling requirements:
 
 - **`uv`** for dependency management, virtual environments, running commands, building distributions
@@ -16,7 +16,7 @@ The aim is a clean, reproducible, contributor-friendly setup with sensible “mo
 
 ## Decisions (locked)
 
-- **Python:** `>=3.13`
+- **Python:** `>=3.14`
 - **Workflow tool:** `uv`
 - **Build backend:** `hatchling` (migration required)
 - **Layout:** `src/` layout
@@ -31,7 +31,7 @@ No `setup.py`. No `setup.cfg`.
 
 ## Entry-point checklist (new session)
 
-1. Confirm Python is **3.13+** and `uv` is installed.
+1. Confirm Python is **3.14+** and `uv` is installed.
 2. Read this plan end-to-end.
 3. Read `.agent/plans/tooling-update-mypy-to-pyright.plan.md` (type checker migration details).
 4. Run current quality gates (expect failures during migration):
@@ -52,7 +52,7 @@ yourtool/
   LICENSE
   .gitignore
   uv.lock
-  .python-version              # optional, recommended (e.g. "3.13.1")
+  .python-version              # optional, recommended (e.g. "3.14")
   src/
     yourtool/
       __init__.py
@@ -86,7 +86,7 @@ name = "yourtool"
 version = "0.1.0"
 description = "Short description of what the CLI does"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 license = { text = "MIT" }
 authors = [{ name = "Jim", email = "cv@jimcresswell.net" }]
 keywords = ["cli"]
@@ -95,7 +95,7 @@ classifiers = [
   "Environment :: Console",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
   # CLI framework (recommended)
@@ -319,7 +319,7 @@ jobs:
         uses: astral-sh/setup-uv@v3
 
       - name: Set up Python
-        run: uv python install 3.13
+        run: uv python install 3.14
 
       - name: Sync deps (incl dev)
         run: uv sync --group dev
@@ -425,7 +425,7 @@ Only if genuinely needed; avoid unnecessary complexity early.
 
 - Ensure `uv` is required for all contributor workflows (no alternative paths).
 - Record current tooling state (build backend, dependency groups, checks).
-- Confirm Python target is `>=3.13` everywhere.
+- Confirm Python target is `>=3.14` everywhere.
 - Identify any legacy configuration to remove (e.g., setuptools configs, mypy-only wiring after Pyright gate).
 
 ### Phase 1 — Hatchling migration (clean break)
@@ -461,7 +461,7 @@ Only if genuinely needed; avoid unnecessary complexity early.
 - `uv` is the only supported workflow for contributors.
 - `uv.lock` updated and committed.
 - `uv run check` passes (Pyright included; mypy removed at the end of migration).
-- Docs reflect Python 3.13+, uv-only workflow, and staged Pyright plan.
+- Docs reflect Python 3.14+, uv-only workflow, and staged Pyright plan.
 
 ---
 

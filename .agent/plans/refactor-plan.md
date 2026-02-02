@@ -19,27 +19,28 @@ This document is the **single source of truth** for the refactor. Assume no othe
 
 ## Current Status (2026-02-02)
 
-- Phase 0–4 are complete and gated.
-- Phase 5 (Domain Extraction: Scoring) is complete and gated.
-- Phase 6 is optional; Phase 7 is the near-term docs/ADR audit; Phase 11 is the final cleanup/docs audit phase.
-- Domain is the core: domain code must not import application, CLI, stages, or infrastructure.
+- Phase 0–5 are complete and gated.
+- Phase 6 is optional.
+- Phase 7 (docs/ADR audit), Phase 8 (location aliases), Phase 8.5 (Companies House source), and Phase 9 (terminology rename) are complete.
+- Phase 10 (usage split) and Phase 11 (final tidy up) are pending.
+- Domain is the core: domain code must not import application, CLI, or infrastructure.
 
 ## Target End State (Acceptance Criteria)
 
 These criteria define the final, measurable outcomes for this plan:
 
-- No usage of the word “stage” in `src/`, `tests/`, `README.md`, or `docs/` (except historical ADR archives under `docs/architectural-decision-records/archive/` if created).
-- CLI commands and help text use semantic ETL/usage naming (no `stage*` commands).
-- Artefact names and directories are semantic (no `stage*` filenames).
+- No usage of legacy pipeline terminology in `src/`, `tests/`, `README.md`, or `docs/` (except historical ADR archives under `docs/architectural-decision-records/archive/` if created).
+- CLI commands and help text use semantic ETL/usage naming (no legacy command names).
+- Artefact names and directories are semantic (no legacy filenames).
 - ETL transforms produce immutable artefacts; usage/query steps only read artefacts and write usage outputs.
-- Domain is core and remains free of application/CLI/stages/infrastructure imports (import-linter passes).
+- Domain is core and remains free of application/CLI/infrastructure imports (import-linter passes).
 - Full gates pass: `format → typecheck → lint → test → coverage`.
-- A repo-wide scan exists at `reports/stage-usage.txt` to guide renames; it is not exhaustive and must not replace comprehensive validation.
+- A repo-wide scan exists at `reports/terminology-usage.txt` to guide renames; it is not exhaustive and must not replace comprehensive validation.
 
 ## Latest Completed Work (Phase 4 Summary)
 
 - `normalization.py` removed; replaced by `domain/organisation_identity.py` (includes `simple_similarity`).
-- Stage 1 rules moved into `domain/sponsor_register.py`; Stage 1 delegates to domain.
+- Transform Register rules moved into `domain/sponsor_register.py`; Transform Register delegates to domain.
 - Town/county now handled as structured collections in core logic; flattened only at IO boundaries.
 - README updated to reflect new module layout.
 - New tests: `tests/test_domain_sponsor_register.py`; `tests/test_normalization.py` now targets the domain module.
@@ -47,26 +48,23 @@ These criteria define the final, measurable outcomes for this plan:
 
 ## Current Structure Snapshot (Required Context for Fresh Session)
 
-- Application layer exists and owns core logic:
-  - `src/uk_sponsor_pipeline/application/download.py`
-  - `src/uk_sponsor_pipeline/application/stage1.py`
-  - `src/uk_sponsor_pipeline/application/stage2_companies_house.py`
-  - `src/uk_sponsor_pipeline/application/stage3_scoring.py`
-- `stages/` are thin delegates only (no business logic). Do not re‑refactor them.
+- Application layer owns orchestration and core pipeline steps:
+  - `src/uk_sponsor_pipeline/application/extract.py`
+  - `src/uk_sponsor_pipeline/application/transform_register.py`
+  - `src/uk_sponsor_pipeline/application/transform_enrich.py`
+  - `src/uk_sponsor_pipeline/application/transform_score.py`
+- Legacy wrapper modules have been removed; there is no wrapper package.
 - Infrastructure IO boundaries are centralised in:
   - `src/uk_sponsor_pipeline/infrastructure/io/http.py`
   - `src/uk_sponsor_pipeline/infrastructure/io/filesystem.py`
   - `src/uk_sponsor_pipeline/infrastructure/io/validation.py`
 - Companies House HTTP client construction is centralised in infrastructure via
-  `build_companies_house_client` (no `requests` imports in application/stages).
+  `build_companies_house_client` (no `requests` imports in application code).
 - Domain modules now include `organisation_identity.py`, `sponsor_register.py`, and `scoring.py`.
 
 ## Remaining Work Summary (Fresh Session Checklist)
 
 - Phase 6 (optional): consolidate use‑cases into `application/pipeline.py`.
-- Phase 7: docs/ADR audit + test renames (current structure); keep scaffolding tests.
-- Phase 8: location aliases (London/Manchester) and wiring into geographic filtering.
-- Phase 9: remove stage terminology across the repo with semantic replacements.
 - Phase 10: split ETL transforms from usage/query logic with independent usage execution.
 - Phase 11: final tidy up (remove scaffolding tests, final docs/ADR/terminology sweep).
 
@@ -74,43 +72,45 @@ These criteria define the final, measurable outcomes for this plan:
 
 This plan is the authoritative entry point for the refactor. It captures the key decisions and changes made so far; assume no other context.
 
-- Stages are **artefact boundaries only**. Architecture is application‑owned orchestration with shared infrastructure (ADR 0012). ADR 0003 is superseded.
-- Configuration is read once at the CLI entry point and passed through. Stage entry points require `PipelineConfig`.
-- Stage 2 fails fast on auth/rate‑limit/circuit‑breaker and unexpected HTTP errors; resumable artefacts are written before exit.
-- If `resume=False`, Stage 2 must write to a new output directory to avoid stale data reuse.
+- Steps are **artefact boundaries only**. Architecture is application‑owned orchestration with shared infrastructure (ADR 0012). ADR 0003 is superseded.
+- Configuration is read once at the CLI entry point and passed through. Application entry points require `PipelineConfig`.
+- Transform Enrich fails fast on auth/rate‑limit/circuit‑breaker and unexpected HTTP errors; resumable artefacts are written before exit.
+- If `resume=False`, Transform Enrich must write to a new output directory to avoid stale data reuse.
 - All linting runs via `uv run lint` (ruff + import‑linter); no separate lint entry points.
 - British spelling throughout docs; code identifiers use British spelling unless constrained by external names.
 - Test doubles will live in `tests/fakes/`; `conftest.py` provides fixtures only.
 - `Any` is allowed only at IO boundaries; external data is validated into strict `TypedDict`/dataclass shapes immediately after ingestion (ADR 0013).
 - Ruff `ANN` (incl. `ANN401`) is enabled; per-file ignores are limited to IO boundary modules and tests.
 - Import-linter contracts are enforced in `uv run lint`/`uv run check`.
-- Domain is the core: domain code must not import application, CLI, stages, or infrastructure.
+- Domain is the core: domain code must not import application, CLI, or infrastructure.
 - Reproducibility is mandatory: avoid hidden time dependencies unless explicitly accepted (age-based scoring uses `datetime.now()` by decision).
 - User-facing text and documentation use British spelling; enforce via shared strings/constants where practical.
 
 ### Changes already applied in the repo
 
-- `run_stage2` and `run_stage3` now require `PipelineConfig`; the CLI loads config once and passes it through.
-- Stage 2 search errors are fail‑fast with clear messages; resume artefacts are still written.
-- New tests cover config preservation and fail‑fast behaviour (`tests/test_config.py`, Stage 2/3 tests).
+- `run_transform_enrich` and `run_transform_score` now require `PipelineConfig`; the CLI loads config once and passes it through.
+- Transform Enrich search errors are fail‑fast with clear messages; resume artefacts are still written.
+- New tests cover config preservation and fail‑fast behaviour (`tests/test_config.py`, Transform Enrich/Transform Score tests).
 - ADR 0012 added; ADR 0003 marked superseded; README updated with architecture direction and config pass‑through guidance.
 - Phase 0 complete: characterisation tests added under `tests/characterisation/` with a local README.
-- Phase 1 complete: shared logger factory in `src/uk_sponsor_pipeline/observability/logging.py`; Stage 1–3 logging standardised; README and ADR 0012 updated.
+- Phase 1 complete: shared logger factory in `src/uk_sponsor_pipeline/observability/logging.py`; Transform Register/Transform Enrich/Transform Score logging standardised; README and ADR 0012 updated.
 - Phase 2 complete: infrastructure split into `src/uk_sponsor_pipeline/infrastructure/io/` plus `resilience.py`; resilience protocols added to `protocols.py`; test fakes moved to `tests/fakes/`; README and ADR 0005 updated.
-- Phase 3 complete: Companies House candidate scoring and mapping extracted to `src/uk_sponsor_pipeline/domain/companies_house.py` with new domain tests; Stage 2 now delegates to the domain module; README updated with domain structure.
-- Strict typing added: `src/uk_sponsor_pipeline/types.py` defines internal `TypedDict` contracts; Stage 2 coerces/validates Companies House payloads at IO boundaries; Stage 3 consumes typed rows.
+- Phase 3 complete: Companies House candidate scoring and mapping extracted to `src/uk_sponsor_pipeline/domain/companies_house.py` with new domain tests; Transform Enrich now delegates to the domain module; README updated with domain structure.
+- Strict typing added: `src/uk_sponsor_pipeline/types.py` defines internal `TypedDict` contracts; Transform Enrich coerces/validates Companies House payloads at IO boundaries; Transform Score consumes typed rows.
 - ADR 0013 added (Strict Internal Typing After IO Boundaries).
-- Import-linter wired into `uv run lint`/`uv run check` with contracts that block domain→infrastructure/CLI/stages and infrastructure→domain/types.
-- Application layer added: `src/uk_sponsor_pipeline/application/*` hosts Stage 1–3 and download use-cases. `stages/` are now thin delegates only.
+- Import-linter wired into `uv run lint`/`uv run check` with contracts that block domain→infrastructure/CLI and infrastructure→domain/types.
+- Application layer added: `src/uk_sponsor_pipeline/application/*` hosts extract + transform use-cases; wrapper modules removed.
 - Companies House HTTP client construction centralised in `infrastructure/io/http.py` via `build_companies_house_client`.
 - ADR 0014 updated to match IO consolidation + validation.
 - Boundary‑neutral IO contracts added in `io_contracts.py`; infrastructure validation no longer imports `types.py`.
-- Stage 2 profile fetch errors are now fail‑fast; no `profile_error` continuation.
+- Transform Enrich profile fetch errors are now fail‑fast; no `profile_error` continuation.
 - `resume=False` now writes to a timestamped output subdirectory to avoid stale data reuse.
 - Region filtering enforces a single region; multiple regions are rejected with a clear error.
-- Phase 4 complete: `normalization.py` removed, `organisation_identity.py` added (including `simple_similarity`); Stage 1 rules moved into `domain/sponsor_register.py`; Stage 1 now flattens structured locations at IO boundaries only; README updated; new domain tests added.
-- Phase 8 complete: location aliases added with London/Manchester profiles; domain matching + Stage 3 geographic filtering use aliases; README and tests updated.
-- Phase 8.5 complete: configurable Companies House source (API or file) with validated file inputs; Stage 2 uses source abstraction; README and ADR updated.
+- Phase 4 complete: `normalization.py` removed, `organisation_identity.py` added (including `simple_similarity`); Transform Register rules moved into `domain/sponsor_register.py`; Transform Register now flattens structured locations at IO boundaries only; README updated; new domain tests added.
+- Phase 7 complete: docs/ADR audit and test renames aligned with application/domain structure.
+- Phase 8 complete: location aliases added with London/Manchester profiles; domain matching + Transform Score geographic filtering use aliases; README and tests updated.
+- Phase 8.5 complete: configurable Companies House source (API or file) with validated file inputs; Transform Enrich uses source abstraction; README and ADR updated.
+- Phase 9 complete: legacy terminology removed across code/docs; wrapper package removed; CLI commands and artefact names are semantic.
 
 ### Resumption checklist (fresh session)
 
@@ -127,8 +127,8 @@ This plan is the authoritative entry point for the refactor. It captures the key
 ## Immediate Work Order (Linear, for the three requested fixes)
 
 1) IO contracts boundary (unblocks import‑linter; minimal surface area). ✅ Completed
-2) Stage 2 fail‑fast on profile fetch errors + new output directory when `resume=False` (behavioural changes + tests). ✅ Completed
-3) Single‑region filtering enforcement in CLI/config/stage3 + docs/tests. ✅ Completed
+2) Transform Enrich fail‑fast on profile fetch errors + new output directory when `resume=False` (behavioural changes + tests). ✅ Completed
+3) Single‑region filtering enforcement in CLI/config/transform-score + docs/tests. ✅ Completed
 
 Each step includes tests and docs updates for that change, then full gates.
 
@@ -144,7 +144,7 @@ Status: ✅ Completed.
    - import IO contracts from `io_contracts.py`
    - validate inbound payloads into IO contracts
    - return IO contract shapes from `parse_companies_house_search` and `parse_companies_house_profile`
-3) Update application/domain call sites to convert IO contracts into internal types in `types.py` at the IO boundary (Stage 2 uses existing coercion/validation patterns).
+3) Update application/domain call sites to convert IO contracts into internal types in `types.py` at the IO boundary (Transform Enrich uses existing coercion/validation patterns).
 4) Add/adjust tests for IO validation to assert:
    - infrastructure depends only on IO contracts
    - parsing output shapes are stable
@@ -152,16 +152,16 @@ Status: ✅ Completed.
 
 DoD:
 - Import-linter passes with infrastructure not importing `types.py`.
-- No behavioural changes to Stage 2 outputs.
+- No behavioural changes to Transform Enrich outputs.
 
 ### Clarified Plan — Single-Region Filtering
 
 Goal: region filtering accepts exactly one region; multiple regions are a user error.
 Status: ✅ Completed.
 
-1) CLI: validate `--region` so multiple values raise a clear error before running Stage 3.
-2) Config: store a single region value (or empty), not a tuple, for Stage 3.
-3) Stage 3: update filter logic to accept a single region string and remove tuple iteration.
+1) CLI: validate `--region` so multiple values raise a clear error before running Transform Score.
+2) Config: store a single region value (or empty), not a tuple, for Transform Score.
+3) Transform Score: update filter logic to accept a single region string and remove tuple iteration.
 4) Tests: add/adjust tests to cover:
    - multiple regions error
    - single region passes
@@ -179,9 +179,9 @@ Refactor the pipeline into explicit domains, reusable infrastructure modules, an
 - The pipeline must be fully working and excellent at the end of each phase.
 - No compatibility shims at any point.
 - Documentation is never deferred: inline docs, README(s), and ADRs are updated in the same phase as the code change and remain cross-referenced and DRY.
-- Stages are conceptual labels for artefact boundaries, not architectural boundaries. Prefer application pipeline steps/use-cases and shared infrastructure; keep `stages/` thin or remove it once the application layer owns orchestration.
+- Steps are conceptual labels for artefact boundaries, not architectural boundaries. Prefer application pipeline steps/use-cases and shared infrastructure; keep orchestration in `application/`.
 - ETL transforms must be separated from usage/query steps. Usage reads artefacts and filters; it does not mutate upstream artefacts.
-- All standards (observability, resilience, filesystem, HTTP, error handling) are shared across the pipeline; no stage-specific infrastructure.
+- All standards (observability, resilience, filesystem, HTTP, error handling) are shared across the pipeline; no step-specific infrastructure.
 - All linting (ruff + import-linter) runs via `uv run lint`; no separate lint gate.
 
 ## Test Harness Constraints
@@ -239,7 +239,7 @@ Refactor the pipeline into explicit domains, reusable infrastructure modules, an
 
 ## Semantic Pipeline Labels (ETL + Usage)
 
-This plan replaces stage labels with semantic names while keeping artefact boundaries and CLI compatibility.
+This plan replaces legacy labels with semantic names while keeping artefact boundaries and CLI compatibility.
 
 ### Canonical Naming Scheme (Target)
 
@@ -280,31 +280,31 @@ This plan replaces stage labels with semantic names while keeping artefact bound
 
 ### Mapping from current labels
 
-- `stage1` → Transform: sponsor register filtering + aggregation.
-- `stage2` → Transform: Companies House enrichment.
-- `stage3` → Transform (scoring) + Usage (shortlist filtering). Split required in Phase 9.
+- `transform-register` → Transform: sponsor register filtering + aggregation.
+- `transform-enrich` → Transform: Companies House enrichment.
+- `transform-score` → Transform (scoring) + Usage (shortlist filtering). Split required in Phase 10.
 
 ### Domains
 
 - `src/uk_sponsor_pipeline/domain/sponsor_register.py`
-  - Stage 1 parsing, filtering, aggregation rules.
+  - Transform Register parsing, filtering, aggregation rules.
 - `src/uk_sponsor_pipeline/domain/organisation_identity.py`
-  - Move existing `normalization.py` here + extract `_simple_similarity()` from Stage 2.
+  - Move existing `normalization.py` here + extract `_simple_similarity()` from Transform Enrich.
   - Contains: `NormalizedName`, `normalize_org_name()`, `generate_query_variants()`, `simple_similarity()`.
 - `src/uk_sponsor_pipeline/domain/companies_house.py`
   - Candidate scoring (uses `simple_similarity` from `organisation_identity`), match selection, profile-to-row mapping.
 - `src/uk_sponsor_pipeline/domain/scoring.py`
-  - Stage 3 feature extraction + scoring rules.
+  - Transform Score feature extraction + scoring rules.
   - Age-based scoring continues to use `datetime.now()`; no `as_of_date` argument.
 
 ### Application
 
-- `src/uk_sponsor_pipeline/application/download.py`
-- `src/uk_sponsor_pipeline/application/stage1.py`
-- `src/uk_sponsor_pipeline/application/stage2_companies_house.py`
-- `src/uk_sponsor_pipeline/application/stage3_scoring.py`
+- `src/uk_sponsor_pipeline/application/extract.py`
+- `src/uk_sponsor_pipeline/application/transform_register.py`
+- `src/uk_sponsor_pipeline/application/transform_enrich.py`
+- `src/uk_sponsor_pipeline/application/transform_score.py`
   - Use‑case orchestration and core logic live here.
-  - `stages/` is a thin delegate layer only.
+  - No wrapper layer remains; the CLI calls application modules directly.
   - Future consolidation into `application/pipeline.py` is optional if a single orchestration entry point is desired.
   - Region filtering accepts a single region only; multiple regions are rejected with a clear error.
 
@@ -312,25 +312,25 @@ This plan replaces stage labels with semantic names while keeping artefact bound
 
 ### Application Steps (use-cases)
 
-Application owns the pipeline steps; stages (if kept) are thin wrappers only.
+Application owns the pipeline steps; no wrapper layer remains.
 
-- `download_register(...) -> DownloadResult`
+- `extract_register(...) -> ExtractResult`
   - Wraps GOV.UK fetch + schema validation.
-- `build_sponsor_register_snapshot(...) -> Stage1Result`
-  - Filters Skilled Worker + A‑rated, aggregates by org.
-- `enrich_with_companies_house(...) -> Stage2Outputs`
+- `run_transform_register(...) -> TransformRegisterResult`
+  - Filters Skilled Worker + A‑rated, aggregates by organisation.
+- `run_transform_enrich(...) -> dict[str, Path]`
   - Search + match + profile fetch + resume reporting.
-- `score_tech_likelihood(...) -> Stage3Outputs`
+- `run_transform_score(...) -> dict[str, Path]`
   - Feature extraction + scoring + shortlist + explainability.
 
 ### Mapping from Current Modules
 
-- `stages/download.py` → `application/download.py`
-- `stages/stage1.py` → `application/stage1.py`
-- `stages/stage2_companies_house.py` → `application/stage2_companies_house.py`
-- `stages/stage3_scoring.py` → `application/stage3_scoring.py`
+- `extract.py` → `application/extract.py`
+- `transform_register.py` → `application/transform_register.py`
+- `transform_enrich.py` → `application/transform_enrich.py`
+- `transform_score.py` → `application/transform_score.py`
 
-If `stages/` remains, each function must be a pure delegate to the application step and contain no infrastructure setup beyond dependency wiring for CLI.
+No wrapper package remains; application modules are the single source of truth.
 
 ### Shared Standards (Applied Everywhere)
 
@@ -343,8 +343,8 @@ If `stages/` remains, each function must be a pure delegate to the application s
 
 ### Phase 0 — Baseline Characterization
 
-- Add characterisation tests for Stage 1, Stage 2, and Stage 3 outputs.
-- Add characterisation tests for Stage 2 error handling (auth/rate limit/circuit breaker on search vs profile fetch) so any changes are explicit.
+- Add characterisation tests for Transform Register, Transform Enrich, and Transform Score outputs.
+- Add characterisation tests for Transform Enrich error handling (auth/rate limit/circuit breaker on search vs profile fetch) so any changes are explicit.
 - Split tests into:
   - **Core behaviour** (must remain after refactor).
   - **Scaffolding** (temporary to guard the refactor; remove once the target module is stable).
@@ -357,7 +357,7 @@ If `stages/` remains, each function must be a pure delegate to the application s
 
 ### Phase 1 — Observability Extraction
 
-- Create `observability/logging.py` and replace direct logging in Stages 1, 2, and 3.
+- Create `observability/logging.py` and replace direct logging in Transform Register, Transform Enrich, and Transform Score.
 - TDD: unit test for logger format and usage.
 - DoD:
   - Log lines use standard UTC format.
@@ -393,22 +393,22 @@ If `stages/` remains, each function must be a pure delegate to the application s
 - Remove legacy implementations immediately after migration.
 - TDD: unit tests for scoring components and match selection.
 - DoD:
-  - Stage 2 outputs unchanged.
+  - Transform Enrich outputs unchanged.
   - Domain code has no infra imports.
   - Docs updated (module docstrings + README/ADR references).
 - Gates: `format → typecheck → lint → test → coverage`.
  - Status: ✅ Completed.
 
-### Phase 4 — Domain Extraction (Identity + Stage 1)
+### Phase 4 — Domain Extraction (Identity + Transform Register)
 
 - Move `normalization.py` → `domain/organisation_identity.py` (mostly a move, not a rewrite).
-- Extract `_simple_similarity()` from `application/stage2_companies_house.py` → `domain/organisation_identity.py`.
-- Move Stage 1 rules to `domain/sponsor_register.py`.
+- Extract `_simple_similarity()` from `application/transform_enrich.py` → `domain/organisation_identity.py`.
+- Move Transform Register rules to `domain/sponsor_register.py`.
 - Replace pipe-joined town/county handling with structured collections in core logic; flatten to strings only at IO boundaries.
 - Delete the old modules immediately after migration.
 - TDD: port and expand tests.
 - DoD:
-  - Stage 1 outputs unchanged.
+  - Transform Register outputs unchanged.
   - Domain modules are pure (no infra imports).
   - `organisation_identity` contains all name-handling logic.
   - Multi-town/county handling preserves locality/region scoring intent.
@@ -418,12 +418,12 @@ If `stages/` remains, each function must be a pure delegate to the application s
 
 ### Phase 5 — Domain Extraction (Scoring)
 
-- Move Stage 3 feature extraction + scoring to `domain/scoring.py`.
+- Move Transform Score feature extraction + scoring to `domain/scoring.py`.
 - Age-based scoring continues to use `datetime.now()` (no `as_of_date` input).
 - Remove legacy code immediately after migration.
 - TDD: ensure tests target domain functions directly.
 - DoD:
-  - Stage 3 outputs unchanged.
+  - Transform Score outputs unchanged.
   - No infra imports in domain code.
   - Scoring remains time-dependent due to age-based scoring; this is accepted.
   - Docs updated (module docstrings + README/ADR references).
@@ -434,12 +434,12 @@ If `stages/` remains, each function must be a pure delegate to the application s
 
 - Optional: consolidate orchestration into `application/pipeline.py`.
 - Remove any legacy orchestration paths immediately after migration.
-- `stages/` already thin delegates; ensure they stay delegating only.
+- No wrapper package remains; application modules are the single source of truth.
 - TDD: end-to-end test with in-memory FS/HTTP still passes.
 - DoD:
   - CLI is thin, orchestration centralised.
   - Resume/batching/reporting owned by application.
-  - Config/env read once at the CLI entry point; stages accept config/dependencies only.
+  - Config/env read once at the CLI entry point; application entry points accept config/dependencies only.
   - Docs updated (module docstrings + README/ADR references).
 - Gates: `format → typecheck → lint → test → coverage`.
 - Status: ⏳ Pending (optional consolidation).
@@ -448,9 +448,7 @@ If `stages/` remains, each function must be a pure delegate to the application s
 
 - Add/adjust ADRs for new boundaries + observability (only for changes completed so far).
 - Update README structure section and cross-references to match current code.
-- Rename test files to match new module structure:
-  - `test_stage2.py` → `test_domain_companies_house.py` (or mirror: `tests/domain/test_companies_house.py`)
-  - `test_infrastructure.py` → split into `test_infrastructure_http.py`, `test_infrastructure_resilience.py`, etc.
+- Rename test files to match current module structure (application + domain splits).
 - Import-linter already configured and wired in `uv run lint`/`uv run check`.
 
   ```ini
@@ -467,10 +465,10 @@ If `stages/` remains, each function must be a pure delegate to the application s
   forbidden_modules = uk_sponsor_pipeline.application
 
   [importlinter:contract:3]
-  name = Domain must not import CLI or stages
+  name = Domain must not import CLI
   type = forbidden
   source_modules = uk_sponsor_pipeline.domain
-  forbidden_modules = uk_sponsor_pipeline.cli, uk_sponsor_pipeline.stages
+  forbidden_modules = uk_sponsor_pipeline.cli
   ```
 
 - DoD:
@@ -479,7 +477,7 @@ If `stages/` remains, each function must be a pure delegate to the application s
   - `import-linter` rules in place and passing via `uv run lint`.
   - Scaffolding characterisation tests remain until Phase 11 completes.
 - Gates: `format → typecheck → lint → test → coverage`.
-- Status: ⏳ Pending.
+- Status: ✅ Completed.
 
 ### Phase 8 — Location Profiles (Aliases) + Geographic Matching
 
@@ -495,7 +493,7 @@ If `stages/` remains, each function must be a pure delegate to the application s
 - Acceptance criteria:
   - Location aliases exist for London and Manchester in a canonical file.
   - Unit tests cover profile resolution and matching.
-  - Stage 3 geographic filtering uses aliases (region/locality/postcode prefixes).
+  - Transform Score geographic filtering uses aliases (region/locality/postcode prefixes).
 - Status: ✅ Completed.
 
 ### Phase 8.5 — Configurable Companies House Source (API or File)
@@ -522,24 +520,24 @@ register file (schema validation + deterministic artefact output).
   - No application/domain code branches on source type beyond the extract boundary.
 - Status: ✅ Completed.
 
-### Phase 9 — Remove Stage Terminology (Semantic Renames)
+### Phase 9 — Remove Legacy Terminology (Semantic Renames)
 
-- Rename CLI commands and help text from `stage*` to semantic ETL/usage names.
-- Remove `stages/` package and adjust imports to application/usage modules directly.
+- Rename CLI commands and help text from legacy naming to semantic ETL/usage names.
+- Remove the wrapper package and adjust imports to application/usage modules directly.
 - Rename output artefacts and directories to semantic equivalents (e.g. `score_scored.csv` → `scored.csv`).
-- Update config flags, docs, ADRs, and tests to remove all “stage” wording.
+- Update config flags, docs, ADRs, and tests to remove all legacy wording.
 - Provide a single, canonical naming scheme across code and documentation.
 - TDD: adjust tests and snapshots to the new naming scheme.
 - Gates: `format → typecheck → lint → test → coverage`.
 - Acceptance criteria:
-  - `rg -n "stage"` in `src/`, `tests/`, `README.md`, and `docs/` returns no matches.
-  - CLI has no `stage*` commands or help text.
-  - Artefact filenames and output directories are semantic (no `stage*`).
-- Status: ⏳ Pending.
+  - `rg -n "legacy-term"` in `src/`, `tests/`, `README.md`, and `docs/` returns no matches.
+  - CLI has no legacy command names or help text.
+  - Artefact filenames and output directories are semantic (no legacy names).
+- Status: ✅ Completed.
 
 ### Phase 10 — ETL Transform vs Usage Separation
 
-- Split Stage 3 into explicit Transform and Usage steps:
+- Split Transform Score into explicit Transform and Usage steps:
   - Transform: score and write `companies_scored.csv` only.
   - Usage: filter by region/postcodes/location profiles and write shortlist/explain outputs.
 - Introduce an application usage module (e.g. `application/usage.py`) with pure selection logic.
@@ -557,11 +555,11 @@ register file (schema validation + deterministic artefact output).
 ### Phase 11 — Final Tidy Up (Docs + Scaffolding Removal)
 
 - Remove scaffolding characterisation tests once Phases 7–10 are complete and stable.
-- Re-audit ADRs and README references for semantic naming consistency (no “stage” terminology).
+- Re-audit ADRs and README references for semantic naming consistency (no legacy terminology).
 - Final pass on module docstrings and usage examples to ensure alignment with CLI and artefact names.
 - DoD:
   - No scaffolding tests remain; permanent regression/contract tests cover the behaviour.
-  - `rg -n "stage"` in `src/`, `tests/`, `README.md`, and `docs/` returns no matches.
+  - `rg -n "legacy-term"` in `src/`, `tests/`, `README.md`, and `docs/` returns no matches.
   - Docs and ADRs are fully aligned with the final module structure and CLI names.
 - Gates: `format → typecheck → lint → test → coverage`.
 - Status: ⏳ Pending.

@@ -50,7 +50,7 @@ These rules are mandatory for all work in this repository. For goals and outputs
 
 ## Style
 
-- Python 3.13+ with type hints.
+- Python 3.14+ with type hints.
 - Use snake_case for modules and functions.
 - Keep Ruff and Pyright clean; fix root causes instead of suppressing.
 - Avoid `Any` outside IO boundaries; validate external data into strict `TypedDict` or dataclass shapes immediately after ingestion.

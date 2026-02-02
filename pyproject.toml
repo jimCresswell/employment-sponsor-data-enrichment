@@ -3,7 +3,7 @@ name = "uk-sponsor-tech-hiring-pipeline"
 version = "0.1.0"
 description = "Pipeline to download UK licensed sponsor register, clean/filter, enrich with Companies House, and produce tech-hiring shortlists."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
   "pandas>=3.0.0",
   "requests>=2.32.5",
@@ -90,10 +90,10 @@ source_modules = ["uk_sponsor_pipeline.domain"]
 forbidden_modules = ["uk_sponsor_pipeline.application"]
 
 [[tool.importlinter.contracts]]
-name = "Domain must not import CLI or stages"
+name = "Domain must not import CLI"
 type = "forbidden"
 source_modules = ["uk_sponsor_pipeline.domain"]
-forbidden_modules = ["uk_sponsor_pipeline.cli", "uk_sponsor_pipeline.stages"]
+forbidden_modules = ["uk_sponsor_pipeline.cli"]
 
 [[tool.importlinter.contracts]]
 name = "Infrastructure must not import domain or types"

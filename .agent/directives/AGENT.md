@@ -17,7 +17,7 @@ Always ask: **could it be simpler without compromising quality?**
 
 ## Repo Context
 
-- Language: Python 3.13+
+- Language: Python 3.14+
 - Tooling: `uv`, `pytest`, `ruff`, `pyright`, `import-linter`
 - Commands:
   - `uv sync --group dev`

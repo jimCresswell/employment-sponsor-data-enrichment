@@ -6,19 +6,19 @@
 
 ## 1. Python 3.12+ Language Features
 
-### Python 3.13 Highlights (October 2024)
+### Python 3.14 Highlights (October 7, 2025)
 
 | Feature | Impact |
 |---------|--------|
-| **Experimental JIT Compiler** | 10-15% CPU performance boost, up to 40% in some scenarios |
-| **Free-threaded CPython (No-GIL)** | Experimental support for disabling GIL for true parallelism |
-| **Incremental Garbage Collector** | Reduced memory usage |
-| **Improved Error Messages** | Contextual hints, IntelliSense-style suggestions |
-| **Stripped Docstring Indentation** | Cleaner docstrings |
+| **Free-threaded CPython (PEP 779)** | Officially supported free-threaded builds |
+| **Deferred annotations (PEP 649)** | Annotations evaluated lazily when accessed |
+| **Template string literals (PEP 750)** | t-strings for custom string processing |
+| **Multiple interpreters (PEP 734)** | Standard library support for multiple interpreters |
+| **Zstandard compression (PEP 784)** | `compression.zstd` module |
 
 ### Modern Python Idioms
 
-- **f-strings**: Preferred for string formatting (t-strings coming in 3.14)
+- **f-strings**: Preferred for string formatting (t-strings available in 3.14)
 - **`pathlib`**: Use `Path` objects instead of string path manipulation
 - **`zoneinfo`**: Always use timezone-aware `datetime` objects (prefer UTC)
 - **`os.scandir()`**: More efficient than `os.listdir()` for directory iteration
