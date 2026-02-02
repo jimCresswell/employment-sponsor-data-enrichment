@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-uk-sponsor = "uk_sponsor_pipeline.cli:app"
+uk-sponsor = "uk_sponsor_pipeline.composition:app"
 lint = "uk_sponsor_pipeline.devtools:lint"
 format = "uk_sponsor_pipeline.devtools:format_code"
 format-check = "uk_sponsor_pipeline.devtools:format_check"
@@ -59,7 +59,7 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ANN"]
-extend-select = ["PGH003", "PGH004", "RUF100", "RUF101"]
+extend-select = ["PGH003", "PGH004", "RUF100", "RUF101", "TRY", "BLE", "SLF001", "T20", "DTZ"]
 # If you use ruff-format, E501 is typically redundant;
 
 [tool.ruff.format]
@@ -117,10 +117,12 @@ name = "Application must not import infrastructure"
 type = "forbidden"
 source_modules = ["uk_sponsor_pipeline.application"]
 forbidden_modules = ["uk_sponsor_pipeline.infrastructure"]
-ignore_imports = [
-  "uk_sponsor_pipeline.application.** -> uk_sponsor_pipeline.infrastructure.io.validation",
-]
-unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
+name = "CLI must not import infrastructure"
+type = "forbidden"
+source_modules = ["uk_sponsor_pipeline.cli"]
+forbidden_modules = ["uk_sponsor_pipeline.infrastructure"]
 
 [[tool.importlinter.contracts]]
 name = "Infrastructure must not import domain or types"

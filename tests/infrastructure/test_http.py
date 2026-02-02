@@ -11,6 +11,7 @@ from requests.auth import HTTPBasicAuth
 from uk_sponsor_pipeline.exceptions import (
     AuthenticationError,
     CircuitBreakerOpen,
+    JsonObjectExpectedError,
     RateLimitError,
 )
 from uk_sponsor_pipeline.infrastructure import (
@@ -341,7 +342,7 @@ class TestCachedHttpClient:
             retry_policy=retry_policy,
         )
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(JsonObjectExpectedError):
             client.get_json("https://example.com", None)
 
         assert circuit_breaker.consecutive_failures == 0

@@ -12,6 +12,7 @@ Improvements over original:
 from __future__ import annotations
 
 import math
+import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -33,8 +34,18 @@ from ..domain.organisation_identity import (
     normalise_org_name,
     simple_similarity,
 )
-from ..exceptions import AuthenticationError, CircuitBreakerOpen, RateLimitError
-from ..infrastructure.io.validation import validate_as
+from ..exceptions import (
+    AuthenticationError,
+    CircuitBreakerOpen,
+    CompaniesHouseProfileError,
+    CompaniesHouseSearchError,
+    DependencyMissingError,
+    InvalidBatchConfigurationError,
+    MissingApiKeyError,
+    PipelineConfigMissingError,
+    RateLimitError,
+)
+from ..io_validation import validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem, HttpClient, HttpSession
 from ..schemas import (
@@ -202,22 +213,24 @@ def run_transform_enrich(
     Raises:
         AuthenticationError: If API key is invalid (stops immediately).
         CircuitBreakerOpen: If too many consecutive API failures.
-        RuntimeError: If configuration is missing.
+        CompaniesHouseProfileError: If profile fetch fails.
+        CompaniesHouseSearchError: If search fails.
+        DependencyMissingError: If required dependencies are missing.
+        InvalidBatchConfigurationError: If batch parameters are invalid.
+        MissingApiKeyError: If CH_API_KEY is missing.
+        PipelineConfigMissingError: If configuration is missing.
     """
     if config is None:
-        raise RuntimeError(
-            "PipelineConfig is required. Load it once at the entry point with "
-            "PipelineConfig.from_env() and pass it through."
-        )
+        raise PipelineConfigMissingError()
 
     if fs is None:
-        raise RuntimeError("FileSystem is required. Inject it at the entry point.")
+        raise DependencyMissingError("FileSystem", reason="Inject it at the entry point.")
 
     if config.ch_source_type == "api" and not config.ch_api_key:
-        raise RuntimeError("Missing CH_API_KEY. Set it in .env or environment variables.")
+        raise MissingApiKeyError()
 
     if config.ch_source_type == "api" and http_client is None:
-        raise RuntimeError("HttpClient is required when CH_SOURCE_TYPE is 'api'.")
+        raise DependencyMissingError("HttpClient", reason="When CH_SOURCE_TYPE is 'api'.")
 
     register_path = Path(register_path)
     out_dir = Path(out_dir)
@@ -252,11 +265,11 @@ def run_transform_enrich(
     batch_size_value = max(1, int(batch_size_value))
     batch_start = int(batch_start)
     if batch_start < 1:
-        raise ValueError("batch_start must be >= 1")
+        raise InvalidBatchConfigurationError("batch_start", batch_start)
     if batch_count is not None:
         batch_count = int(batch_count)
         if batch_count < 1:
-            raise ValueError("batch_count must be >= 1")
+            raise InvalidBatchConfigurationError("batch_count", batch_count)
 
     # Load existing results for resumability
     already_processed: set[str] = set()
@@ -388,10 +401,8 @@ def run_transform_enrich(
                     items = source.search(query)
                 except (AuthenticationError, CircuitBreakerOpen, RateLimitError):
                     raise
-                except Exception as e:
-                    raise RuntimeError(
-                        f"Companies House search failed for query '{query}': {e}"
-                    ) from e
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise CompaniesHouseSearchError(query, str(exc)) from exc
 
                 scored = score_candidates(
                     org_norm=org_norm,
@@ -439,11 +450,9 @@ def run_transform_enrich(
             except (AuthenticationError, CircuitBreakerOpen, RateLimitError):
                 flush_batch()
                 raise
-            except Exception as e:
+            except (KeyError, TypeError, ValueError) as exc:
                 flush_batch()
-                raise RuntimeError(
-                    f"Companies House profile fetch failed for {best_match.company_number}: {e}"
-                ) from e
+                raise CompaniesHouseProfileError(best_match.company_number, str(exc)) from exc
             batch_enriched.append(
                 build_enriched_row(row=row, best_match=best_match, profile=profile)
             )
@@ -496,17 +505,16 @@ def run_transform_enrich(
                 fs.write_csv(checkpoint_df, out_checkpoint)
 
         logger.info("Enriched: %s matched, %s unmatched", len(enriched_df), len(unmatched_df))
-    except KeyboardInterrupt:
-        status = "interrupted"
-        error_message = "KeyboardInterrupt"
-        flush_batch()
-        raise
-    except Exception as exc:
-        status = "error"
-        error_message = str(exc)
-        flush_batch()
-        raise
     finally:
+        exc = sys.exc_info()[1]
+        if exc is not None:
+            if isinstance(exc, KeyboardInterrupt):
+                status = "interrupted"
+                error_message = "KeyboardInterrupt"
+            else:
+                status = "error"
+                error_message = str(exc)
+            flush_batch()
         run_finished_at_utc = datetime.now(UTC)
         run_duration_seconds = time.perf_counter() - run_started_perf
         processed_total = 0

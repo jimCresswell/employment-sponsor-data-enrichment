@@ -5,12 +5,9 @@ Usage example:
         ApiCompaniesHouseSource,
         FileCompaniesHouseSource,
     )
-    from uk_sponsor_pipeline.infrastructure.io.http import build_companies_house_client
+    http_client = ...  # Injected HttpClient from the CLI/composition root
 
-    api_source = ApiCompaniesHouseSource(
-        http_client=build_companies_house_client(...),
-        search_limit=10,
-    )
+    api_source = ApiCompaniesHouseSource(http_client=http_client, search_limit=10)
 
     file_source = FileCompaniesHouseSource(
         searches=[{"query": "Acme Ltd", "items": []}],
@@ -29,14 +26,20 @@ from typing import Protocol, override
 from urllib.parse import quote
 
 from ..config import PipelineConfig
-from ..infrastructure.io.validation import (
+from ..exceptions import (
+    CompaniesHouseFileProfileMissingError,
+    DependencyMissingError,
+    InvalidSourceTypeError,
+    MissingSourcePathError,
+)
+from ..io_contracts import CompaniesHouseProfileEntryIO, CompaniesHouseSearchEntryIO
+from ..io_validation import (
     parse_companies_house_file,
     parse_companies_house_profile,
     parse_companies_house_search,
     validate_as,
     validate_json_as,
 )
-from ..io_contracts import CompaniesHouseProfileEntryIO, CompaniesHouseSearchEntryIO
 from ..protocols import FileSystem, HttpClient, HttpSession
 from ..types import CompanyProfile, SearchItem
 
@@ -104,10 +107,7 @@ class FileCompaniesHouseSource(CompaniesHouseSource):
         key = _normalise_key(company_number)
         profile = self._profile_map.get(key)
         if profile is None:
-            raise RuntimeError(
-                "Companies House file source is missing a profile for company number "
-                f"'{company_number}'."
-            )
+            raise CompaniesHouseFileProfileMissingError(company_number)
         return profile
 
 
@@ -120,7 +120,7 @@ def build_companies_house_source(
 ) -> CompaniesHouseSource:
     if config.ch_source_type == "api":
         if http_client is None:
-            raise RuntimeError("API source requires an HTTP client.")
+            raise DependencyMissingError("HttpClient", reason="When CH_SOURCE_TYPE is 'api'.")
         return ApiCompaniesHouseSource(http_client=http_client, search_limit=config.ch_search_limit)
 
     if config.ch_source_type == "file":
@@ -136,7 +136,7 @@ def build_companies_house_source(
             profiles=tuple(parsed["profiles"]),
         )
 
-    raise ValueError("CH_SOURCE_TYPE must be 'api' or 'file'.")
+    raise InvalidSourceTypeError()
 
 
 def _load_file_payload(
@@ -147,10 +147,10 @@ def _load_file_payload(
     timeout_seconds: float,
 ) -> dict[str, object]:
     if not path:
-        raise RuntimeError("CH_SOURCE_PATH is required when CH_SOURCE_TYPE is 'file'.")
+        raise MissingSourcePathError()
     if path.startswith("http://") or path.startswith("https://"):
         if http_session is None:
-            raise RuntimeError("HttpSession is required to load a file source from a URL.")
+            raise DependencyMissingError("HttpSession", reason="To load a file source from a URL.")
         content = http_session.get_text(path, timeout_seconds=timeout_seconds)
         return validate_json_as(dict[str, object], content)
     file_path = Path(path)

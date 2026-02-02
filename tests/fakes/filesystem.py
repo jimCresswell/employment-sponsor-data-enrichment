@@ -10,7 +10,8 @@ from typing import override
 
 import pandas as pd
 
-from uk_sponsor_pipeline.infrastructure.io.validation import IncomingDataError, validate_as
+from tests.support.errors import FakeFileNotFoundError, FakeFileTypeError
+from uk_sponsor_pipeline.io_validation import IncomingDataError, validate_as
 from uk_sponsor_pipeline.protocols import FileSystem
 
 
@@ -33,11 +34,11 @@ class InMemoryFileSystem(FileSystem):
     def read_csv(self, path: Path) -> pd.DataFrame:
         key = str(path)
         if key not in self._files:
-            raise FileNotFoundError(f"No such file: {path}")
+            raise FakeFileNotFoundError(str(path))
         data = self._files[key]
         if isinstance(data, pd.DataFrame):
             return data
-        raise TypeError(f"Expected DataFrame at {path}")
+        raise FakeFileTypeError("DataFrame", str(path))
 
     @override
     def write_csv(self, df: pd.DataFrame, path: Path) -> None:
@@ -59,12 +60,12 @@ class InMemoryFileSystem(FileSystem):
     def read_json(self, path: Path) -> dict[str, object]:
         key = str(path)
         if key not in self._files:
-            raise FileNotFoundError(f"No such file: {path}")
+            raise FakeFileNotFoundError(str(path))
         data: object = self._files[key]
         try:
             return validate_as(dict[str, object], data)
         except IncomingDataError as exc:
-            raise TypeError(f"Expected dict at {path}") from exc
+            raise FakeFileTypeError("dict", str(path)) from exc
 
     @override
     def write_json(self, data: Mapping[str, object], path: Path) -> None:
@@ -76,11 +77,11 @@ class InMemoryFileSystem(FileSystem):
     def read_text(self, path: Path) -> str:
         key = str(path)
         if key not in self._files:
-            raise FileNotFoundError(f"No such file: {path}")
+            raise FakeFileNotFoundError(str(path))
         data = self._files[key]
         if isinstance(data, str):
             return data
-        raise TypeError(f"Expected str at {path}")
+        raise FakeFileTypeError("str", str(path))
 
     @override
     def write_text(self, content: str, path: Path) -> None:
@@ -92,11 +93,11 @@ class InMemoryFileSystem(FileSystem):
     def read_bytes(self, path: Path) -> bytes:
         key = str(path)
         if key not in self._files:
-            raise FileNotFoundError(f"No such file: {path}")
+            raise FakeFileNotFoundError(str(path))
         data = self._files[key]
         if isinstance(data, bytes):
             return data
-        raise TypeError(f"Expected bytes at {path}")
+        raise FakeFileTypeError("bytes", str(path))
 
     @override
     def write_bytes(self, content: bytes, path: Path) -> None:

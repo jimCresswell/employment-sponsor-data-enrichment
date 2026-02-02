@@ -26,8 +26,9 @@ from typing import override
 
 import pandas as pd
 
+from ...exceptions import JsonObjectExpectedError
+from ...io_validation import IncomingDataError, validate_json_as
 from ...protocols import Cache, FileSystem
-from .validation import IncomingDataError, validate_json_as
 
 
 class LocalFileSystem(FileSystem):
@@ -54,7 +55,7 @@ class LocalFileSystem(FileSystem):
         try:
             return validate_json_as(dict[str, object], payload)
         except IncomingDataError as exc:
-            raise RuntimeError("JSON file must contain an object.") from exc
+            raise JsonObjectExpectedError.for_json_file() from exc
 
     @override
     def write_json(self, data: Mapping[str, object], path: Path) -> None:
@@ -118,7 +119,7 @@ class DiskCache(Cache):
             try:
                 return validate_json_as(dict[str, object], payload)
             except IncomingDataError as exc:
-                raise RuntimeError("Cache data must be a JSON object.") from exc
+                raise JsonObjectExpectedError.for_cache_data() from exc
         return None
 
     @override

@@ -7,6 +7,11 @@ import pytest
 
 from tests.fakes import InMemoryFileSystem
 from uk_sponsor_pipeline.application.extract import extract_register
+from uk_sponsor_pipeline.exceptions import (
+    CsvLinkAmbiguousError,
+    CsvSchemaMissingColumnsError,
+    DependencyMissingError,
+)
 from uk_sponsor_pipeline.protocols import HttpSession
 
 
@@ -67,7 +72,7 @@ def test_extract_fails_on_invalid_schema(in_memory_fs: InMemoryFileSystem) -> No
     )
     session = DummySession(DummyResponse(csv_content))
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(CsvSchemaMissingColumnsError) as exc_info:
         extract_register(
             url_override="https://example.com/register.csv",
             data_dir="data/raw",
@@ -87,7 +92,7 @@ def test_extract_requires_filesystem() -> None:
     )
     session = DummySession(DummyResponse(csv_content))
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(DependencyMissingError) as exc_info:
         extract_register(
             url_override="https://example.com/register.csv",
             data_dir="data/raw",
@@ -100,7 +105,7 @@ def test_extract_requires_filesystem() -> None:
 
 
 def test_extract_requires_session(in_memory_fs: InMemoryFileSystem) -> None:
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(DependencyMissingError) as exc_info:
         extract_register(
             url_override="https://example.com/register.csv",
             data_dir="data/raw",
@@ -127,7 +132,7 @@ def test_extract_fails_on_ambiguous_csv_links(in_memory_fs: InMemoryFileSystem) 
     """
     session = DummySession(DummyResponse(html))
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(CsvLinkAmbiguousError) as exc_info:
         extract_register(
             data_dir="data/raw",
             reports_dir="reports",

@@ -11,6 +11,7 @@ import pytest
 from tests.support.transform_score_rows import make_scored_row
 from uk_sponsor_pipeline.application.usage import run_usage_shortlist
 from uk_sponsor_pipeline.config import PipelineConfig
+from uk_sponsor_pipeline.exceptions import DependencyMissingError, PipelineConfigMissingError
 from uk_sponsor_pipeline.infrastructure import LocalFileSystem
 
 
@@ -113,7 +114,7 @@ def test_usage_shortlist_geographic_filter_uses_aliases(tmp_path: Path) -> None:
 
 
 def test_usage_shortlist_requires_config() -> None:
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(PipelineConfigMissingError) as exc_info:
         run_usage_shortlist()
     assert "PipelineConfig" in str(exc_info.value)
 
@@ -124,7 +125,7 @@ def test_usage_shortlist_requires_filesystem(tmp_path: Path) -> None:
     scored_path = tmp_path / "scored.csv"
     df.to_csv(scored_path, index=False)
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(DependencyMissingError) as exc_info:
         run_usage_shortlist(
             scored_path=scored_path,
             out_dir=tmp_path,

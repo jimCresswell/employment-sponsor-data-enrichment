@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
 
+import pytest
+
 from scripts.check_us_spelling import US_UK_MAPPING, SpellingConfig, run, scan_repo
 
 
@@ -35,7 +37,7 @@ def _pair_for_uk(uk_word: str) -> tuple[str, str]:
     for us_word, mapped_uk in US_UK_MAPPING.items():
         if mapped_uk == uk_word:
             return us_word, mapped_uk
-    raise AssertionError(f"Missing mapping for {uk_word}")
+    pytest.fail(f"Missing mapping for {uk_word}")
 
 
 def test_scan_detects_american_spellings(tmp_path: Path) -> None:

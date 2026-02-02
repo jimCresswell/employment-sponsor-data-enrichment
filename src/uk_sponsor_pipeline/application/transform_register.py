@@ -17,7 +17,8 @@ import pandas as pd
 
 from ..domain.organisation_identity import normalise_org_name
 from ..domain.sponsor_register import RawSponsorRow, build_sponsor_register_snapshot
-from ..infrastructure.io.validation import validate_as
+from ..exceptions import DependencyMissingError, MissingRawCsvError
+from ..io_validation import validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem
 from ..schemas import RAW_REQUIRED_COLUMNS, TRANSFORM_REGISTER_OUTPUT_COLUMNS, validate_columns
@@ -110,7 +111,7 @@ def run_transform_register(
         TransformRegisterResult with paths and counts.
     """
     if fs is None:
-        raise RuntimeError("FileSystem is required. Inject it at the entry point.")
+        raise DependencyMissingError("FileSystem", reason="Inject it at the entry point.")
     logger = get_logger("uk_sponsor_pipeline.transform_register")
     raw_dir = Path(raw_dir)
     out_path = Path(out_path)
@@ -124,7 +125,7 @@ def run_transform_register(
     else:
         candidates = fs.list_files(raw_dir, "*.csv")
     if not candidates:
-        raise RuntimeError(f"No raw CSV found in {raw_dir}. Run `uk-sponsor extract` first.")
+        raise MissingRawCsvError(str(raw_dir))
 
     in_path = max(candidates, key=fs.mtime)
     logger.info("Reading: %s", in_path)

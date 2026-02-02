@@ -10,6 +10,7 @@ import pytest
 from tests.fakes import FakeHttpClient, InMemoryFileSystem
 from uk_sponsor_pipeline.application.pipeline import run_pipeline
 from uk_sponsor_pipeline.config import PipelineConfig
+from uk_sponsor_pipeline.exceptions import DependencyMissingError
 
 
 def test_run_pipeline_skips_download_and_returns_outputs() -> None:
@@ -77,7 +78,7 @@ def test_run_pipeline_skips_download_and_returns_outputs() -> None:
 
 
 def test_run_pipeline_requires_filesystem() -> None:
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(DependencyMissingError) as exc_info:
         run_pipeline(
             config=PipelineConfig(
                 ch_api_key="test-key",

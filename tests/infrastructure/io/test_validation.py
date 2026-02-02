@@ -1,8 +1,8 @@
-"""Tests for infrastructure IO validation helpers."""
+"""Tests for IO validation helpers."""
 
 from __future__ import annotations
 
-from uk_sponsor_pipeline.infrastructure.io.validation import (
+from uk_sponsor_pipeline.io_validation import (
     parse_companies_house_file,
     parse_companies_house_profile,
     parse_companies_house_search,

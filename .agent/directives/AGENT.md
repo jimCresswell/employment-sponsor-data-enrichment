@@ -43,7 +43,7 @@ Always ask: **could it be simpler without compromising quality?**
 - Read environment variables once at the entry point (CLI), pass config through.
 - Remove dead code and unused files.
 - Keep documentation current with behaviour and CLI flags.
-- Incoming IO boundaries accept `object`/`Mapping[str, object]` only, then validate with Pydantic and emit strict dataclasses/`TypedDict` shapes via `infrastructure/io/validation.py`.
+- Incoming IO boundaries accept `object`/`Mapping[str, object]` only, then validate with Pydantic and emit strict dataclasses/`TypedDict` shapes via `uk_sponsor_pipeline.io_validation`.
 
 ## Size and Complexity Guidance
 

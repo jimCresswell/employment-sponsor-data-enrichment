@@ -20,10 +20,14 @@ from uk_sponsor_pipeline.domain.companies_house import (
 from uk_sponsor_pipeline.exceptions import (
     AuthenticationError,
     CircuitBreakerOpen,
+    CompaniesHouseProfileError,
+    DependencyMissingError,
+    InvalidSourceTypeError,
+    PipelineConfigMissingError,
     RateLimitError,
 )
 from uk_sponsor_pipeline.infrastructure import LocalFileSystem
-from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
+from uk_sponsor_pipeline.io_validation import validate_as
 from uk_sponsor_pipeline.schemas import (
     TRANSFORM_ENRICH_CANDIDATES_COLUMNS,
     TRANSFORM_ENRICH_OUTPUT_COLUMNS,
@@ -64,18 +68,15 @@ class TestTransformEnrichAuthIntegration:
         out_dir = tmp_path / "out"
         cache_dir = tmp_path / "cache"
 
-        try:
-            run_transform_enrich(
-                register_path=transform_register_csv,
-                out_dir=out_dir,
-                cache_dir=cache_dir,
-                config=config,
-                http_client=mock_http,
-                resume=False,
-                fs=fs,
-            )
-        except Exception:
-            pass  # We just want to verify the mock was called
+        run_transform_enrich(
+            register_path=transform_register_csv,
+            out_dir=out_dir,
+            cache_dir=cache_dir,
+            config=config,
+            http_client=mock_http,
+            resume=False,
+            fs=fs,
+        )
 
         # Verify http_client.get_json was called (meaning config was used)
         assert mock_http.get_json.called
@@ -358,7 +359,7 @@ class TestTransformEnrichResume:
 
             def get_json(self, url: str, cache_key: str | None = None) -> dict[str, object]:
                 self.calls += 1
-                raise AssertionError("Should not call HTTP client when resuming")
+                pytest.fail("Should not call HTTP client when resuming")
 
         failing_http = FailingHttp()
 
@@ -585,7 +586,7 @@ def test_transform_enrich_search_errors_write_resume_report(
 
     class FailingHttp:
         def get_json(self, url: str, cache_key: str | None = None) -> dict[str, object]:
-            raise AuthenticationError("invalid key")
+            raise AuthenticationError.invalid_key()
 
     config = PipelineConfig(
         ch_api_key="test-key",
@@ -617,7 +618,7 @@ def test_transform_enrich_search_errors_write_resume_report(
 
 
 def test_transform_enrich_requires_config() -> None:
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(PipelineConfigMissingError) as exc_info:
         run_transform_enrich()
     assert "PipelineConfig" in str(exc_info.value)
 
@@ -629,7 +630,7 @@ def test_transform_enrich_requires_filesystem() -> None:
         ch_source_path="data/reference/companies_house.json",
     )
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(DependencyMissingError) as exc_info:
         run_transform_enrich(
             register_path=Path("data/interim/sponsor_register_filtered.csv"),
             config=config,
@@ -670,7 +671,7 @@ def test_transform_enrich_requires_http_client_for_api(
         ch_search_limit=1,
     )
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(DependencyMissingError) as exc_info:
         run_transform_enrich(
             register_path=register_path,
             out_dir=Path("data/processed"),
@@ -759,7 +760,7 @@ def test_transform_enrich_profile_fetch_errors_fail_fast(
 
     monkeypatch.setattr(s2, "score_candidates", fake_score_candidates)
 
-    with pytest.raises(RuntimeError, match="profile fetch failed"):
+    with pytest.raises(CompaniesHouseProfileError, match="profile fetch failed"):
         run_transform_enrich(
             register_path=register_path,
             out_dir=out_dir,
@@ -929,5 +930,5 @@ def test_transform_enrich_invalid_source_type_raises(in_memory_fs: InMemoryFileS
         ch_source_type="invalid",
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidSourceTypeError):
         run_transform_enrich(register_path=register_path, config=config, fs=in_memory_fs)

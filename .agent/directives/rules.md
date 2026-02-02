@@ -7,6 +7,7 @@ These rules are mandatory for all work in this repository. For goals and outputs
 - Always reflect on the question: **could it be simpler without compromising quality or functionality?**
 - Strict typing: no `Any` allowed, use `object` only at incoming IO boundaries, no `cast` or `type: ignore`.
 - No compatibility layers, no backward compatibility. Clean breaks only. Replace and delete old paths.
+- No shims, refactor instead.
 - No trivial aliases, refactor instead.
 - DRY + YAGNI + KISS.
 - Optimise for architectural excellence, and choose long-term correctness over short-term convenience.
@@ -17,7 +18,7 @@ These rules are mandatory for all work in this repository. For goals and outputs
 - Fail fast with helpful error messages.
 - All logic must be strict, not permissive.
 - Delete unused code, unused files, and dead branches.
-- Never disable linting, formatting, type checking, or tests.
+- NEVER disable linting, formatting, type checking, or tests.
 - Use conventional commit messages (e.g. `feat: ...`, `fix: ...`).
 
 ## Error Handling
@@ -67,7 +68,7 @@ These rules are mandatory for all work in this repository. For goals and outputs
 - `Any` is forbidden (explicit or implicit). Enforce with Ruff `ANN401`; Pyright strict mode must not allow `Any` to escape IO boundaries.
 - Complexity limits are enforced via Ruff (C90/PLR): max complexity 45, max branches 45, max returns 8, max statements 220, max arguments 20.
 - File/function size guidance is documented in `AGENT.md` (no automated gate yet).
-- Incoming IO payloads must be accepted as `object`/`Mapping[str, object]`, validated immediately with Pydantic, and converted to strict dataclasses/`TypedDict` shapes using helpers in `infrastructure/io/validation.py`.
+- Incoming IO payloads must be accepted as `object`/`Mapping[str, object]`, validated immediately with Pydantic, and converted to strict dataclasses/`TypedDict` shapes using helpers in `uk_sponsor_pipeline.io_validation`.
 
 ## Documentation
 

@@ -14,7 +14,12 @@ import pandas as pd
 
 from ..config import PipelineConfig
 from ..domain.scoring import ScoringFeatures, calculate_features
-from ..infrastructure.io.validation import validate_as
+from ..exceptions import (
+    DependencyMissingError,
+    InvalidMatchScoreError,
+    PipelineConfigMissingError,
+)
+from ..io_validation import validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem
 from ..schemas import (
@@ -45,19 +50,15 @@ def _format_invalid_match_scores(values: pd.Series) -> str:
 def _parse_match_score(values: pd.Series) -> pd.Series:
     try:
         numeric = pd.to_numeric(values, errors="raise")
-    except Exception as exc:
+    except (TypeError, ValueError) as exc:
         coerced = pd.to_numeric(values, errors="coerce")
         invalid_values = values[coerced.isna()]
         sample = _format_invalid_match_scores(invalid_values)
-        raise RuntimeError(
-            f"Transform score: match_score must be numeric. Invalid values: {sample}"
-        ) from exc
+        raise InvalidMatchScoreError(sample) from exc
     if numeric.isna().any():
         invalid_values = values[numeric.isna()]
         sample = _format_invalid_match_scores(invalid_values)
-        raise RuntimeError(
-            f"Transform score: match_score must be numeric. Invalid values: {sample}"
-        )
+        raise InvalidMatchScoreError(sample)
     return numeric
 
 
@@ -79,13 +80,10 @@ def run_transform_score(
         Dict with path to scored file.
     """
     if config is None:
-        raise RuntimeError(
-            "PipelineConfig is required. Load it once at the entry point with "
-            "PipelineConfig.from_env() and pass it through."
-        )
+        raise PipelineConfigMissingError()
 
     if fs is None:
-        raise RuntimeError("FileSystem is required. Inject it at the entry point.")
+        raise DependencyMissingError("FileSystem", reason="Inject it at the entry point.")
     logger = get_logger("uk_sponsor_pipeline.transform_score")
     enriched_path = Path(enriched_path)
     out_dir = Path(out_dir)

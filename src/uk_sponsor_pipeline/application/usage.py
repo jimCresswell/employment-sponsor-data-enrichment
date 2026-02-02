@@ -3,9 +3,8 @@
 Usage example:
     >>> from uk_sponsor_pipeline.application.usage import run_usage_shortlist
     >>> from uk_sponsor_pipeline.config import PipelineConfig
-    >>> from uk_sponsor_pipeline.infrastructure import LocalFileSystem
     >>> config = PipelineConfig.from_env()
-    >>> fs = LocalFileSystem()
+    >>> fs = ...  # Injected FileSystem from the CLI/composition root
     >>> run_usage_shortlist(
     ...     scored_path="data/processed/companies_scored.csv",
     ...     config=config,
@@ -26,8 +25,15 @@ from ..domain.location_profiles import (
     build_geo_filter,
     build_location_profiles,
 )
-from ..domain.location_profiles import matches_geo_filter as domain_matches_geo_filter
-from ..infrastructure.io.validation import parse_location_aliases, validate_as
+from ..domain.location_profiles import (
+    matches_geo_filter as domain_matches_geo_filter,
+)
+from ..exceptions import (
+    DependencyMissingError,
+    LocationAliasesNotFoundError,
+    PipelineConfigMissingError,
+)
+from ..io_validation import parse_location_aliases, validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem
 from ..schemas import (
@@ -41,10 +47,7 @@ from ..types import TransformEnrichRow
 
 def _load_location_profiles(path: Path, fs: FileSystem) -> list[LocationProfile]:
     if not fs.exists(path):
-        raise RuntimeError(
-            "Location aliases file not found. Create data/reference/location_aliases.json "
-            "or set LOCATION_ALIASES_PATH to a valid file."
-        )
+        raise LocationAliasesNotFoundError()
     payload = fs.read_json(path)
     return build_location_profiles(parse_location_aliases(payload))
 
@@ -73,13 +76,10 @@ def run_usage_shortlist(
         Dict with paths to shortlist and explain files.
     """
     if config is None:
-        raise RuntimeError(
-            "PipelineConfig is required. Load it once at the entry point with "
-            "PipelineConfig.from_env() and pass it through."
-        )
+        raise PipelineConfigMissingError()
 
     if fs is None:
-        raise RuntimeError("FileSystem is required. Inject it at the entry point.")
+        raise DependencyMissingError("FileSystem", reason="Inject it at the entry point.")
     logger = get_logger("uk_sponsor_pipeline.usage_shortlist")
     scored_path = Path(scored_path)
     out_dir = Path(out_dir)

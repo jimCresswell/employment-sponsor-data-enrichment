@@ -163,7 +163,7 @@ Location aliases live in `data/reference/location_aliases.json` and expand regio
 
 ### Architecture Direction
 
-The long‑term direction is an application‑owned pipeline: orchestration and step ownership live in an application layer, domain logic is pure and infrastructure is shared and injected. CSV artefacts remain as audit and resume boundaries.
+The long‑term direction is an application‑owned pipeline: orchestration and step ownership live in an application layer, domain logic is pure and infrastructure is shared and injected. CSV artefacts remain as audit and resume boundaries. The CLI delegates concrete wiring to the composition root.
 
 Observability is standardised via a shared logger factory with UTC timestamps so pipeline logs remain consistent across steps.
 
@@ -172,8 +172,10 @@ Observability is standardised via a shared logger factory with UTC timestamps so
 ```text
 src/uk_sponsor_pipeline/
 ├── cli.py              # Typer CLI entry point
+├── composition.py      # Composition root for CLI wiring
 ├── config.py           # Pipeline configuration
 ├── io_contracts.py     # IO boundary contracts for infrastructure
+├── io_validation.py    # Boundary-neutral IO validation helpers
 ├── protocols.py        # Interface-style contracts
 ├── application/        # Use-case orchestration
 │   ├── companies_house_source.py
@@ -187,7 +189,6 @@ src/uk_sponsor_pipeline/
 │   ├── io/
 │   │   ├── filesystem.py
 │   │   ├── http.py
-│   │   └── validation.py
 │   └── resilience.py
 ├── domain/
 │   ├── companies_house.py
@@ -212,7 +213,7 @@ tests/
 └── conftest.py         # Pytest fixtures and fakes
 ```
 
-Application modules implement pipeline steps and orchestration; the CLI delegates to them (see `application/pipeline.py`). Track the refactor in `/.agent/plans/refactor-plan.md`.
+Application modules implement pipeline steps and orchestration; the CLI delegates to them via the composition root (see `composition.py`). Track the refactor in `/.agent/plans/refactor-plan.md`.
 
 ### Dependency Injection
 
@@ -238,38 +239,30 @@ Application entry points require a `PipelineConfig` instance and injected depend
 variables are read once at the CLI entry point and passed through. For programmatic use:
 
 ```python
+from uk_sponsor_pipeline.composition import build_cli_dependencies
 from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.application.transform_enrich import run_transform_enrich
 from uk_sponsor_pipeline.application.transform_score import run_transform_score
-from uk_sponsor_pipeline.infrastructure import LocalFileSystem, build_companies_house_client
 
 config = PipelineConfig.from_env()
-fs = LocalFileSystem()
-http_client = build_companies_house_client(
-    api_key=config.ch_api_key,
+deps = build_cli_dependencies(
+    config=config,
     cache_dir="data/cache/companies_house",
-    max_rpm=config.ch_max_rpm,
-    min_delay_seconds=config.ch_sleep_seconds,
-    circuit_breaker_threshold=config.ch_circuit_breaker_threshold,
-    circuit_breaker_timeout_seconds=config.ch_circuit_breaker_timeout_seconds,
-    max_retries=config.ch_max_retries,
-    backoff_factor=config.ch_backoff_factor,
-    max_backoff_seconds=config.ch_backoff_max_seconds,
-    jitter_seconds=config.ch_backoff_jitter_seconds,
-    timeout_seconds=config.ch_timeout_seconds,
+    build_http_client=True,
 )
 run_transform_enrich(
     register_path="data/interim/sponsor_register_filtered.csv",
     out_dir="data/processed",
     config=config,
-    http_client=http_client,
-    fs=fs,
+    http_client=deps.http_client,
+    http_session=deps.http_session,
+    fs=deps.fs,
 )
 run_transform_score(
     enriched_path="data/processed/companies_house_enriched.csv",
     out_dir="data/processed",
     config=config,
-    fs=fs,
+    fs=deps.fs,
 )
 ```
 
@@ -320,6 +313,7 @@ uv run check
 
 `uv run lint` is the single lint entry point. It runs ruff, the inline ignore check, the US spelling scan, and import‑linter.
 The spelling scan checks identifiers, comments/docstrings, and string literals, but ignores string literals used for comparisons or matching (external tokens) and skips inline/fenced code in docs.
+Linting also enforces fail‑fast exception handling (`TRY`, `BLE`), no private member access (`SLF001`), no `print` outside the CLI (`T20`), and timezone‑aware datetimes (`DTZ`).
 
 ## Scoring Model (Transform Score)
 

@@ -21,7 +21,7 @@ This file complements `.agent/directives/AGENT.md`, `.agent/directives/rules.md`
 
 - No `Any`, no `cast`, no inline ignores.
 - Accept untrusted inputs as `object`/`Mapping[str, object]` at IO boundaries only.
-- Validate at IO boundaries with Pydantic helpers in `infrastructure/io/validation.py`.
+- Validate at IO boundaries with Pydantic helpers in `uk_sponsor_pipeline.io_validation`.
 - Convert validated data into strict `TypedDict` or dataclasses immediately after ingestion.
 - Prefer `dataclasses(frozen=True)` for immutable value objects.
 - Use built-in generics (e.g., `list[str]`, `dict[str, int]`).

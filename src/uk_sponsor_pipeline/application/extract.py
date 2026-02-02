@@ -11,7 +11,14 @@ from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
-from ..infrastructure.io.validation import validate_as
+from ..exceptions import (
+    CsvLinkAmbiguousError,
+    CsvLinkNotFoundError,
+    CsvSchemaDecodeError,
+    CsvSchemaMissingColumnsError,
+    DependencyMissingError,
+)
+from ..io_validation import validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem, HttpSession
 from ..schemas import RAW_REQUIRED_COLUMNS
@@ -54,7 +61,7 @@ def _find_best_csv_link(soup: BeautifulSoup) -> str | None:
     """Find the best CSV link from the page, preferring specific patterns.
 
     Raises:
-        RuntimeError: If multiple links match the top-ranked pattern.
+        CsvLinkAmbiguousError: If multiple links match the top-ranked pattern.
     """
     csv_links: list[tuple[int, str, str]] = []  # (priority, link_text, url)
 
@@ -93,12 +100,7 @@ def _find_best_csv_link(soup: BeautifulSoup) -> str | None:
     best_links = [link for link in csv_links if link[0] == best_priority]
     unique_urls = sorted({link[2] for link in best_links})
     if len(unique_urls) > 1:
-        candidates = ", ".join(unique_urls[:5])
-        raise RuntimeError(
-            "Multiple candidate CSV links matched the best pattern on the GOV.UK "
-            "sponsor register page. Use --url to specify the correct CSV. "
-            f"Candidates: {candidates}"
-        )
+        raise CsvLinkAmbiguousError(unique_urls)
     return unique_urls[0]
 
 
@@ -106,13 +108,12 @@ def _validate_csv_schema(content: bytes) -> None:
     """Validate that CSV has required columns."""
     try:
         first_line = content.split(b"\n", 1)[0].decode("utf-8-sig")
-    except Exception as exc:
-        raise RuntimeError("Could not validate CSV schema headers.") from exc
+    except UnicodeDecodeError as exc:
+        raise CsvSchemaDecodeError() from exc
     headers = {h.strip().strip('"').strip("'") for h in first_line.split(",")}
     missing = RAW_REQUIRED_COLUMNS - headers
     if missing:
-        missing_list = ", ".join(sorted(missing))
-        raise RuntimeError(f"CSV schema validation failed. Missing columns: {missing_list}.")
+        raise CsvSchemaMissingColumnsError(sorted(missing))
 
 
 def extract_register(
@@ -135,18 +136,21 @@ def extract_register(
         ExtractResult with path, hash, and validation status.
 
     Raises:
-        RuntimeError: If dependencies are missing, no CSV link found, download fails,
-            or schema validation fails.
+        DependencyMissingError: If required dependencies are missing.
+        CsvLinkNotFoundError: If no CSV link is found on the GOV.UK page.
+        CsvLinkAmbiguousError: If multiple CSV links match the best pattern.
+        CsvSchemaDecodeError: If CSV headers cannot be decoded.
+        CsvSchemaMissingColumnsError: If required columns are missing.
     """
     data_dir = Path(data_dir)
     reports_dir = Path(reports_dir)
     if fs is None:
-        raise RuntimeError("FileSystem is required. Inject it at the entry point.")
+        raise DependencyMissingError("FileSystem", reason="Inject it at the entry point.")
     fs.mkdir(data_dir, parents=True)
     fs.mkdir(reports_dir, parents=True)
 
     if session is None:
-        raise RuntimeError("HttpSession is required. Inject it at the entry point.")
+        raise DependencyMissingError("HttpSession", reason="Inject it at the entry point.")
     logger = get_logger("uk_sponsor_pipeline.extract")
 
     # Determine asset URL
@@ -160,10 +164,7 @@ def extract_register(
 
         asset_url = _find_best_csv_link(soup)
         if asset_url is None:
-            raise RuntimeError(
-                "Could not find a CSV link on the GOV.UK sponsor register page.\n"
-                "The page structure may have changed. Use --url to specify the direct CSV URL."
-            )
+            raise CsvLinkNotFoundError()
 
     assert asset_url is not None
 

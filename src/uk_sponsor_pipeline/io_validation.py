@@ -6,7 +6,7 @@ from typing import TypedDict
 
 from pydantic import TypeAdapter, ValidationError
 
-from ...io_contracts import (
+from .io_contracts import (
     CompaniesHouseFileIO,
     CompaniesHouseProfileEntryIO,
     CompaniesHouseSearchEntryIO,
@@ -21,12 +21,16 @@ class IncomingDataError(ValueError):
 
 
 class SearchAddressInput(TypedDict, total=False):
+    """Search address payload input shape."""
+
     locality: str | None
     region: str | None
     postal_code: str | None
 
 
 class SearchItemInput(TypedDict, total=False):
+    """Search item payload input shape."""
+
     title: str | None
     company_number: str | None
     company_status: str | None
@@ -34,16 +38,22 @@ class SearchItemInput(TypedDict, total=False):
 
 
 class SearchResponseInput(TypedDict, total=False):
+    """Search response payload input shape."""
+
     items: list[SearchItemInput]
 
 
 class RegisteredOfficeAddressInput(TypedDict, total=False):
+    """Registered office address payload input shape."""
+
     locality: str | None
     region: str | None
     postal_code: str | None
 
 
 class CompanyProfileInput(TypedDict, total=False):
+    """Company profile payload input shape."""
+
     company_name: str | None
     company_status: str | None
     type: str | None
@@ -53,21 +63,29 @@ class CompanyProfileInput(TypedDict, total=False):
 
 
 class CompaniesHouseSearchEntryInput(TypedDict, total=False):
+    """Companies House search entry payload input shape."""
+
     query: str | None
     items: list[object] | None
 
 
 class CompaniesHouseProfileEntryInput(TypedDict, total=False):
+    """Companies House profile entry payload input shape."""
+
     company_number: str | None
     profile: dict[str, object] | None
 
 
 class CompaniesHouseFileInput(TypedDict, total=False):
+    """Companies House file payload input shape."""
+
     searches: list[CompaniesHouseSearchEntryInput]
     profiles: list[CompaniesHouseProfileEntryInput]
 
 
 class LocationProfileInput(TypedDict, total=False):
+    """Location profile payload input shape."""
+
     canonical_name: str | None
     aliases: list[str] | None
     regions: list[str] | None
@@ -77,10 +95,13 @@ class LocationProfileInput(TypedDict, total=False):
 
 
 class LocationAliasesInput(TypedDict, total=False):
+    """Location aliases payload input shape."""
+
     locations: list[LocationProfileInput]
 
 
 def validate_as[SchemaT](schema: type[SchemaT], payload: object) -> SchemaT:
+    """Validate a payload against a schema."""
     try:
         return TypeAdapter(schema).validate_python(payload)
     except ValidationError as exc:
@@ -89,6 +110,7 @@ def validate_as[SchemaT](schema: type[SchemaT], payload: object) -> SchemaT:
 
 
 def validate_json_as[SchemaT](schema: type[SchemaT], payload: str | bytes | bytearray) -> SchemaT:
+    """Validate a JSON payload against a schema."""
     try:
         return TypeAdapter(schema).validate_json(payload)
     except ValidationError as exc:
@@ -97,10 +119,12 @@ def validate_json_as[SchemaT](schema: type[SchemaT], payload: str | bytes | byte
 
 
 def _as_str(value: object) -> str:
+    """Return the value if it is a string, otherwise an empty string."""
     return value if isinstance(value, str) else ""
 
 
 def _as_str_list(value: object) -> list[str]:
+    """Coerce a value into a list of non-empty strings."""
     if value is None:
         return []
     try:
@@ -116,6 +140,7 @@ def _as_str_list(value: object) -> list[str]:
 
 
 def _coerce_sic_codes(value: object) -> list[str]:
+    """Coerce SIC code payloads into a list of strings."""
     if value is None:
         return []
     try:
@@ -135,6 +160,7 @@ def _coerce_sic_codes(value: object) -> list[str]:
 
 
 def parse_companies_house_search(payload: object) -> list[SearchItemIO]:
+    """Parse a Companies House search payload into IO contracts."""
     response = validate_as(SearchResponseInput, payload)
     raw_items = response.get("items", [])
     items: list[SearchItemIO] = []
@@ -158,6 +184,7 @@ def parse_companies_house_search(payload: object) -> list[SearchItemIO]:
 
 
 def parse_companies_house_profile(payload: object) -> CompanyProfileIO:
+    """Parse a Companies House profile payload into IO contracts."""
     profile = validate_as(CompanyProfileInput, payload)
     address_input = profile.get("registered_office_address") or {}
     address = validate_as(RegisteredOfficeAddressInput, address_input)
@@ -176,6 +203,7 @@ def parse_companies_house_profile(payload: object) -> CompanyProfileIO:
 
 
 def parse_location_aliases(payload: object) -> list[LocationProfileIO]:
+    """Parse a location aliases payload into IO contracts."""
     aliases = validate_as(LocationAliasesInput, payload)
     raw_locations = aliases.get("locations", [])
     locations: list[LocationProfileIO] = []
@@ -195,6 +223,7 @@ def parse_location_aliases(payload: object) -> list[LocationProfileIO]:
 
 
 def parse_companies_house_file(payload: object) -> CompaniesHouseFileIO:
+    """Parse a Companies House file payload into IO contracts."""
     file_payload = validate_as(CompaniesHouseFileInput, payload)
     raw_searches = file_payload.get("searches", [])
     raw_profiles = file_payload.get("profiles", [])

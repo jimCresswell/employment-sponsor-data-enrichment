@@ -8,6 +8,11 @@ import pytest
 from tests.support.transform_enrich_rows import make_enrich_row
 from uk_sponsor_pipeline.application.transform_score import run_transform_score
 from uk_sponsor_pipeline.config import PipelineConfig
+from uk_sponsor_pipeline.exceptions import (
+    DependencyMissingError,
+    InvalidMatchScoreError,
+    PipelineConfigMissingError,
+)
 from uk_sponsor_pipeline.infrastructure import LocalFileSystem
 from uk_sponsor_pipeline.schemas import TRANSFORM_SCORE_OUTPUT_COLUMNS
 
@@ -48,7 +53,7 @@ def test_transform_score_raises_on_non_numeric_match_score(tmp_path: Path) -> No
     enriched_path = tmp_path / "enriched.csv"
     df.to_csv(enriched_path, index=False)
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(InvalidMatchScoreError) as exc_info:
         run_transform_score(
             enriched_path=enriched_path, out_dir=tmp_path, config=PipelineConfig(), fs=fs
         )
@@ -59,7 +64,7 @@ def test_transform_score_raises_on_non_numeric_match_score(tmp_path: Path) -> No
 
 
 def test_transform_score_requires_config() -> None:
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(PipelineConfigMissingError) as exc_info:
         run_transform_score()
     assert "PipelineConfig" in str(exc_info.value)
 
@@ -70,7 +75,7 @@ def test_transform_score_requires_filesystem(tmp_path: Path) -> None:
     enriched_path = tmp_path / "enriched.csv"
     df.to_csv(enriched_path, index=False)
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(DependencyMissingError) as exc_info:
         run_transform_score(
             enriched_path=enriched_path,
             out_dir=tmp_path,

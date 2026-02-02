@@ -18,6 +18,7 @@ The pipeline uses step CSV outputs for auditability and resumability. However, t
 - Share infrastructure and observability across all steps via dependency injection.
 - Use a shared logger factory in `uk_sponsor_pipeline.observability.logging` for consistent UTC timestamps.
 - Read configuration once at the CLI entry point and pass it through.
+- Delegate concrete dependency wiring to the composition root (`uk_sponsor_pipeline/composition.py`); the CLI calls it.
 - If a legacy wrapper remains, it must be a thin delegate layer that forwards to application steps.
 
 ## Consequences

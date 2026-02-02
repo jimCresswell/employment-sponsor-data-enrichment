@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, date, datetime
 
 from ..types import TransformEnrichRow
 
@@ -197,8 +197,9 @@ def score_company_age(date_of_creation: str) -> float:
         return 0.05  # Unknown: small baseline
 
     try:
-        created = datetime.strptime(date_of_creation, "%Y-%m-%d")
-        years = (datetime.now() - created).days / 365.25
+        created = date.fromisoformat(date_of_creation)
+        today = datetime.now(UTC).date()
+        years = (today - created).days / 365.25
 
         if years >= 10:
             return 0.12
@@ -210,7 +211,7 @@ def score_company_age(date_of_creation: str) -> float:
             return 0.04
         else:
             return 0.02  # Very new
-    except (ValueError, TypeError):
+    except (TypeError, ValueError):
         return 0.05
 
 

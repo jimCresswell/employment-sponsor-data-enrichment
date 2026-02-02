@@ -8,6 +8,8 @@ from typing import Self
 
 from dotenv import load_dotenv
 
+from .exceptions import GeoFilterRegionError
+
 
 @dataclass(frozen=True)
 class PipelineConfig:
@@ -118,7 +120,7 @@ def _parse_single_region(s: str) -> str | None:
     if not items:
         return None
     if len(items) > 1:
-        raise ValueError("GEO_FILTER_REGIONS must contain at most one region.")
+        raise GeoFilterRegionError()
     for item in items:
         return item
     return None

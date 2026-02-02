@@ -3,22 +3,9 @@
 Example:
     >>> from uk_sponsor_pipeline.config import PipelineConfig
     >>> from uk_sponsor_pipeline.application.pipeline import run_pipeline
-    >>> from uk_sponsor_pipeline.infrastructure import LocalFileSystem, build_companies_house_client
     >>> config = PipelineConfig.from_env()
-    >>> fs = LocalFileSystem()
-    >>> http_client = build_companies_house_client(
-    ...     api_key=config.ch_api_key,
-    ...     cache_dir="data/cache/companies_house",
-    ...     max_rpm=config.ch_max_rpm,
-    ...     min_delay_seconds=config.ch_sleep_seconds,
-    ...     circuit_breaker_threshold=config.ch_circuit_breaker_threshold,
-    ...     circuit_breaker_timeout_seconds=config.ch_circuit_breaker_timeout_seconds,
-    ...     max_retries=config.ch_max_retries,
-    ...     backoff_factor=config.ch_backoff_factor,
-    ...     max_backoff_seconds=config.ch_backoff_max_seconds,
-    ...     jitter_seconds=config.ch_backoff_jitter_seconds,
-    ...     timeout_seconds=config.ch_timeout_seconds,
-    ... )
+    >>> fs = ...  # Injected FileSystem from the CLI/composition root
+    >>> http_client = ...  # Injected HttpClient when CH_SOURCE_TYPE is "api"
     >>> result = run_pipeline(config=config, skip_download=True, fs=fs, http_client=http_client)
     >>> result.usage["shortlist"]
 """
@@ -29,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..config import PipelineConfig
+from ..exceptions import DependencyMissingError
 from ..protocols import FileSystem, HttpClient, HttpSession
 from .extract import ExtractResult, extract_register
 from .transform_enrich import run_transform_enrich
@@ -85,11 +73,13 @@ def run_pipeline(
         PipelineRunResult with outputs for each step.
     """
     if fs is None:
-        raise RuntimeError("FileSystem is required. Inject it at the entry point.")
+        raise DependencyMissingError("FileSystem", reason="Inject it at the entry point.")
     if not skip_download and session is None:
-        raise RuntimeError("HttpSession is required for extract. Inject it at the entry point.")
+        raise DependencyMissingError(
+            "HttpSession", reason="For extract. Inject it at the entry point."
+        )
     if config.ch_source_type == "api" and http_client is None:
-        raise RuntimeError("HttpClient is required when CH_SOURCE_TYPE is 'api'.")
+        raise DependencyMissingError("HttpClient", reason="When CH_SOURCE_TYPE is 'api'.")
 
     extract_result: ExtractResult | None = None
     if not skip_download:

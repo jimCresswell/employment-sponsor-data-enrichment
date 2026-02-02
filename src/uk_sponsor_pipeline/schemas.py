@@ -6,6 +6,8 @@ and clear documentation of data contracts.
 
 from __future__ import annotations
 
+from .exceptions import SchemaColumnsMissingError
+
 # Raw sponsor register CSV (downloaded from GOV.UK)
 RAW_REQUIRED_COLUMNS = frozenset(
     [
@@ -114,8 +116,8 @@ def validate_columns(df_columns: list[str], required: frozenset[str], step_name:
         step_name: Name of step for error messages.
 
     Raises:
-        ValueError: If required columns are missing.
+        SchemaColumnsMissingError: If required columns are missing.
     """
     missing = required - set(df_columns)
     if missing:
-        raise ValueError(f"{step_name}: Missing required columns: {sorted(missing)}")
+        raise SchemaColumnsMissingError(step_name, sorted(missing))

@@ -12,6 +12,7 @@ import pandas as pd
 import pytest
 
 from tests.fakes import FakeHttpClient, InMemoryCache, InMemoryFileSystem
+from tests.support.errors import NetworkIsolationError
 
 # =============================================================================
 # Network Isolation - Block all socket connections in tests
@@ -22,11 +23,8 @@ _original_socket_connect = socket.socket.connect
 
 def _blocked_socket_connect(self: socket.socket, *args: object, **kwargs: object) -> None:
     """Raise an error if any test tries to make a real network connection."""
-    raise RuntimeError(
-        "Tests must not make network connections! "
-        "Use mocks or FakeHttpClient instead. "
-        f"Attempted connection to: {args}"
-    )
+    _ = (self, kwargs)
+    raise NetworkIsolationError(str(args))
 
 
 @pytest.fixture(autouse=True)

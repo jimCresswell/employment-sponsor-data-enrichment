@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from tests.support.transform_enrich_rows import make_enrich_row
-from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
+from uk_sponsor_pipeline.io_validation import validate_as
 from uk_sponsor_pipeline.types import TransformScoreRow
 
 

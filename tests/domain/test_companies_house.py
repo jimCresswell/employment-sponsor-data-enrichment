@@ -9,7 +9,7 @@ from uk_sponsor_pipeline.domain.companies_house import (
     build_unmatched_row,
     score_candidates,
 )
-from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
+from uk_sponsor_pipeline.io_validation import validate_as
 from uk_sponsor_pipeline.types import CompanyProfile, SearchItem, TransformRegisterRow
 
 

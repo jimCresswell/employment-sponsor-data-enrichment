@@ -13,6 +13,7 @@ Pipeline steps depend on file I/O and HTTP calls. Direct dependencies would make
 ## Decision
 
 Use protocol-style interfaces (`protocols.py`) and concrete implementations (`infrastructure/`). Steps accept injected dependencies (file system, HTTP client, cache, rate limiter, circuit breaker) to keep I/O replaceable.
+Concrete wiring is owned by the composition root (`composition.py`) and called by the CLI. Application entry points require injected dependencies with no concrete defaults.
 
 ## Consequences
 

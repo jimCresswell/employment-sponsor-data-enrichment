@@ -16,3 +16,12 @@ Transform Enrich fails fast on authentication, rate‑limit exhaustion, circuit 
 - Fix the underlying issue (wait for limits to reset, reduce batch size, or correct configuration).
 - Re‑run with `--resume` to continue from the last checkpoint.
 - Check `data/processed/companies_house_resume_report.json` for the exact resume command (or the run subdirectory if `--no-resume` was used).
+
+## Lint Failures (TRY/BLE/DTZ/SLF001/T20)
+
+If `uv run lint` fails after enabling the stricter rules:
+
+- **TRY/BLE**: narrow exception handling and use `raise ... from ...` to preserve context.
+- **DTZ**: use timezone‑aware datetimes (e.g. `datetime.now(UTC)`) and avoid naive clocks.
+- **SLF001**: avoid accessing private members across modules; add a public wrapper instead.
+- **T20**: replace non‑CLI `print` calls with structured logging (or move output to the CLI).

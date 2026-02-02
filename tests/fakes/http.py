@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import override
 
+from tests.support.errors import FakeResponseMissingError
 from uk_sponsor_pipeline.protocols import HttpClient
 
 
@@ -30,4 +31,4 @@ class FakeHttpClient(HttpClient):
         for pattern, response in self.responses.items():
             if pattern in url:
                 return response
-        raise ValueError(f"No canned response for URL: {url}")
+        raise FakeResponseMissingError(url)

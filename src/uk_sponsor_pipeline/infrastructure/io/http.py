@@ -30,14 +30,14 @@ from typing import override
 import requests
 from requests.auth import HTTPBasicAuth
 
-from ...exceptions import AuthenticationError, RateLimitError
+from ...exceptions import AuthenticationError, JsonObjectExpectedError, RateLimitError
+from ...io_validation import IncomingDataError, validate_as, validate_json_as
 from ...observability import get_logger
 from ...protocols import Cache, CircuitBreaker, HttpClient, HttpSession, RateLimiter, RetryPolicy
 from ..resilience import CircuitBreaker as CircuitBreakerImpl
 from ..resilience import RateLimiter as RateLimiterImpl
 from ..resilience import RetryPolicy as RetryPolicyImpl
 from .filesystem import DiskCache
-from .validation import IncomingDataError, validate_as, validate_json_as
 
 logger = get_logger("uk_sponsor_pipeline.infrastructure.http")
 
@@ -114,7 +114,7 @@ def parse_retry_after(headers: Mapping[str, str] | None) -> int | None:
             dt = dt.replace(tzinfo=UTC)
         delta = (dt - datetime.now(UTC)).total_seconds()
         return max(0, int(delta))
-    except Exception:
+    except (AttributeError, OverflowError, TypeError, ValueError):
         return None
 
 
@@ -122,7 +122,7 @@ def _response_details(response: requests.Response) -> str:
     """Return a compact status/body summary for error reporting."""
     try:
         body = response.text
-    except Exception:
+    except (UnicodeDecodeError, ValueError, requests.RequestException):
         body = "<unreadable>"
     body = " ".join(body.split())
     if len(body) > 300:
@@ -200,18 +200,12 @@ class CachedHttpClient(HttpClient):
             if r.status_code == 401:
                 self.circuit_breaker.record_failure()
                 details = _response_details(r)
-                raise AuthenticationError(
-                    f"Companies House API returned 401 Unauthorised ({details})"
-                )
+                raise AuthenticationError.for_status_401(details)
 
             if r.status_code == 403:
                 self.circuit_breaker.record_failure()
                 details = _response_details(r)
-                raise AuthenticationError(
-                    "Companies House API returned 403 Forbidden. "
-                    "Your IP may be temporarily blocked due to excessive requests. "
-                    f"({details})"
-                )
+                raise AuthenticationError.for_status_403(details)
 
             if r.status_code in self.retry_policy.retry_statuses:
                 retry_after = parse_retry_after(getattr(r, "headers", None))
@@ -232,7 +226,7 @@ class CachedHttpClient(HttpClient):
             except requests.HTTPError as e:
                 if is_auth_error(e):
                     self.circuit_breaker.record_failure()
-                    raise AuthenticationError(f"HTTP error indicates auth failure: {e}") from e
+                    raise AuthenticationError.for_http_error(e) from e
                 if is_rate_limit_error(e):
                     self.circuit_breaker.record_failure()
                     raise RateLimitError(60) from e
@@ -244,9 +238,12 @@ class CachedHttpClient(HttpClient):
             except IncomingDataError:
                 try:
                     payload: object = r.json()
+                except (TypeError, ValueError) as exc:
+                    raise JsonObjectExpectedError.for_companies_house_response() from exc
+                try:
                     data = validate_as(dict[str, object], payload)
-                except Exception as exc:
-                    raise RuntimeError("Companies House response must be a JSON object.") from exc
+                except IncomingDataError as exc:
+                    raise JsonObjectExpectedError.for_companies_house_response() from exc
 
             # Record success
             self.circuit_breaker.record_success()

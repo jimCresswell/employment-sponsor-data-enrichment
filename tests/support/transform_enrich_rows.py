@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
+from uk_sponsor_pipeline.io_validation import validate_as
 from uk_sponsor_pipeline.types import TransformEnrichRow
 
 

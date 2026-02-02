@@ -7,8 +7,9 @@ import pandas as pd
 import pytest
 
 from uk_sponsor_pipeline.application.transform_register import run_transform_register
+from uk_sponsor_pipeline.exceptions import DependencyMissingError
 from uk_sponsor_pipeline.infrastructure import LocalFileSystem
-from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
+from uk_sponsor_pipeline.io_validation import validate_as
 from uk_sponsor_pipeline.schemas import TRANSFORM_REGISTER_OUTPUT_COLUMNS
 
 
@@ -53,7 +54,7 @@ def test_transform_register_filters_and_aggregates(
 
 
 def test_transform_register_requires_filesystem(tmp_path: Path) -> None:
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(DependencyMissingError) as exc_info:
         run_transform_register(
             raw_dir=tmp_path / "raw",
             out_path=tmp_path / "interim" / "sponsor_register_filtered.csv",
