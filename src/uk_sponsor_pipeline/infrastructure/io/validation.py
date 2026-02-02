@@ -6,7 +6,14 @@ from typing import TypedDict
 
 from pydantic import TypeAdapter, ValidationError
 
-from ...io_contracts import CompanyProfileIO, LocationProfileIO, SearchItemIO
+from ...io_contracts import (
+    CompaniesHouseFileIO,
+    CompaniesHouseProfileEntryIO,
+    CompaniesHouseSearchEntryIO,
+    CompanyProfileIO,
+    LocationProfileIO,
+    SearchItemIO,
+)
 
 
 class IncomingDataError(ValueError):
@@ -43,6 +50,21 @@ class CompanyProfileInput(TypedDict, total=False):
     date_of_creation: str | None
     sic_codes: list[str] | str | None
     registered_office_address: RegisteredOfficeAddressInput | None
+
+
+class CompaniesHouseSearchEntryInput(TypedDict, total=False):
+    query: str | None
+    items: list[object] | None
+
+
+class CompaniesHouseProfileEntryInput(TypedDict, total=False):
+    company_number: str | None
+    profile: dict[str, object] | None
+
+
+class CompaniesHouseFileInput(TypedDict, total=False):
+    searches: list[CompaniesHouseSearchEntryInput]
+    profiles: list[CompaniesHouseProfileEntryInput]
 
 
 class LocationProfileInput(TypedDict, total=False):
@@ -170,3 +192,27 @@ def parse_location_aliases(payload: object) -> list[LocationProfileIO]:
             }
         )
     return locations
+
+
+def parse_companies_house_file(payload: object) -> CompaniesHouseFileIO:
+    file_payload = validate_as(CompaniesHouseFileInput, payload)
+    raw_searches = file_payload.get("searches", [])
+    raw_profiles = file_payload.get("profiles", [])
+    searches: list[CompaniesHouseSearchEntryIO] = []
+    profiles: list[CompaniesHouseProfileEntryIO] = []
+
+    for raw_search in raw_searches:
+        entry = validate_as(CompaniesHouseSearchEntryInput, raw_search)
+        query = _as_str(entry.get("query"))
+        items_payload = {"items": entry.get("items") or []}
+        items = parse_companies_house_search(items_payload)
+        searches.append({"query": query, "items": items})
+
+    for raw_profile in raw_profiles:
+        entry = validate_as(CompaniesHouseProfileEntryInput, raw_profile)
+        company_number = _as_str(entry.get("company_number"))
+        profile_payload = entry.get("profile") or {}
+        profile = parse_companies_house_profile(profile_payload)
+        profiles.append({"company_number": company_number, "profile": profile})
+
+    return {"searches": searches, "profiles": profiles}

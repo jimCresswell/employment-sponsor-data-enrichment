@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from uk_sponsor_pipeline.infrastructure.io.validation import (
+    parse_companies_house_file,
     parse_companies_house_profile,
     parse_companies_house_search,
     parse_location_aliases,
@@ -88,3 +89,67 @@ def test_parse_location_aliases_defaults_missing_fields() -> None:
             "notes": "",
         }
     ]
+
+
+def test_parse_companies_house_file_defaults_missing_fields() -> None:
+    payload: dict[str, object] = {
+        "searches": [
+            {
+                "query": "Acme Ltd",
+                "items": [
+                    {
+                        "title": "Acme Ltd",
+                        "company_number": "12345678",
+                        "company_status": "active",
+                        "address": {"locality": "London"},
+                    }
+                ],
+            }
+        ],
+        "profiles": [
+            {
+                "company_number": "12345678",
+                "profile": {
+                    "company_name": "ACME LTD",
+                    "company_status": "active",
+                    "type": "ltd",
+                    "registered_office_address": {"region": "Greater London"},
+                },
+            }
+        ],
+    }
+
+    parsed = parse_companies_house_file(payload)
+
+    assert parsed == {
+        "searches": [
+            {
+                "query": "Acme Ltd",
+                "items": [
+                    {
+                        "title": "Acme Ltd",
+                        "company_number": "12345678",
+                        "company_status": "active",
+                        "address": {"locality": "London", "region": "", "postal_code": ""},
+                    }
+                ],
+            }
+        ],
+        "profiles": [
+            {
+                "company_number": "12345678",
+                "profile": {
+                    "company_name": "ACME LTD",
+                    "company_status": "active",
+                    "type": "ltd",
+                    "date_of_creation": "",
+                    "sic_codes": [],
+                    "registered_office_address": {
+                        "locality": "",
+                        "region": "Greater London",
+                        "postal_code": "",
+                    },
+                },
+            }
+        ],
+    }

@@ -110,6 +110,7 @@ This plan is the authoritative entry point for the refactor. It captures the key
 - Region filtering enforces a single region; multiple regions are rejected with a clear error.
 - Phase 4 complete: `normalization.py` removed, `organisation_identity.py` added (including `simple_similarity`); Stage 1 rules moved into `domain/sponsor_register.py`; Stage 1 now flattens structured locations at IO boundaries only; README updated; new domain tests added.
 - Phase 8 complete: location aliases added with London/Manchester profiles; domain matching + Stage 3 geographic filtering use aliases; README and tests updated.
+- Phase 8.5 complete: configurable Companies House source (API or file) with validated file inputs; Stage 2 uses source abstraction; README and ADR updated.
 
 ### Resumption checklist (fresh session)
 
@@ -519,7 +520,7 @@ register file (schema validation + deterministic artefact output).
   - Switching source from API to file is a config-only change.
   - File-based source produces the same typed IO shapes as API source.
   - No application/domain code branches on source type beyond the extract boundary.
-- Status: ⏳ Pending.
+- Status: ✅ Completed.
 
 ### Phase 9 — Remove Stage Terminology (Semantic Renames)
 

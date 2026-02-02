@@ -81,6 +81,56 @@ Stage 2 fails fast on authentication, rate limit, circuit breaker, or unexpected
 
 When running with `--no-resume`, Stage 2 writes to a new timestamped subdirectory under the output directory to avoid stale data reuse.
 
+### Companies House Source (API or File)
+
+By default Stage 2 uses the Companies House API. To use a file source instead, set:
+
+```bash
+export CH_SOURCE_TYPE=file
+export CH_SOURCE_PATH=data/reference/companies_house.json
+```
+
+The file format is JSON:
+
+```json
+{
+  "searches": [
+    {
+      "query": "Acme Ltd",
+      "items": [
+        {
+          "title": "ACME LTD",
+          "company_number": "12345678",
+          "company_status": "active",
+          "address": {
+            "locality": "London",
+            "region": "Greater London",
+            "postal_code": "EC1A 1BB"
+          }
+        }
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "company_number": "12345678",
+      "profile": {
+        "company_name": "ACME LTD",
+        "company_status": "active",
+        "type": "ltd",
+        "date_of_creation": "2015-01-01",
+        "sic_codes": ["62020"],
+        "registered_office_address": {
+          "locality": "London",
+          "region": "Greater London",
+          "postal_code": "EC1A 1BB"
+        }
+      }
+    }
+  ]
+}
+```
+
 ### Geographic Filtering
 
 Filter the final shortlist by region or postcode (single region only):
@@ -123,6 +173,7 @@ src/uk_sponsor_pipeline/
 ├── io_contracts.py     # IO boundary contracts for infrastructure
 ├── protocols.py        # Interface-style contracts
 ├── application/        # Use-case orchestration
+│   ├── companies_house_source.py
 │   ├── download.py
 │   ├── stage1.py
 │   ├── stage2_companies_house.py

@@ -11,13 +11,10 @@ Improvements over original:
 
 from __future__ import annotations
 
-import hashlib
 import math
-import re
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import quote
 
 import pandas as pd
 from tqdm import tqdm
@@ -38,13 +35,9 @@ from ..domain.organisation_identity import (
 )
 from ..exceptions import AuthenticationError, CircuitBreakerOpen, RateLimitError
 from ..infrastructure import LocalFileSystem, build_companies_house_client
-from ..infrastructure.io.validation import (
-    parse_companies_house_profile,
-    parse_companies_house_search,
-    validate_as,
-)
+from ..infrastructure.io.validation import validate_as
 from ..observability import get_logger
-from ..protocols import FileSystem, HttpClient
+from ..protocols import FileSystem, HttpClient, HttpSession
 from ..schemas import (
     STAGE1_OUTPUT_COLUMNS,
     STAGE2_CANDIDATES_COLUMNS,
@@ -54,16 +47,14 @@ from ..schemas import (
 )
 from ..types import (
     BatchRange,
-    CompanyProfile,
-    SearchItem,
     Stage1Row,
     Stage2CandidateRow,
     Stage2EnrichedRow,
     Stage2ResumeReport,
     Stage2UnmatchedRow,
 )
+from .companies_house_source import CompaniesHouseSource, build_companies_house_source
 
-CH_BASE = "https://api.company-information.service.gov.uk"
 STAGE2_CHECKPOINT_COLUMNS = ("Organisation Name",)
 
 __all__ = [
@@ -71,18 +62,6 @@ __all__ = [
     "MatchScore",
     "run_stage2",
 ]
-
-
-def _normalize_for_cache(s: str) -> str:
-    """Normalize string for cache key (avoid whitespace collisions)."""
-    return re.sub(r"\s+", "_", s.strip().lower())
-
-
-def _cache_key(prefix: str, *parts: str) -> str:
-    """Create cache key from parts with normalisation."""
-    normalized = "_".join(_normalize_for_cache(p) for p in parts if p)
-    h = hashlib.sha256(normalized.encode()).hexdigest()[:16]
-    return f"{prefix}:{h}"
 
 
 def _run_dir_name(now: datetime) -> str:
@@ -196,6 +175,7 @@ def run_stage2(
     cache_dir: str | Path = "data/cache/companies_house",
     config: PipelineConfig | None = None,
     http_client: HttpClient | None = None,
+    http_session: HttpSession | None = None,
     resume: bool = True,
     fs: FileSystem | None = None,
     batch_start: int = 1,
@@ -230,7 +210,7 @@ def run_stage2(
             "PipelineConfig.from_env() and pass it through."
         )
 
-    if not config.ch_api_key:
+    if config.ch_source_type == "api" and not config.ch_api_key:
         raise RuntimeError("Missing CH_API_KEY. Set it in .env or environment variables.")
 
     fs = fs or LocalFileSystem()
@@ -285,21 +265,28 @@ def run_stage2(
     if already_processed:
         logger.info("Resuming: %s orgs already processed", len(already_processed))
 
-    # Set up HTTP client with circuit breaker
-    if http_client is None:
-        http_client = build_companies_house_client(
-            api_key=config.ch_api_key,
-            cache_dir=cache_dir,
-            max_rpm=config.ch_max_rpm,
-            min_delay_seconds=config.ch_sleep_seconds,
-            circuit_breaker_threshold=config.ch_circuit_breaker_threshold,
-            circuit_breaker_timeout_seconds=config.ch_circuit_breaker_timeout_seconds,
-            max_retries=config.ch_max_retries,
-            backoff_factor=config.ch_backoff_factor,
-            max_backoff_seconds=config.ch_backoff_max_seconds,
-            jitter_seconds=config.ch_backoff_jitter_seconds,
-            timeout_seconds=config.ch_timeout_seconds,
-        )
+    # Set up Companies House source
+    if config.ch_source_type == "api":
+        if http_client is None:
+            http_client = build_companies_house_client(
+                api_key=config.ch_api_key,
+                cache_dir=cache_dir,
+                max_rpm=config.ch_max_rpm,
+                min_delay_seconds=config.ch_sleep_seconds,
+                circuit_breaker_threshold=config.ch_circuit_breaker_threshold,
+                circuit_breaker_timeout_seconds=config.ch_circuit_breaker_timeout_seconds,
+                max_retries=config.ch_max_retries,
+                backoff_factor=config.ch_backoff_factor,
+                max_backoff_seconds=config.ch_backoff_max_seconds,
+                jitter_seconds=config.ch_backoff_jitter_seconds,
+                timeout_seconds=config.ch_timeout_seconds,
+            )
+    source: CompaniesHouseSource = build_companies_house_source(
+        config=config,
+        fs=fs,
+        http_client=http_client,
+        http_session=http_session,
+    )
 
     # Process organizations in batches
     raw_rows = validate_as(list[dict[str, object]], df.to_dict(orient="records"))
@@ -399,14 +386,8 @@ def run_stage2(
 
             # Try each query variant
             for query in query_variants:
-                search_url = (
-                    f"{CH_BASE}/search/companies?q={quote(query)}"
-                    f"&items_per_page={config.ch_search_limit}"
-                )
-                cache_key = _cache_key("search", query, str(config.ch_search_limit))
-
                 try:
-                    search = http_client.get_json(search_url, cache_key)
+                    items = source.search(query)
                 except (AuthenticationError, CircuitBreakerOpen, RateLimitError):
                     raise
                 except Exception as e:
@@ -414,8 +395,6 @@ def run_stage2(
                         f"Companies House search failed for query '{query}': {e}"
                     ) from e
 
-                items_io = parse_companies_house_search(search)
-                items = validate_as(list[SearchItem], items_io)
                 scored = score_candidates(
                     org_norm=org_norm,
                     town_norm=town_norm,
@@ -457,11 +436,8 @@ def run_stage2(
                 continue
 
             # Fetch company profile
-            profile_url = f"{CH_BASE}/company/{best_match.company_number}"
-            profile_key = _cache_key("profile", best_match.company_number)
-
             try:
-                raw_profile = http_client.get_json(profile_url, profile_key)
+                profile = source.profile(best_match.company_number)
             except (AuthenticationError, CircuitBreakerOpen, RateLimitError):
                 flush_batch()
                 raise
@@ -470,9 +446,6 @@ def run_stage2(
                 raise RuntimeError(
                     f"Companies House profile fetch failed for {best_match.company_number}: {e}"
                 ) from e
-
-            profile_io = parse_companies_house_profile(raw_profile)
-            profile = validate_as(CompanyProfile, profile_io)
             batch_enriched.append(
                 build_enriched_row(row=row, best_match=best_match, profile=profile)
             )

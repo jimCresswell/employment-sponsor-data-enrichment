@@ -18,6 +18,8 @@ def test_with_overrides_preserves_fields() -> None:
         ch_circuit_breaker_threshold=9,
         ch_circuit_breaker_timeout_seconds=99.0,
         ch_batch_size=42,
+        ch_source_type="file",
+        ch_source_path="data/reference/companies_house.json",
         tech_score_threshold=0.6,
         geo_filter_region="London",
         geo_filter_postcodes=("EC",),
@@ -40,3 +42,5 @@ def test_with_overrides_preserves_fields() -> None:
     assert updated.ch_circuit_breaker_threshold == base.ch_circuit_breaker_threshold
     assert updated.ch_circuit_breaker_timeout_seconds == base.ch_circuit_breaker_timeout_seconds
     assert updated.ch_batch_size == base.ch_batch_size
+    assert updated.ch_source_type == base.ch_source_type
+    assert updated.ch_source_path == base.ch_source_path

@@ -64,6 +64,27 @@ class CompanyProfileIO(TypedDict):
     registered_office_address: RegisteredOfficeAddressIO
 
 
+class CompaniesHouseSearchEntryIO(TypedDict):
+    """Companies House file search entry payload shape."""
+
+    query: str
+    items: list[SearchItemIO]
+
+
+class CompaniesHouseProfileEntryIO(TypedDict):
+    """Companies House file profile entry payload shape."""
+
+    company_number: str
+    profile: CompanyProfileIO
+
+
+class CompaniesHouseFileIO(TypedDict):
+    """Companies House file payload shape."""
+
+    searches: list[CompaniesHouseSearchEntryIO]
+    profiles: list[CompaniesHouseProfileEntryIO]
+
+
 class LocationProfileIO(TypedDict):
     """Location alias payload shape."""
 

@@ -607,3 +607,118 @@ def test_resume_false_writes_to_new_output_dir(
 
     assert outs["enriched"].parent != out_dir
     assert outs["enriched"].parent.name == "run_20260201_120000"
+
+
+def test_stage2_file_source_uses_local_payload(in_memory_fs: InMemoryFileSystem) -> None:
+    stage1_path = Path("data/interim/stage1.csv")
+    in_memory_fs.write_csv(
+        pd.DataFrame(
+            [
+                {
+                    "Organisation Name": "Acme Ltd",
+                    "org_name_normalized": "acme",
+                    "has_multiple_towns": "False",
+                    "has_multiple_counties": "False",
+                    "Town/City": "London",
+                    "County": "Greater London",
+                    "Type & Rating": "A rating",
+                    "Route": "Skilled Worker",
+                    "raw_name_variants": "Acme Ltd",
+                }
+            ]
+        ),
+        stage1_path,
+    )
+
+    ch_file_path = Path("data/reference/companies_house.json")
+    in_memory_fs.write_json(
+        {
+            "searches": [
+                {
+                    "query": "Acme Ltd",
+                    "items": [
+                        {
+                            "title": "ACME LTD",
+                            "company_number": "12345678",
+                            "company_status": "active",
+                            "address": {
+                                "locality": "London",
+                                "region": "Greater London",
+                                "postal_code": "EC1A 1BB",
+                            },
+                        }
+                    ],
+                }
+            ],
+            "profiles": [
+                {
+                    "company_number": "12345678",
+                    "profile": {
+                        "company_name": "ACME LTD",
+                        "company_status": "active",
+                        "type": "ltd",
+                        "date_of_creation": "2015-01-01",
+                        "sic_codes": ["62020"],
+                        "registered_office_address": {
+                            "locality": "London",
+                            "region": "Greater London",
+                            "postal_code": "EC1A 1BB",
+                        },
+                    },
+                }
+            ],
+        },
+        ch_file_path,
+    )
+
+    config = PipelineConfig(
+        ch_api_key="",
+        ch_sleep_seconds=0,
+        ch_max_rpm=600,
+        ch_min_match_score=0.0,
+        ch_search_limit=5,
+        ch_source_type="file",
+        ch_source_path=str(ch_file_path),
+    )
+
+    outs = run_stage2(
+        stage1_path=stage1_path,
+        out_dir=Path("data/processed"),
+        config=config,
+        fs=in_memory_fs,
+        resume=False,
+    )
+
+    enriched_df = in_memory_fs.read_csv(outs["enriched"]).fillna("")
+    assert enriched_df["Organisation Name"].tolist() == ["Acme Ltd"]
+    assert enriched_df.loc[0, "ch_company_number"] == "12345678"
+
+
+def test_stage2_invalid_source_type_raises(in_memory_fs: InMemoryFileSystem) -> None:
+    stage1_path = Path("data/interim/stage1.csv")
+    in_memory_fs.write_csv(
+        pd.DataFrame(
+            [
+                {
+                    "Organisation Name": "Acme Ltd",
+                    "org_name_normalized": "acme",
+                    "has_multiple_towns": "False",
+                    "has_multiple_counties": "False",
+                    "Town/City": "London",
+                    "County": "Greater London",
+                    "Type & Rating": "A rating",
+                    "Route": "Skilled Worker",
+                    "raw_name_variants": "Acme Ltd",
+                }
+            ]
+        ),
+        stage1_path,
+    )
+
+    config = PipelineConfig(
+        ch_api_key="",
+        ch_source_type="invalid",
+    )
+
+    with pytest.raises(ValueError):
+        run_stage2(stage1_path=stage1_path, config=config, fs=in_memory_fs)
