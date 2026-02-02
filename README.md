@@ -175,6 +175,7 @@ src/uk_sponsor_pipeline/
 ├── application/        # Use-case orchestration
 │   ├── companies_house_source.py
 │   ├── extract.py
+│   ├── pipeline.py
 │   ├── transform_register.py
 │   ├── transform_enrich.py
 │   └── transform_score.py
@@ -207,7 +208,7 @@ tests/
 └── conftest.py         # Pytest fixtures and fakes
 ```
 
-Application modules implement pipeline steps; the CLI invokes them directly. Track the refactor in `/.agent/plans/refactor-plan.md`.
+Application modules implement pipeline steps and orchestration; the CLI delegates to them (see `application/pipeline.py`). Track the refactor in `/.agent/plans/refactor-plan.md`.
 
 ### Dependency Injection
 

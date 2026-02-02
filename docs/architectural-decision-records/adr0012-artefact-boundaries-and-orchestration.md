@@ -30,4 +30,4 @@ The pipeline uses step CSV outputs for auditability and resumability. However, t
 
 ## Migration Status
 
-In progress: the target architecture is an `application/` use‑case layer. Residual logic should continue to be moved into `application/` until wrapper modules contain no business logic.
+In progress: the target architecture is an `application/` use‑case layer. Orchestration now lives in `application/pipeline.py`, and the CLI delegates to it; residual logic should continue to be moved into `application/` until wrapper modules contain no business logic.

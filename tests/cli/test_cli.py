@@ -67,19 +67,16 @@ def test_cli_transform_score_rejects_multiple_regions(monkeypatch: pytest.Monkey
 
 
 def test_cli_run_all_skip_download(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = {"transform_register": 0, "transform_enrich": 0, "transform_score": 0}
+    calls: dict[str, object] = {}
 
-    def fake_transform_register(*args: object, **kwargs: object) -> SimpleNamespace:
-        calls["transform_register"] += 1
-        return SimpleNamespace(unique_orgs=1)
-
-    def fake_transform_enrich(*args: object, **kwargs: object) -> dict[str, str]:
-        calls["transform_enrich"] += 1
-        return {"enriched": "enriched.csv"}
-
-    def fake_transform_score(*args: object, **kwargs: object) -> dict[str, str]:
-        calls["transform_score"] += 1
-        return {"shortlist": "short.csv", "explain": "explain.csv"}
+    def fake_run_pipeline(**kwargs: object) -> SimpleNamespace:
+        calls.update(kwargs)
+        return SimpleNamespace(
+            extract=None,
+            register=SimpleNamespace(unique_orgs=1),
+            enrich={"enriched": "enriched.csv"},
+            score={"shortlist": "short.csv", "explain": "explain.csv"},
+        )
 
     def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
         return PipelineConfig()
@@ -93,11 +90,9 @@ def test_cli_run_all_skip_download(monkeypatch: pytest.MonkeyPatch) -> None:
         classmethod(fake_from_env),
     )
     monkeypatch.setattr(cli, "extract_register", fail_download)
-    monkeypatch.setattr(cli, "run_transform_register", fake_transform_register)
-    monkeypatch.setattr(cli, "run_transform_enrich", fake_transform_enrich)
-    monkeypatch.setattr(cli, "run_transform_score", fake_transform_score)
+    monkeypatch.setattr(cli, "run_pipeline", fake_run_pipeline)
 
     result = runner.invoke(cli.app, ["run-all", "--skip-download"])
 
     assert result.exit_code == 0
-    assert calls == {"transform_register": 1, "transform_enrich": 1, "transform_score": 1}
+    assert calls["skip_download"] is True

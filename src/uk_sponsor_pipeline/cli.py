@@ -17,6 +17,7 @@ import typer
 from rich import print as rprint
 
 from .application.extract import ExtractResult, extract_register
+from .application.pipeline import run_pipeline
 from .application.transform_enrich import run_transform_enrich
 from .application.transform_register import TransformRegisterResult, run_transform_register
 from .application.transform_score import run_transform_score
@@ -266,29 +267,7 @@ def run_all(
     Executes: extract → transform-register → transform-enrich → transform-score
     Geographic filters apply to the final shortlist.
     """
-    # Extract
-    if not skip_download:
-        rprint("\n[bold cyan]═══ Extract: Register CSV ═══[/bold cyan]")
-        download_result = extract_register()
-        rprint(f"[green]✓ Downloaded:[/green] {download_result.output_path}")
-    else:
-        rprint("[yellow]Skipping download (--skip-download)[/yellow]")
-
-    # Transform register
-    rprint("\n[bold cyan]═══ Transform: Register ═══[/bold cyan]")
-    register_result = run_transform_register()
-    rprint(f"[green]✓ {register_result.unique_orgs:,} unique organisations[/green]")
-
     config = PipelineConfig.from_env()
-
-    # Transform enrich
-    rprint("\n[bold cyan]═══ Transform: Companies House Enrich ═══[/bold cyan]")
-    enrich_outs = run_transform_enrich(config=config)
-    rprint(f"[green]✓ Enriched: {enrich_outs['enriched']}[/green]")
-
-    # Transform score
-    rprint("\n[bold cyan]═══ Transform: Score & Shortlist ═══[/bold cyan]")
-
     if threshold is not None or region or postcode_prefix:
         config = config.with_overrides(
             tech_score_threshold=threshold,
@@ -296,8 +275,16 @@ def run_all(
             geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
         )
 
-    score_outs = run_transform_score(config=config)
+    result = run_pipeline(config=config, skip_download=skip_download)
+
+    if skip_download:
+        rprint("[yellow]Skipping download (--skip-download)[/yellow]")
+    elif result.extract is not None:
+        rprint(f"[green]✓ Downloaded:[/green] {result.extract.output_path}")
+
+    rprint(f"[green]✓ {result.register.unique_orgs:,} unique organisations[/green]")
+    rprint(f"[green]✓ Enriched: {result.enrich['enriched']}[/green]")
 
     rprint("\n[bold green]═══ Pipeline Complete ═══[/bold green]")
-    rprint(f"Final shortlist: {score_outs['shortlist']}")
-    rprint(f"Explainability: {score_outs['explain']}")
+    rprint(f"Final shortlist: {result.score['shortlist']}")
+    rprint(f"Explainability: {result.score['explain']}")

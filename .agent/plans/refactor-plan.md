@@ -20,7 +20,7 @@ This document is the **single source of truth** for the refactor. Assume no othe
 ## Current Status (2026-02-02)
 
 - Phase 0–5 are complete and gated.
-- Phase 6 is optional.
+- Phase 6 is complete.
 - Phase 7 (docs/ADR audit), Phase 8 (location aliases), Phase 8.5 (Companies House source), and Phase 9 (terminology rename) are complete.
 - Phase 10 (usage split) and Phase 11 (final tidy up) are pending.
 - Domain is the core: domain code must not import application, CLI, or infrastructure.
@@ -49,6 +49,7 @@ These criteria define the final, measurable outcomes for this plan:
 
 - Application layer owns orchestration and core pipeline steps:
   - `src/uk_sponsor_pipeline/application/extract.py`
+  - `src/uk_sponsor_pipeline/application/pipeline.py`
   - `src/uk_sponsor_pipeline/application/transform_register.py`
   - `src/uk_sponsor_pipeline/application/transform_enrich.py`
   - `src/uk_sponsor_pipeline/application/transform_score.py`
@@ -63,7 +64,6 @@ These criteria define the final, measurable outcomes for this plan:
 
 ## Remaining Work Summary (Fresh Session Checklist)
 
-- Phase 6 (optional): consolidate use‑cases into `application/pipeline.py`.
 - Phase 10: split ETL transforms from usage/query logic with independent usage execution.
 - Phase 11: final tidy up (remove scaffolding tests, final docs/ADR/terminology sweep).
 
@@ -106,6 +106,7 @@ This plan is the authoritative entry point for the refactor. It captures the key
 - `resume=False` now writes to a timestamped output subdirectory to avoid stale data reuse.
 - Region filtering enforces a single region; multiple regions are rejected with a clear error.
 - Phase 4 complete: `normalisation.py` removed, `organisation_identity.py` added (including `simple_similarity`); Transform Register rules moved into `domain/sponsor_register.py`; Transform Register now flattens structured locations at IO boundaries only; README updated; new domain tests added.
+- Phase 6 complete: orchestration consolidated in `application/pipeline.py` and CLI `run-all` delegates.
 - Phase 7 complete: docs/ADR audit and test renames aligned with application/domain structure.
 - Phase 8 complete: location aliases added with London/Manchester profiles; domain matching + Transform Score geographic filtering use aliases; README and tests updated.
 - Phase 8.5 complete: configurable Companies House source (API or file) with validated file inputs; Transform Enrich uses source abstraction; README and ADR updated.
@@ -429,9 +430,9 @@ No wrapper package remains; application modules are the single source of truth.
 - Gates: `format → typecheck → lint → test → coverage`.
 - Status: ✅ Completed.
 
-### Phase 6 — Application Orchestration (Optional Consolidation)
+### Phase 6 — Application Orchestration
 
-- Optional: consolidate orchestration into `application/pipeline.py`.
+- Consolidate orchestration into `application/pipeline.py`.
 - Remove any legacy orchestration paths immediately after migration.
 - No wrapper package remains; application modules are the single source of truth.
 - TDD: end-to-end test with in-memory FS/HTTP still passes.
@@ -441,7 +442,7 @@ No wrapper package remains; application modules are the single source of truth.
   - Config/env read once at the CLI entry point; application entry points accept config/dependencies only.
   - Docs updated (module docstrings + README/ADR references).
 - Gates: `format → typecheck → lint → test → coverage`.
-- Status: ⏳ Pending (optional consolidation).
+- Status: ✅ Completed.
 
 ### Phase 7 — Docs + ADR Audit (Now)
 
