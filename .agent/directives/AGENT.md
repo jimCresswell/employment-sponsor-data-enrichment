@@ -1,6 +1,7 @@
 # AGENT.md
 
-Core directives for this repository. Read this file first, then `rules.md` and `project.md`.
+Core directives for this repository. Read this file first, then `rules.md`, `project.md`, and
+`python3.practice.md`.
 
 ## First Question
 
@@ -32,6 +33,7 @@ Always ask: **could it be simpler without compromising quality?**
 
 - `project.md` covers goals, pipeline stages, outputs, and configuration.
 - `rules.md` covers quality gates, testing constraints, and working conventions.
+- `python3.practice.md` covers Python 3.14+ practices, boundaries, and testing expectations.
 
 ## Engineering Expectations
 

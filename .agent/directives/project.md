@@ -27,7 +27,8 @@ Produce a reproducible, auditable shortlist of UK sponsor‑licensed companies l
 1. **extract** → fetch latest GOV.UK sponsor register data.
 2. **transform-register** → filter Skilled Worker + A‑rated and aggregate by organisation.
 3. **transform-enrich** → enrich with Companies House data using reliable, rate‑limited access.
-4. **transform-score** → score for tech‑likelihood and produce a shortlist with explainability.
+4. **transform-score** → score for tech‑likelihood and write the scored artefact.
+5. **usage-shortlist** → apply thresholds and geographic filters, then produce shortlist + explainability.
 
 ## Non‑Goals
 
