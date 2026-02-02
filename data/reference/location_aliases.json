@@ -1,0 +1,83 @@
+{
+  "locations": [
+    {
+      "canonical_name": "London",
+      "aliases": [
+        "London",
+        "Greater London",
+        "City of London",
+        "Inner London",
+        "Outer London",
+        "Central London"
+      ],
+      "regions": [
+        "Greater London",
+        "London"
+      ],
+      "localities": [
+        "City of London",
+        "Camden",
+        "Westminster",
+        "Southwark",
+        "Lambeth",
+        "Islington",
+        "Hackney",
+        "Tower Hamlets",
+        "Kensington and Chelsea",
+        "Hammersmith and Fulham",
+        "Wandsworth",
+        "Haringey",
+        "Lewisham",
+        "Greenwich",
+        "Croydon",
+        "Ealing",
+        "Newham",
+        "Brent",
+        "Barnet"
+      ],
+      "postcode_prefixes": [
+        "EC",
+        "WC",
+        "E",
+        "N",
+        "NW",
+        "SE",
+        "SW",
+        "W"
+      ],
+      "notes": "London cluster using common administrative names, boroughs, and London postcode areas."
+    },
+    {
+      "canonical_name": "Manchester",
+      "aliases": [
+        "Manchester",
+        "City of Manchester",
+        "Greater Manchester"
+      ],
+      "regions": [
+        "Greater Manchester",
+        "Manchester"
+      ],
+      "localities": [
+        "Manchester",
+        "Salford",
+        "Trafford",
+        "Stockport",
+        "Tameside",
+        "Rochdale",
+        "Oldham",
+        "Bolton",
+        "Bury",
+        "Wigan"
+      ],
+      "postcode_prefixes": [
+        "M",
+        "OL",
+        "SK",
+        "BL",
+        "WN"
+      ],
+      "notes": "Manchester cluster using Greater Manchester boroughs and common postcode areas."
+    }
+  ]
+}

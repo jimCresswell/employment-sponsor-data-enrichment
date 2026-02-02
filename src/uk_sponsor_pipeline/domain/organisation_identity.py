@@ -1,7 +1,14 @@
-"""Name normalization utilities for organization name matching.
+"""Organisation identity and name normalisation utilities.
 
-This module provides functions to normalize organization names for matching
-and deduplication while preserving the original names for audit trails.
+Usage example:
+    from uk_sponsor_pipeline.domain.organisation_identity import (
+        generate_query_variants,
+        normalize_org_name,
+        simple_similarity,
+    )
+
+    query_variants = generate_query_variants("Acme Ltd")
+    score = simple_similarity("Acme Ltd", "Acme Limited")
 """
 
 from __future__ import annotations
@@ -44,7 +51,7 @@ TRADING_AS_PATTERNS = (
 
 @dataclass
 class NormalizedName:
-    """Result of name normalization."""
+    """Result of name normalisation."""
 
     raw: str
     normalized: str
@@ -52,7 +59,7 @@ class NormalizedName:
 
 
 def normalize_org_name(name: str) -> str:
-    """Normalize organization name for matching.
+    """Normalise organisation name for matching.
 
     Transformations:
     1. Lowercase
@@ -62,10 +69,10 @@ def normalize_org_name(name: str) -> str:
     5. Strip leading/trailing whitespace
 
     Args:
-        name: Raw organization name
+        name: Raw organisation name
 
     Returns:
-        Normalized name for matching
+        Normalised name for matching
     """
     if not name:
         return ""
@@ -77,7 +84,6 @@ def normalize_org_name(name: str) -> str:
 
     # Remove company suffixes (word boundaries)
     for suffix in COMPANY_SUFFIXES:
-        # Match suffix at word boundary
         pattern = rf"\b{re.escape(suffix)}\b"
         s = re.sub(pattern, " ", s, flags=re.IGNORECASE)
 
@@ -88,18 +94,10 @@ def normalize_org_name(name: str) -> str:
 
 
 def extract_trading_name(name: str) -> str | None:
-    """Extract trading name from "X T/A Y" or "X trading as Y" pattern.
-
-    Args:
-        name: Organization name possibly containing trading as pattern
-
-    Returns:
-        The trading name (Y) if pattern found, else None
-    """
+    """Extract trading name from "X T/A Y" or "X trading as Y" pattern."""
     for pattern in TRADING_AS_PATTERNS:
         match = re.search(pattern, name, re.IGNORECASE)
         if match:
-            # Return everything after the pattern
             after = name[match.end() :].strip()
             if after:
                 return after
@@ -107,28 +105,14 @@ def extract_trading_name(name: str) -> str | None:
 
 
 def extract_bracketed_names(name: str) -> list[str]:
-    """Extract names from brackets.
-
-    Examples:
-        "Foo (Bar Ltd)" → ["Foo", "Bar Ltd"]
-        "ABC Holdings (XYZ Corp)" → ["ABC Holdings", "XYZ Corp"]
-
-    Args:
-        name: Organization name possibly containing brackets
-
-    Returns:
-        List of extracted names (may be empty)
-    """
+    """Extract names from brackets."""
     names: list[str] = []
-
-    # Find all bracketed content
     brackets = re.findall(r"\(([^)]+)\)", name)
     for bracket in brackets:
         cleaned = bracket.strip()
         if cleaned and len(cleaned) > 2:
             names.append(cleaned)
 
-    # Also get the name without brackets
     without_brackets = re.sub(r"\([^)]*\)", "", name).strip()
     if without_brackets and without_brackets != name.strip():
         names.insert(0, without_brackets)
@@ -137,39 +121,13 @@ def extract_bracketed_names(name: str) -> list[str]:
 
 
 def split_on_delimiters(name: str) -> list[str]:
-    """Split name on common delimiters.
-
-    Examples:
-        "Foo - Bar" → ["Foo", "Bar"]
-        "ABC / XYZ Corp" → ["ABC", "XYZ Corp"]
-
-    Args:
-        name: Organization name with possible delimiters
-
-    Returns:
-        List of split parts (may have 1 element if no delimiters)
-    """
-    # Split on " - " or " / " or " | "
+    """Split name on common delimiters."""
     parts = re.split(r"\s+[-/|]\s+", name)
     return [p.strip() for p in parts if p.strip()]
 
 
 def generate_query_variants(name: str) -> list[str]:
-    """Generate search query variants for Companies House API.
-
-    Strategy:
-    1. Original name
-    2. Trading name (if "T/A" pattern found)
-    3. Bracketed names extracted
-    4. Delimiter-split parts
-    5. Normalized versions of above
-
-    Args:
-        name: Raw organization name
-
-    Returns:
-        List of query variants, deduplicated, original first
-    """
+    """Generate search query variants for Companies House API."""
     if not name or not name.strip():
         return []
 
@@ -185,11 +143,9 @@ def generate_query_variants(name: str) -> list[str]:
             variants.append(v)
             seen_normalized.add(norm)
 
-    # Trading name
     trading = extract_trading_name(name)
     if trading:
         add_variant(trading)
-        # Also add the part before "T/A"
         for pattern in TRADING_AS_PATTERNS:
             match = re.search(pattern, name, re.IGNORECASE)
             if match:
@@ -198,13 +154,33 @@ def generate_query_variants(name: str) -> list[str]:
                     add_variant(before)
                 break
 
-    # Bracketed names
     for bracketed in extract_bracketed_names(name):
         add_variant(bracketed)
 
-    # Delimiter splits
     for part in split_on_delimiters(name):
         if part != name.strip():
             add_variant(part)
 
-    return variants[:5]  # Limit to 5 variants max
+    return variants[:5]
+
+
+def _token_sort_key(name: str) -> str:
+    toks = normalize_org_name(name).split()
+    toks.sort()
+    return " ".join(toks)
+
+
+def simple_similarity(a: str, b: str) -> float:
+    """Calculate name similarity using Jaccard + character overlap."""
+    a0, b0 = _token_sort_key(a), _token_sort_key(b)
+    if not a0 or not b0:
+        return 0.0
+
+    set_a, set_b = set(a0.split()), set(b0.split())
+    jacc = len(set_a & set_b) / max(1, len(set_a | set_b))
+
+    common = sum(min(a0.count(ch), b0.count(ch)) for ch in set(a0))
+    denom = max(len(a0), len(b0))
+    char_overlap = common / denom if denom else 0.0
+
+    return 0.6 * jacc + 0.4 * char_overlap

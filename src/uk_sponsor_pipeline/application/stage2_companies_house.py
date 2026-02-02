@@ -28,9 +28,13 @@ from ..domain.companies_house import (
     MatchScore,
     build_candidate_row,
     build_enriched_row,
-    build_profile_error_row,
     build_unmatched_row,
     score_candidates,
+)
+from ..domain.organisation_identity import (
+    generate_query_variants,
+    normalize_org_name,
+    simple_similarity,
 )
 from ..exceptions import AuthenticationError, CircuitBreakerOpen, RateLimitError
 from ..infrastructure import LocalFileSystem, build_companies_house_client
@@ -39,7 +43,6 @@ from ..infrastructure.io.validation import (
     parse_companies_house_search,
     validate_as,
 )
-from ..normalization import generate_query_variants, normalize_org_name
 from ..observability import get_logger
 from ..protocols import FileSystem, HttpClient
 from ..schemas import (
@@ -51,6 +54,8 @@ from ..schemas import (
 )
 from ..types import (
     BatchRange,
+    CompanyProfile,
+    SearchItem,
     Stage1Row,
     Stage2CandidateRow,
     Stage2EnrichedRow,
@@ -74,33 +79,14 @@ def _normalize_for_cache(s: str) -> str:
 
 
 def _cache_key(prefix: str, *parts: str) -> str:
-    """Create cache key from parts with normalization."""
+    """Create cache key from parts with normalisation."""
     normalized = "_".join(_normalize_for_cache(p) for p in parts if p)
     h = hashlib.sha256(normalized.encode()).hexdigest()[:16]
     return f"{prefix}:{h}"
 
 
-def _token_sort_key(s: str) -> str:
-    """Create token-sorted key for name comparison."""
-    toks = normalize_org_name(s).split()
-    toks.sort()
-    return " ".join(toks)
-
-
-def _simple_similarity(a: str, b: str) -> float:
-    """Calculate name similarity using Jaccard + character overlap."""
-    a0, b0 = _token_sort_key(a), _token_sort_key(b)
-    if not a0 or not b0:
-        return 0.0
-
-    set_a, set_b = set(a0.split()), set(b0.split())
-    jacc = len(set_a & set_b) / max(1, len(set_a | set_b))
-
-    common = sum(min(a0.count(ch), b0.count(ch)) for ch in set(a0))
-    denom = max(len(a0), len(b0))
-    char_overlap = common / denom if denom else 0.0
-
-    return 0.6 * jacc + 0.4 * char_overlap
+def _run_dir_name(now: datetime) -> str:
+    return now.strftime("run_%Y%m%d_%H%M%S")
 
 
 def _coerce_output_columns(df: pd.DataFrame, columns: tuple[str, ...]) -> pd.DataFrame:
@@ -231,7 +217,7 @@ def run_stage2(
         batch_size: Override batch size for this run (default: config.ch_batch_size).
 
     Returns:
-        Dict with paths to enriched, unmatched, and candidates files.
+        Dict with paths to enriched, unmatched, candidates, checkpoint, and resume report files.
 
     Raises:
         AuthenticationError: If API key is invalid (stops immediately).
@@ -251,9 +237,14 @@ def run_stage2(
     stage1_path = Path(stage1_path)
     out_dir = Path(out_dir)
     cache_dir = Path(cache_dir)
-    fs.mkdir(out_dir, parents=True)
 
     # Output paths
+    logger = get_logger("uk_sponsor_pipeline.stage2")
+    if not resume:
+        out_dir = out_dir / _run_dir_name(datetime.now(UTC))
+        logger.info("Resume disabled; writing to new output directory: %s", out_dir)
+    fs.mkdir(out_dir, parents=True)
+
     out_enriched = out_dir / "stage2_enriched_companies_house.csv"
     out_unmatched = out_dir / "stage2_unmatched.csv"
     out_candidates = out_dir / "stage2_candidates_top3.csv"
@@ -261,7 +252,6 @@ def run_stage2(
     out_resume_report = out_dir / "stage2_resume_report.json"
 
     # Load input
-    logger = get_logger("uk_sponsor_pipeline.stage2")
     run_started_at_utc = datetime.now(UTC)
     run_started_perf = time.perf_counter()
 
@@ -424,14 +414,15 @@ def run_stage2(
                         f"Companies House search failed for query '{query}': {e}"
                     ) from e
 
-                items = parse_companies_house_search(search)
+                items_io = parse_companies_house_search(search)
+                items = validate_as(list[SearchItem], items_io)
                 scored = score_candidates(
                     org_norm=org_norm,
                     town_norm=town_norm,
                     county_norm=county_norm,
                     items=items,
                     query_used=query,
-                    similarity_fn=_simple_similarity,
+                    similarity_fn=simple_similarity,
                     normalize_fn=normalize_org_name,
                 )
                 all_candidates.extend(scored)
@@ -475,15 +466,13 @@ def run_stage2(
                 flush_batch()
                 raise
             except Exception as e:
-                batch_unmatched.append(
-                    build_profile_error_row(row=row, best_match=best_match, error=e)
-                )
-                mark_processed(org)
-                if len(batch_processed) >= batch_size_value:
-                    flush_batch()
-                continue
+                flush_batch()
+                raise RuntimeError(
+                    f"Companies House profile fetch failed for {best_match.company_number}: {e}"
+                ) from e
 
-            profile = parse_companies_house_profile(raw_profile)
+            profile_io = parse_companies_house_profile(raw_profile)
+            profile = validate_as(CompanyProfile, profile_io)
             batch_enriched.append(
                 build_enriched_row(row=row, best_match=best_match, profile=profile)
             )
@@ -577,4 +566,10 @@ def run_stage2(
         )
         fs.write_json(dict(report), out_resume_report)
 
-    return {"enriched": out_enriched, "unmatched": out_unmatched, "candidates": out_candidates}
+    return {
+        "enriched": out_enriched,
+        "unmatched": out_unmatched,
+        "candidates": out_candidates,
+        "checkpoint": out_checkpoint,
+        "resume_report": out_resume_report,
+    }

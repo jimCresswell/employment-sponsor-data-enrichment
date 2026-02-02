@@ -19,14 +19,14 @@ def test_with_overrides_preserves_fields() -> None:
         ch_circuit_breaker_timeout_seconds=99.0,
         ch_batch_size=42,
         tech_score_threshold=0.6,
-        geo_filter_regions=("London",),
+        geo_filter_region="London",
         geo_filter_postcodes=("EC",),
     )
 
-    updated = base.with_overrides(tech_score_threshold=0.4, geo_filter_regions=("Leeds",))
+    updated = base.with_overrides(tech_score_threshold=0.4, geo_filter_region="Leeds")
 
     assert updated.tech_score_threshold == 0.4
-    assert updated.geo_filter_regions == ("Leeds",)
+    assert updated.geo_filter_region == "Leeds"
     assert updated.geo_filter_postcodes == ("EC",)
 
     assert updated.ch_api_key == base.ch_api_key

@@ -11,8 +11,8 @@ If Stage 2 fails with `401 Unauthorized` or `Invalid Authorization`:
 
 ## Rate Limits, Circuit Breaker, and Resume
 
-Stage 2 fails fast on rate‑limit exhaustion or circuit breaker open errors. This is intentional to protect the API and preserve data quality.
+Stage 2 fails fast on authentication, rate‑limit exhaustion, circuit breaker open, or unexpected HTTP errors. This is intentional to protect the API and preserve data quality.
 
 - Fix the underlying issue (wait for limits to reset, reduce batch size, or correct configuration).
 - Re‑run with `--resume` to continue from the last checkpoint.
-- Check `data/processed/stage2_resume_report.json` for the exact resume command.
+- Check `data/processed/stage2_resume_report.json` for the exact resume command (or the run subdirectory if `--no-resume` was used).

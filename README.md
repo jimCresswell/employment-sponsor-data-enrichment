@@ -79,16 +79,18 @@ Resume data is written to `data/processed/stage2_checkpoint.csv` and
 
 Stage 2 fails fast on authentication, rate limit, circuit breaker, or unexpected HTTP errors. Fix the issue and rerun with `--resume`; the resume report includes a ready‑made command.
 
+When running with `--no-resume`, Stage 2 writes to a new timestamped subdirectory under the output directory to avoid stale data reuse.
+
 ### Geographic Filtering
 
-Filter the final shortlist by region or postcode:
+Filter the final shortlist by region or postcode (single region only):
 
 ```bash
 # Filter to London companies only
 uv run uk-sponsor stage3 --region London
 
-# Multiple regions
-uv run uk-sponsor stage3 --region London --region Manchester --region Bristol
+# Single region only
+uv run uk-sponsor stage3 --region London
 
 # Postcode prefix filtering
 uv run uk-sponsor stage3 --postcode-prefix EC --postcode-prefix SW
@@ -114,16 +116,25 @@ Observability is standardised via a shared logger factory with UTC timestamps so
 src/uk_sponsor_pipeline/
 ├── cli.py              # Typer CLI entry point
 ├── config.py           # Pipeline configuration
+├── io_contracts.py     # IO boundary contracts for infrastructure
 ├── protocols.py        # Interface-style contracts
+├── application/        # Use-case orchestration
+│   ├── download.py
+│   ├── stage1.py
+│   ├── stage2_companies_house.py
+│   └── stage3_scoring.py
 ├── infrastructure/     # Concrete implementations (DI pattern)
-│   ├── cache.py
-│   ├── filesystem.py
-│   ├── http.py
+│   ├── io/
+│   │   ├── filesystem.py
+│   │   ├── http.py
+│   │   └── validation.py
 │   └── resilience.py
 ├── domain/
-│   └── companies_house.py
+│   ├── companies_house.py
+│   ├── organisation_identity.py
+│   ├── scoring.py
+│   └── sponsor_register.py
 ├── observability/      # Shared logging helpers
-├── normalization.py    # Org name processing utilities
 ├── schemas.py          # Column contracts per stage
 └── stages/
     ├── download.py
@@ -133,8 +144,8 @@ src/uk_sponsor_pipeline/
 
 tests/
 ├── conftest.py         # Pytest fixtures and fakes
-├── test_normalization.py
-└── test_stage3.py
+├── test_domain_sponsor_register.py
+└── test_normalization.py
 ```
 
 The current `stages/` modules implement pipeline steps, but the architectural direction is to move orchestration into an application layer with shared infrastructure and keep `stages/` as thin delegates (or remove it entirely). Track this in `/.agent/plans/refactor-plan.md`.
@@ -235,6 +246,9 @@ Companies are scored on multiple features:
 
 ## Output Files
 
+When running Stage 2 with `--no-resume`, outputs are written under a timestamped
+subdirectory of `data/processed/` (paths below reflect the default `--resume` behaviour).
+
 | File                                                 | Description                                   |
 | ---------------------------------------------------- | --------------------------------------------- |
 | `reports/download_manifest.json`                     | Download metadata with SHA256 hash            |
@@ -304,7 +318,7 @@ CH_BATCH_SIZE=250             # Organisations per batch (incremental output)
 CH_MIN_MATCH_SCORE=0.72       # Minimum score to accept a match
 CH_SEARCH_LIMIT=5             # Candidates per search
 TECH_SCORE_THRESHOLD=0.55     # Minimum score for shortlist
-GEO_FILTER_REGIONS=           # Comma-separated region filter
+GEO_FILTER_REGIONS=           # Single region filter (one value only)
 GEO_FILTER_POSTCODES=         # Comma-separated postcode prefix filter
 ```
 

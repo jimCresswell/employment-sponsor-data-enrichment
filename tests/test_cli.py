@@ -44,8 +44,24 @@ def test_cli_stage3_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.exit_code == 0
     assert captured["config"].tech_score_threshold == 0.4
-    assert captured["config"].geo_filter_regions == ("London",)
+    assert captured["config"].geo_filter_region == "London"
     assert captured["config"].geo_filter_postcodes == ("EC",)
+
+
+def test_cli_stage3_rejects_multiple_regions(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        return PipelineConfig()
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    result = runner.invoke(cli.app, ["stage3", "--region", "London", "--region", "Leeds"])
+
+    assert result.exit_code != 0
+    assert "Only one --region" in result.output
 
 
 def test_cli_run_all_skip_download(monkeypatch: pytest.MonkeyPatch) -> None:

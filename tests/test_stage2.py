@@ -1,5 +1,6 @@
 """Tests for Stage 2 Companies House integration."""
 
+from datetime import datetime, tzinfo
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -249,7 +250,7 @@ class TestStage2CandidateOrdering:
         monkeypatch.setattr(s2, "score_candidates", fake_score_candidates)
 
         out_dir = tmp_path / "out"
-        run_stage2(
+        outs = run_stage2(
             stage1_path=stage1_csv,
             out_dir=out_dir,
             cache_dir=tmp_path / "cache",
@@ -258,7 +259,7 @@ class TestStage2CandidateOrdering:
             resume=False,
         )
 
-        candidates_df = pd.read_csv(out_dir / "stage2_candidates_top3.csv", dtype=str).fillna("")
+        candidates_df = pd.read_csv(outs["candidates"], dtype=str).fillna("")
         top_score = float(str(candidates_df.loc[0, "candidate_score"]))
         assert top_score == 0.7
 
@@ -477,7 +478,7 @@ class TestStage2Resume:
 
         monkeypatch.setattr(s2, "score_candidates", fake_score_candidates)
 
-        run_stage2(
+        outs = run_stage2(
             stage1_path=stage1_path,
             out_dir=out_dir,
             cache_dir=cache_dir,
@@ -489,11 +490,11 @@ class TestStage2Resume:
             batch_count=1,
         )
 
-        checkpoint_df = in_memory_fs.read_csv(out_dir / "stage2_checkpoint.csv")
-        unmatched_df = in_memory_fs.read_csv(out_dir / "stage2_unmatched.csv")
+        checkpoint_df = in_memory_fs.read_csv(outs["checkpoint"])
+        unmatched_df = in_memory_fs.read_csv(outs["unmatched"])
         report = validate_as(
             Stage2ResumeReport,
-            in_memory_fs.read_json(out_dir / "stage2_resume_report.json"),
+            in_memory_fs.read_json(outs["resume_report"]),
         )
 
         assert checkpoint_df["Organisation Name"].tolist() == ["Beta Ltd"]
@@ -573,3 +574,136 @@ def test_stage2_requires_config() -> None:
     with pytest.raises(RuntimeError) as exc_info:
         run_stage2()
     assert "PipelineConfig" in str(exc_info.value)
+
+
+def test_stage2_profile_fetch_errors_fail_fast(
+    in_memory_fs: InMemoryFileSystem,
+    fake_http_client: FakeHttpClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stage1_path = Path("data/interim/stage1.csv")
+    out_dir = Path("data/processed")
+    cache_dir = Path("data/cache")
+
+    in_memory_fs.write_csv(
+        pd.DataFrame(
+            [
+                {
+                    "Organisation Name": "Acme Ltd",
+                    "org_name_normalized": "acme ltd",
+                    "has_multiple_towns": "False",
+                    "has_multiple_counties": "False",
+                    "Town/City": "London",
+                    "County": "Greater London",
+                    "Type & Rating": "A rating",
+                    "Route": "Skilled Worker",
+                    "raw_name_variants": "Acme Ltd",
+                }
+            ]
+        ),
+        stage1_path,
+    )
+
+    config = PipelineConfig(
+        ch_api_key="test-key",
+        ch_sleep_seconds=0,
+        ch_max_rpm=600,
+        ch_min_match_score=0.0,
+        ch_search_limit=1,
+    )
+
+    fake_http_client.responses = {
+        "search/companies": {
+            "items": [
+                {
+                    "title": "Acme Ltd",
+                    "company_number": "12345678",
+                    "company_status": "active",
+                    "address": {"locality": "London", "region": "Greater London"},
+                }
+            ]
+        }
+    }
+
+    def fake_score_candidates(
+        *,
+        org_norm: str,
+        town_norm: str,
+        county_norm: str,
+        items: list[SearchItem],
+        query_used: str,
+        similarity_fn: SimilarityFn,
+        normalize_fn: NormalizeFn,
+    ) -> list[CandidateMatch]:
+        score = MatchScore(0.9, 0.8, 0.05, 0.03, 0.02)
+        return [
+            CandidateMatch(
+                company_number="12345678",
+                title="Acme Ltd",
+                status="active",
+                locality="London",
+                region="Greater London",
+                postcode="EC1A 1BB",
+                score=score,
+                query_used=query_used,
+            )
+        ]
+
+    monkeypatch.setattr(s2, "score_candidates", fake_score_candidates)
+
+    with pytest.raises(RuntimeError, match="profile fetch failed"):
+        run_stage2(
+            stage1_path=stage1_path,
+            out_dir=out_dir,
+            cache_dir=cache_dir,
+            config=config,
+            http_client=fake_http_client,
+            resume=True,
+            fs=in_memory_fs,
+        )
+
+    assert in_memory_fs.exists(out_dir / "stage2_resume_report.json")
+    assert not in_memory_fs.exists(out_dir / "stage2_unmatched.csv")
+
+
+def test_resume_false_writes_to_new_output_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage1_csv = tmp_path / "stage1.csv"
+    stage1_csv.write_text(
+        "Organisation Name,org_name_normalized,has_multiple_towns,has_multiple_counties,"
+        "Town/City,County,Type & Rating,Route,raw_name_variants\n"
+        "Acme Ltd,acme,False,False,London,Greater London,A rating,Skilled Worker,Acme Ltd\n"
+    )
+
+    config = PipelineConfig(
+        ch_api_key="test-key",
+        ch_sleep_seconds=0,
+        ch_max_rpm=600,
+        ch_min_match_score=1.0,
+        ch_search_limit=1,
+    )
+
+    class FixedDatetime:
+        @staticmethod
+        def now(tz: tzinfo | None = None) -> datetime:
+            return datetime(2026, 2, 1, 12, 0, 0, tzinfo=tz)
+
+    monkeypatch.setattr(s2, "datetime", FixedDatetime)
+
+    class DummyHttp:
+        def get_json(self, url: str, cache_key: str | None = None) -> dict[str, object]:
+            return {"items": []}
+
+    out_dir = tmp_path / "out"
+    outs = run_stage2(
+        stage1_path=stage1_csv,
+        out_dir=out_dir,
+        cache_dir=tmp_path / "cache",
+        config=config,
+        http_client=DummyHttp(),
+        resume=False,
+    )
+
+    assert outs["enriched"].parent != out_dir
+    assert outs["enriched"].parent.name == "run_20260201_120000"

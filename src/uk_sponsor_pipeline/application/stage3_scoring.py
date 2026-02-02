@@ -10,14 +10,12 @@ Improvements over original:
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 
 from ..config import PipelineConfig
+from ..domain.scoring import ScoringFeatures, calculate_features
 from ..infrastructure import LocalFileSystem
 from ..infrastructure.io.validation import validate_as
 from ..observability import get_logger
@@ -30,237 +28,24 @@ from ..schemas import (
 )
 from ..types import Stage2EnrichedRow
 
-# SIC code mappings for tech signals (prefix → score)
-TECH_SIC_PREFIXES = {
-    "620": 0.50,  # Computer programming, consultancy, IT services
-    "631": 0.40,  # Data processing, hosting
-    "582": 0.35,  # Software publishing
-    "611": 0.25,  # Wired telecommunications
-    "612": 0.25,  # Wireless telecommunications
-    "619": 0.20,  # Other telecommunications
-    "721": 0.20,  # R&D in natural sciences
-    "722": 0.15,  # R&D in social sciences
-    "711": 0.15,  # Architectural and engineering activities
-}
-
-# Negative SIC signals (sectors unlikely to hire senior engineers)
-NEGATIVE_SIC_PREFIXES = {
-    "861": -0.25,  # Hospital activities
-    "862": -0.20,  # Medical practice
-    "869": -0.15,  # Other human health
-    "871": -0.25,  # Residential nursing care
-    "872": -0.25,  # Residential care for disabilities
-    "873": -0.25,  # Residential care for elderly
-    "879": -0.25,  # Other residential care
-    "412": -0.15,  # Construction of buildings
-    "411": -0.10,  # Development of building projects
-    "432": -0.10,  # Electrical installation
-    "439": -0.10,  # Other construction
-    "561": -0.20,  # Restaurants
-    "562": -0.20,  # Event catering
-    "551": -0.15,  # Hotels
-}
-
-# Name keywords that suggest tech company
-TECH_KEYWORDS = frozenset(
-    {
-        "software",
-        "digital",
-        "tech",
-        "technology",
-        "data",
-        "ai",
-        "cloud",
-        "cyber",
-        "app",
-        "platform",
-        "saas",
-        "fintech",
-        "healthtech",
-        "edtech",
-        "devops",
-        "analytics",
-        "machine",
-        "learning",
-        "automation",
-    }
-)
-
-# Name keywords that suggest non-tech
-NEGATIVE_KEYWORDS = frozenset(
-    {
-        "care",
-        "nursing",
-        "recruitment",
-        "staffing",
-        "construction",
-        "cleaning",
-        "security",
-        "catering",
-        "restaurant",
-        "hotel",
-    }
-)
-
-# Company types and their weights
-COMPANY_TYPE_WEIGHTS = {
-    "ltd": 0.08,
-    "private-limited-company": 0.08,
-    "public limited company": 0.05,
-    "plc": 0.05,
-    "llp": 0.06,
-    "limited-partnership": 0.04,
-    "community-interest-company": 0.02,
-    "charitable-incorporated-organisation": 0.01,
-}
-
-
-@dataclass
-class ScoringFeatures:
-    """Feature breakdown for tech-likelihood scoring."""
-
-    sic_tech_score: float  # 0.0–0.5 from SIC codes
-    is_active_score: float  # 0.0 or 0.10
-    company_age_score: float  # 0.0–0.15 based on years since creation
-    company_type_score: float  # 0.0–0.10 based on company type
-    name_keyword_score: float  # -0.10 to 0.15 based on name keywords
-
-    @property
-    def total(self) -> float:
-        """Calculate total score, clamped to 0.0–1.0."""
-        raw = (
-            self.sic_tech_score
-            + self.is_active_score
-            + self.company_age_score
-            + self.company_type_score
-            + self.name_keyword_score
-        )
-        return max(0.0, min(1.0, raw))
-
-    @property
-    def bucket(self) -> str:
-        """Classify into role-fit bucket."""
-        if self.total >= 0.55:
-            return "strong"
-        elif self.total >= 0.35:
-            return "possible"
-        else:
-            return "unlikely"
-
-
-def parse_sic_list(s: str) -> list[str]:
-    """Parse semicolon/comma-separated SIC codes."""
-    if not s.strip():
-        return []
-    parts = [p.strip() for p in s.replace(",", ";").split(";")]
-    return [p for p in parts if p]
-
-
-def score_from_sic(sics: list[str]) -> float:
-    """Calculate SIC-based tech score."""
-    if not sics:
-        return 0.10  # Unknown: small baseline
-
-    score = 0.10  # Baseline
-    for sic in sics:
-        pref3 = sic[:3]
-        # Tech positive signals (take max)
-        for pref, val in TECH_SIC_PREFIXES.items():
-            if pref3.startswith(pref):
-                score = max(score, val)
-        # Negative signals (additive penalty)
-        for pref, val in NEGATIVE_SIC_PREFIXES.items():
-            if pref3.startswith(pref):
-                score += val
-
-    return max(0.0, min(0.5, score))
-
-
-def score_company_age(date_of_creation: str) -> float:
-    """Score based on company age (established companies score higher)."""
-    if not date_of_creation:
-        return 0.05  # Unknown: small baseline
-
-    try:
-        created = datetime.strptime(date_of_creation, "%Y-%m-%d")
-        years = (datetime.now() - created).days / 365.25
-
-        if years >= 10:
-            return 0.12
-        elif years >= 5:
-            return 0.10
-        elif years >= 2:
-            return 0.07
-        elif years >= 1:
-            return 0.04
-        else:
-            return 0.02  # Very new
-    except (ValueError, TypeError):
-        return 0.05
-
-
-def score_company_type(company_type: str) -> float:
-    """Score based on company type."""
-    ct = (company_type or "").lower().strip()
-    return COMPANY_TYPE_WEIGHTS.get(ct, 0.03)
-
-
-def score_name_keywords(name: str) -> float:
-    """Score based on keywords in company name."""
-    if not name:
-        return 0.0
-
-    name_lower = name.lower()
-    words = set(re.findall(r"\w+", name_lower))
-
-    score = 0.0
-
-    # Positive keywords
-    tech_matches = words & TECH_KEYWORDS
-    if tech_matches:
-        score += min(0.15, len(tech_matches) * 0.05)
-
-    # Negative keywords
-    negative_matches = words & NEGATIVE_KEYWORDS
-    if negative_matches:
-        score -= min(0.10, len(negative_matches) * 0.05)
-
-    return score
-
-
-def calculate_features(row: Stage2EnrichedRow) -> ScoringFeatures:
-    """Calculate all scoring features for a company row."""
-    sics = parse_sic_list(row["ch_sic_codes"])
-    status = row["ch_company_status"].lower()
-    date_of_creation = row["ch_date_of_creation"]
-    company_type = row["ch_company_type"]
-    company_name = row["ch_company_name"] or row["Organisation Name"]
-
-    return ScoringFeatures(
-        sic_tech_score=score_from_sic(sics),
-        is_active_score=0.10 if status == "active" else 0.0,
-        company_age_score=score_company_age(date_of_creation),
-        company_type_score=score_company_type(company_type),
-        name_keyword_score=score_name_keywords(company_name),
-    )
-
 
 def _matches_geographic_filter(
     row: Stage2EnrichedRow,
-    regions: tuple[str, ...],
+    region: str | None,
     postcodes: tuple[str, ...],
 ) -> bool:
     """Check if company matches geographic filters."""
-    if not regions and not postcodes:
+    if not region and not postcodes:
         return True  # No filter = all pass
 
-    region = row["ch_address_region"].lower()
+    row_region = row["ch_address_region"].lower()
     locality = row["ch_address_locality"].lower()
     postcode = row["ch_address_postcode"].upper()
 
     # Check region filter
-    if regions:
-        region_match = any(r.lower() in region or r.lower() in locality for r in regions)
+    if region:
+        target = region.lower()
+        region_match = target in row_region or target in locality
         if region_match:
             return True
 
@@ -270,14 +55,14 @@ def _matches_geographic_filter(
         if postcode_match:
             return True
 
-    return not regions and not postcodes  # Only pass if no filters specified
+    return not region and not postcodes  # Only pass if no filters specified
 
 
 def _matches_geographic_filter_row(
-    row: pd.Series[str], regions: tuple[str, ...], postcodes: tuple[str, ...]
+    row: pd.Series[str], region: str | None, postcodes: tuple[str, ...]
 ) -> bool:
     return _matches_geographic_filter(
-        validate_as(Stage2EnrichedRow, row.to_dict()), regions, postcodes
+        validate_as(Stage2EnrichedRow, row.to_dict()), region, postcodes
     )
 
 
@@ -351,11 +136,11 @@ def run_stage3(
     ].copy()
 
     # Apply geographic filter if specified
-    if config.geo_filter_regions or config.geo_filter_postcodes:
+    if config.geo_filter_region or config.geo_filter_postcodes:
         geo_mask = shortlist.apply(
             _matches_geographic_filter_row,
             axis=1,
-            args=(config.geo_filter_regions, config.geo_filter_postcodes),
+            args=(config.geo_filter_region, config.geo_filter_postcodes),
         )
         shortlist = shortlist[geo_mask]
         logger.info("Geographic filter: %s companies match", int(geo_mask.sum()))

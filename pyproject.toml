@@ -84,6 +84,12 @@ source_modules = ["uk_sponsor_pipeline.domain"]
 forbidden_modules = ["uk_sponsor_pipeline.infrastructure"]
 
 [[tool.importlinter.contracts]]
+name = "Domain must not import application"
+type = "forbidden"
+source_modules = ["uk_sponsor_pipeline.domain"]
+forbidden_modules = ["uk_sponsor_pipeline.application"]
+
+[[tool.importlinter.contracts]]
 name = "Domain must not import CLI or stages"
 type = "forbidden"
 source_modules = ["uk_sponsor_pipeline.domain"]

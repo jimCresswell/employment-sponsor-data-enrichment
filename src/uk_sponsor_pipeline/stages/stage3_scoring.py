@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from ..application.stage3_scoring import (
+from ..application.stage3_scoring import run_stage3
+from ..domain.scoring import (
     ScoringFeatures,
     calculate_features,
     parse_sic_list,
-    run_stage3,
     score_company_age,
     score_company_type,
     score_from_sic,

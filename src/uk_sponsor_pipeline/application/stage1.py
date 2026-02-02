@@ -1,4 +1,4 @@
-"""Stage 1: Filter to Skilled Worker + A-rated and aggregate by organization.
+"""Stage 1: Filter to Skilled Worker + A-rated and aggregate by organisation.
 
 Improvements over original:
 - Adds org_name_normalized for matching
@@ -13,9 +13,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pandas as pd
+
+from ..domain.organisation_identity import normalize_org_name
+from ..domain.sponsor_register import RawSponsorRow, build_sponsor_register_snapshot
 from ..infrastructure import LocalFileSystem
-from ..infrastructure.io.validation import IncomingDataError, validate_as
-from ..normalization import normalize_org_name
+from ..infrastructure.io.validation import validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem
 from ..schemas import RAW_REQUIRED_COLUMNS, STAGE1_OUTPUT_COLUMNS, validate_columns
@@ -49,61 +52,45 @@ class Stage1Stats:
     processed_at_utc: str
 
 
-def _arr_to_str(a: Iterable[object] | str) -> str:
-    """Convert array/list to pipe-separated string."""
-    if isinstance(a, str):
-        return a
-    vals = [x for x in list(a) if isinstance(x, str) and x.strip() and x.lower() != "nan"]
+def _as_str(value: object) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _coerce_raw_row(raw: dict[str, object]) -> RawSponsorRow:
+    return {
+        "Organisation Name": _as_str(raw.get("Organisation Name", "")),
+        "Town/City": _as_str(raw.get("Town/City", "")),
+        "County": _as_str(raw.get("County", "")),
+        "Type & Rating": _as_str(raw.get("Type & Rating", "")),
+        "Route": _as_str(raw.get("Route", "")),
+    }
+
+
+def _coerce_raw_rows(raw_rows: list[dict[str, object]]) -> list[RawSponsorRow]:
+    return [_coerce_raw_row(row) for row in raw_rows]
+
+
+def _join_unique(values: Iterable[str]) -> str:
     seen: set[str] = set()
     out: list[str] = []
-    for v in vals:
-        if v not in seen:
-            seen.add(v)
-            out.append(v)
+    for value in values:
+        text = value.strip()
+        if not text or text.lower() == "nan" or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
     if not out:
         return ""
     return out[0] if len(out) == 1 else " | ".join(out)
 
 
-def _unique_list(values: Iterable[object]) -> list[str]:
-    """Return unique values as a list of strings."""
-    seen: set[str] = set()
-    out: list[str] = []
-    for v in values:
-        text = v if isinstance(v, str) else str(v)
-        if text and text not in seen:
-            seen.add(text)
-            out.append(text)
-    return out
-
-
-def _to_str(value: object) -> str:
-    if isinstance(value, str):
-        return value
-    return str(value)
-
-
-def _join_variants(values: object) -> str:
-    try:
-        values_list = validate_as(list[object], values)
-    except IncomingDataError:
+def _join_sorted(values: Iterable[str]) -> str:
+    cleaned = [value.strip() for value in values if value.strip() and value.lower() != "nan"]
+    if not cleaned:
         return ""
-    cleaned: list[str] = []
-    for value in values_list:
-        text = _to_str(value)
-        if text:
-            cleaned.append(text)
     return " | ".join(sorted(set(cleaned)))
-
-
-def _primary_name(values: object) -> str:
-    try:
-        values_list = validate_as(list[object], values)
-    except IncomingDataError:
-        return ""
-    if not values_list:
-        return ""
-    return _to_str(values_list[0])
 
 
 def run_stage1(
@@ -148,90 +135,49 @@ def run_stage1(
     # Validate schema
     validate_columns(list(df.columns), RAW_REQUIRED_COLUMNS, "Raw CSV")
 
-    total_raw_rows = len(df)
-
     # Clean columns
     for col in ["Organisation Name", "Town/City", "County", "Type & Rating", "Route"]:
         df[col] = df[col].astype(str).str.strip()
 
-    # Count intermediate steps for stats
-    skilled_worker_mask = df["Route"] == "Skilled Worker"
-    skilled_worker_count = skilled_worker_mask.sum()
+    raw_rows = validate_as(list[dict[str, object]], df.to_dict(orient="records"))
+    rows = _coerce_raw_rows(raw_rows)
 
-    a_rated_mask = df["Type & Rating"].str.contains("A rating", case=False, na=False)
-    a_rated_count = a_rated_mask.sum()
+    snapshot = build_sponsor_register_snapshot(rows, normalize_fn=normalize_org_name)
+    logger.info("Filtered: %s rows (Skilled Worker + A-rated)", f"{snapshot.stats.filtered_rows:,}")
 
-    # Filter: Skilled Worker + A-rated
-    mask = skilled_worker_mask & a_rated_mask
-    filtered = df.loc[
-        mask, ["Organisation Name", "Town/City", "County", "Type & Rating", "Route"]
-    ].copy()
-    filtered_rows = len(filtered)
+    aggregated_rows: list[dict[str, object]] = []
+    for record in snapshot.aggregated:
+        aggregated_rows.append(
+            {
+                "Organisation Name": record.organisation_name,
+                "org_name_normalized": record.org_name_normalized,
+                "has_multiple_towns": record.has_multiple_towns,
+                "has_multiple_counties": record.has_multiple_counties,
+                "Town/City": _join_unique(record.towns),
+                "County": _join_unique(record.counties),
+                "Type & Rating": _join_unique(record.type_and_rating),
+                "Route": _join_unique(record.routes),
+                "raw_name_variants": _join_sorted(record.raw_name_variants),
+            }
+        )
 
-    logger.info("Filtered: %s rows (Skilled Worker + A-rated)", f"{filtered_rows:,}")
-
-    # Add normalized name column
-    filtered["org_name_normalized"] = filtered["Organisation Name"].apply(normalize_org_name)
-
-    # Count unique before aggregation
-    unique_raw = filtered["Organisation Name"].nunique()
-    unique_normalized = filtered["org_name_normalized"].nunique()
-
-    # Aggregate by normalized name, preserving raw name variants
-    agg = filtered.groupby("org_name_normalized", sort=True, as_index=False).agg(
-        {
-            "Organisation Name": _unique_list,  # All raw variants
-            "Town/City": "unique",
-            "County": "unique",
-            "Type & Rating": "unique",
-            "Route": "unique",
-        }
-    )
-
-    # Process aggregated columns
-    agg["raw_name_variants"] = agg["Organisation Name"].apply(_join_variants)
-    agg["Organisation Name"] = agg["Organisation Name"].apply(_primary_name)  # Primary name
-
-    for col in ["Town/City", "County", "Type & Rating", "Route"]:
-        agg[col] = agg[col].apply(_arr_to_str)
-
-    # Add multi-location flags
-    agg.insert(2, "has_multiple_towns", agg["Town/City"].str.contains(r"\|", regex=True, na=False))
-    agg.insert(3, "has_multiple_counties", agg["County"].str.contains(r"\|", regex=True, na=False))
-
-    # Reorder columns
-    cols = [
-        "Organisation Name",
-        "org_name_normalized",
-        "has_multiple_towns",
-        "has_multiple_counties",
-        "Town/City",
-        "County",
-        "Type & Rating",
-        "Route",
-        "raw_name_variants",
-    ]
-    agg = agg[cols]
+    agg = pd.DataFrame(aggregated_rows, columns=STAGE1_OUTPUT_COLUMNS)
     validate_columns(list(agg.columns), frozenset(STAGE1_OUTPUT_COLUMNS), "Stage 1 output")
 
     fs.write_csv(agg, out_path)
     logger.info("Output: %s (%s unique organisations)", out_path, f"{len(agg):,}")
 
-    # Calculate stats
-    town_counts = filtered["Town/City"].value_counts().head(10)
-    county_counts = filtered["County"].value_counts().head(10)
-
     stats = Stage1Stats(
         input_file=str(in_path),
-        total_raw_rows=total_raw_rows,
-        skilled_worker_rows=int(skilled_worker_count),
-        a_rated_rows=int(a_rated_count),
-        filtered_rows=filtered_rows,
-        unique_orgs_raw=unique_raw,
-        unique_orgs_normalized=unique_normalized,
-        duplicates_merged=unique_raw - unique_normalized,
-        top_towns=[(str(k), int(v)) for k, v in town_counts.items()],
-        top_counties=[(str(k), int(v)) for k, v in county_counts.items()],
+        total_raw_rows=snapshot.stats.total_raw_rows,
+        skilled_worker_rows=snapshot.stats.skilled_worker_rows,
+        a_rated_rows=snapshot.stats.a_rated_rows,
+        filtered_rows=snapshot.stats.filtered_rows,
+        unique_orgs_raw=snapshot.stats.unique_orgs_raw,
+        unique_orgs_normalized=snapshot.stats.unique_orgs_normalized,
+        duplicates_merged=snapshot.stats.duplicates_merged,
+        top_towns=snapshot.stats.top_towns,
+        top_counties=snapshot.stats.top_counties,
         processed_at_utc=datetime.now(UTC).isoformat(),
     )
 
@@ -256,7 +202,7 @@ def run_stage1(
     return Stage1Result(
         output_path=out_path,
         stats_path=stats_path,
-        total_raw_rows=total_raw_rows,
-        filtered_rows=filtered_rows,
+        total_raw_rows=snapshot.stats.total_raw_rows,
+        filtered_rows=snapshot.stats.filtered_rows,
         unique_orgs=len(agg),
     )

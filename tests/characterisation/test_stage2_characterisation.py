@@ -58,7 +58,7 @@ def test_stage2_outputs_are_deterministic(
         ch_batch_size=1,
     )
 
-    run_stage2(
+    outs = run_stage2(
         stage1_path=stage1_path,
         out_dir=out_dir,
         cache_dir=cache_dir,
@@ -68,11 +68,11 @@ def test_stage2_outputs_are_deterministic(
         fs=in_memory_fs,
     )
 
-    enriched_df = in_memory_fs.read_csv(out_dir / "stage2_enriched_companies_house.csv")
-    candidates_df = in_memory_fs.read_csv(out_dir / "stage2_candidates_top3.csv")
+    enriched_df = in_memory_fs.read_csv(outs["enriched"])
+    candidates_df = in_memory_fs.read_csv(outs["candidates"])
     report = validate_as(
         Stage2ResumeReport,
-        in_memory_fs.read_json(out_dir / "stage2_resume_report.json"),
+        in_memory_fs.read_json(outs["resume_report"]),
     )
 
     assert list(enriched_df.columns) == list(STAGE2_ENRICHED_COLUMNS)
@@ -120,7 +120,7 @@ def test_stage2_search_errors_write_resume_report(in_memory_fs: InMemoryFileSyst
             cache_dir=cache_dir,
             config=config,
             http_client=FailingHttp(),
-            resume=False,
+            resume=True,
             fs=in_memory_fs,
         )
 

@@ -35,7 +35,7 @@ class PipelineConfig:
     tech_score_threshold: float = 0.55
 
     # Geographic filters (applied in Stage 3)
-    geo_filter_regions: tuple[str, ...] = field(default_factory=tuple)
+    geo_filter_region: str | None = None
     geo_filter_postcodes: tuple[str, ...] = field(default_factory=tuple)
 
     @classmethod
@@ -67,7 +67,7 @@ class PipelineConfig:
             ),
             ch_batch_size=int(os.getenv("CH_BATCH_SIZE", "250")),
             tech_score_threshold=float(os.getenv("TECH_SCORE_THRESHOLD", "0.55")),
-            geo_filter_regions=_parse_list(os.getenv("GEO_FILTER_REGIONS", "")),
+            geo_filter_region=_parse_single_region(os.getenv("GEO_FILTER_REGIONS", "")),
             geo_filter_postcodes=_parse_list(os.getenv("GEO_FILTER_POSTCODES", "")),
         )
 
@@ -75,7 +75,7 @@ class PipelineConfig:
         self,
         *,
         tech_score_threshold: float | None = None,
-        geo_filter_regions: tuple[str, ...] | None = None,
+        geo_filter_region: str | None = None,
         geo_filter_postcodes: tuple[str, ...] | None = None,
     ) -> Self:
         """Return a new config with specified overrides (for CLI options)."""
@@ -84,9 +84,9 @@ class PipelineConfig:
             tech_score_threshold=self.tech_score_threshold
             if tech_score_threshold is None
             else tech_score_threshold,
-            geo_filter_regions=self.geo_filter_regions
-            if geo_filter_regions is None
-            else geo_filter_regions,
+            geo_filter_region=self.geo_filter_region
+            if geo_filter_region is None
+            else geo_filter_region,
             geo_filter_postcodes=self.geo_filter_postcodes
             if geo_filter_postcodes is None
             else geo_filter_postcodes,
@@ -95,6 +95,17 @@ class PipelineConfig:
 
 def _parse_list(s: str) -> tuple[str, ...]:
     """Parse comma-separated string into tuple of stripped values."""
-    if not s.strip():
-        return ()
-    return tuple(item.strip() for item in s.split(",") if item.strip())
+    items = [item.strip() for item in s.split(",") if item.strip()]
+    return tuple(items)
+
+
+def _parse_single_region(s: str) -> str | None:
+    """Parse a single region value from comma-separated input."""
+    items = _parse_list(s)
+    if not items:
+        return None
+    if len(items) > 1:
+        raise ValueError("GEO_FILTER_REGIONS must contain at most one region.")
+    for item in items:
+        return item
+    return None

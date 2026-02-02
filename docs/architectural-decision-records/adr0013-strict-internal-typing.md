@@ -14,6 +14,7 @@ The pipeline ingests untrusted data from disk (CSV/JSON) and the network (Compan
 
 - Treat external data as untrusted at IO boundaries only.
 - Validate and coerce external data into strict `TypedDict` or dataclass shapes immediately after ingestion.
+- Use boundary‑neutral IO contracts for infrastructure validation; convert to internal `types.py` contracts in application code at the IO boundary.
 - Avoid `Any` outside IO boundary modules (infrastructure and CLI entry points).
 - Domain and application layers must use strict, explicit types.
 

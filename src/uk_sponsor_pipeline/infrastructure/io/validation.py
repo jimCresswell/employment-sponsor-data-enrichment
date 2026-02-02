@@ -6,7 +6,7 @@ from typing import TypedDict
 
 from pydantic import TypeAdapter, ValidationError
 
-from ...types import CompanyProfile, SearchItem
+from ...io_contracts import CompanyProfileIO, SearchItemIO
 
 
 class IncomingDataError(ValueError):
@@ -84,10 +84,10 @@ def _coerce_sic_codes(value: object) -> list[str]:
     return []
 
 
-def parse_companies_house_search(payload: object) -> list[SearchItem]:
+def parse_companies_house_search(payload: object) -> list[SearchItemIO]:
     response = validate_as(SearchResponseInput, payload)
     raw_items = response.get("items", [])
-    items: list[SearchItem] = []
+    items: list[SearchItemIO] = []
     for raw_item in raw_items:
         item = validate_as(SearchItemInput, raw_item)
         address_input = item.get("address") or {}
@@ -107,7 +107,7 @@ def parse_companies_house_search(payload: object) -> list[SearchItem]:
     return items
 
 
-def parse_companies_house_profile(payload: object) -> CompanyProfile:
+def parse_companies_house_profile(payload: object) -> CompanyProfileIO:
     profile = validate_as(CompanyProfileInput, payload)
     address_input = profile.get("registered_office_address") or {}
     address = validate_as(RegisteredOfficeAddressInput, address_input)

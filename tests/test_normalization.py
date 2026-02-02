@@ -1,10 +1,11 @@
-"""Tests for name normalization utilities."""
+"""Tests for name normalisation utilities."""
 
-from uk_sponsor_pipeline.normalization import (
+from uk_sponsor_pipeline.domain.organisation_identity import (
     extract_bracketed_names,
     extract_trading_name,
     generate_query_variants,
     normalize_org_name,
+    simple_similarity,
     split_on_delimiters,
 )
 
@@ -123,3 +124,19 @@ class TestGenerateQueryVariants:
         # Complex name with many potential variants
         variants = generate_query_variants("A (B) (C) (D) T/A X - Y / Z")
         assert len(variants) <= 5  # Should be capped
+
+
+class TestSimpleSimilarity:
+    """Tests for simple_similarity function."""
+
+    def test_exact_match_scores_high(self):
+        score = simple_similarity("Acme Limited", "Acme Limited")
+        assert score >= 0.95
+
+    def test_unrelated_scores_low(self):
+        score = simple_similarity("Acme Software", "City Hospital")
+        assert score < 0.2
+
+    def test_order_independent_tokens(self):
+        score = simple_similarity("Acme Software", "Software Acme")
+        assert score >= 0.9

@@ -18,7 +18,9 @@ Stage 2 processes input in batches with explicit controls (`batch_start`, `batch
 
 The resume report includes timing, overall batch range, processed counts, and a prebuilt resume command.
 
-Stage 2 is fail‑fast on authentication, rate‑limit exhaustion, circuit breaker open, and unexpected HTTP errors. Resumable artefacts are written before exit so operators can fix the issue and continue safely.
+Stage 2 is fail‑fast on authentication, rate‑limit exhaustion, circuit breaker open, and unexpected HTTP errors (including profile fetch failures). Resumable artefacts are written before exit so operators can fix the issue and continue safely.
+
+When `--no-resume` is used, Stage 2 writes outputs into a new timestamped subdirectory under the chosen output directory to avoid stale data reuse.
 
 ## Consequences
 

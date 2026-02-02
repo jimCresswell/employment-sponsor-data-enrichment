@@ -33,6 +33,14 @@ DEFAULT_PROCESSED_DIR = Path("data/processed")
 DEFAULT_STAGE2_IN = Path("data/processed/stage2_enriched_companies_house.csv")
 
 
+def _single_region(region: list[str] | None) -> str | None:
+    if not region:
+        return None
+    if len(region) > 1:
+        raise typer.BadParameter("Only one --region value is supported.")
+    return region[0]
+
+
 @app.command()
 def download(
     url: Annotated[
@@ -184,7 +192,7 @@ def stage3(
         typer.Option(
             "--region",
             "-r",
-            help="Filter by region (repeatable, e.g. --region London --region Manchester)",
+            help="Filter by region (single value, e.g. --region London)",
         ),
     ] = None,
     postcode_prefix: Annotated[
@@ -209,7 +217,7 @@ def stage3(
     if threshold is not None or region or postcode_prefix:
         config = config.with_overrides(
             tech_score_threshold=threshold,
-            geo_filter_regions=tuple(region) if region else None,
+            geo_filter_region=_single_region(region),
             geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
         )
 
@@ -226,7 +234,7 @@ def run_all(
         typer.Option(
             "--region",
             "-r",
-            help="Filter final shortlist by region (repeatable)",
+            help="Filter final shortlist by region (single value)",
         ),
     ] = None,
     postcode_prefix: Annotated[
@@ -284,7 +292,7 @@ def run_all(
     if threshold is not None or region or postcode_prefix:
         config = config.with_overrides(
             tech_score_threshold=threshold,
-            geo_filter_regions=tuple(region) if region else None,
+            geo_filter_region=_single_region(region),
             geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
         )
 

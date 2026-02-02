@@ -13,6 +13,7 @@ The pipeline needs an explainable mechanism to rank companies by likelihood of h
 ## Decision
 
 Use a multi-feature scoring model based on Companies House profile data and name heuristics. Features include SIC codes, company status, company age, company type, and name keywords. The model outputs a numeric score and a bucketed classification (strong/possible/unlikely).
+The scoring rules live in the domain layer (`domain/scoring.py`) and are invoked by the Stage 3 application use-case.
 
 ## Consequences
 
