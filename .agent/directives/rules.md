@@ -5,7 +5,7 @@ These rules are mandatory for all work in this repository. For goals and outputs
 ## Core
 
 - Always reflect on the question: **could it be simpler without compromising quality or functionality?**
-- Strict typing:what  no `Any` allowed, use `object` only at incoming IO boundaries, no `cast` or `type: ignore`.
+- Strict typing: no `Any` allowed, use `object` only at incoming IO boundaries, no `cast` or `type: ignore`.
 - No compatibility layers, no backward compatibility. Clean breaks only. Replace and delete old paths.
 - No trivial aliases, refactor instead.
 - DRY + YAGNI + KISS.
@@ -27,6 +27,18 @@ These rules are mandatory for all work in this repository. For goals and outputs
 
 - Read environment variables once at entry points.
 - Pass configuration through function calls; avoid global config lookups.
+
+## Interfaces
+
+- Prefer `typing.Protocol` over `abc.ABC` for DI contracts (structural subtyping).
+- Use ABCs only when shared implementation inheritance is required.
+- Resilience primitives (`RateLimiter`, `CircuitBreaker`, `RetryPolicy`) are backed by Protocols for testability.
+
+## Observability
+
+- Use the shared logger factory from `observability/logging.py`.
+- Prefer structured logging (key-value context) over plain strings.
+- Never log sensitive data (API keys, PII).
 
 ## Testing
 
