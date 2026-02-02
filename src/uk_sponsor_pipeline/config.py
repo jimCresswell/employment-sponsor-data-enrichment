@@ -37,6 +37,7 @@ class PipelineConfig:
     # Geographic filters (applied in Stage 3)
     geo_filter_region: str | None = None
     geo_filter_postcodes: tuple[str, ...] = field(default_factory=tuple)
+    location_aliases_path: str = "data/reference/location_aliases.json"
 
     @classmethod
     def from_env(cls, dotenv_path: str | None = None) -> Self:
@@ -69,6 +70,10 @@ class PipelineConfig:
             tech_score_threshold=float(os.getenv("TECH_SCORE_THRESHOLD", "0.55")),
             geo_filter_region=_parse_single_region(os.getenv("GEO_FILTER_REGIONS", "")),
             geo_filter_postcodes=_parse_list(os.getenv("GEO_FILTER_POSTCODES", "")),
+            location_aliases_path=os.getenv(
+                "LOCATION_ALIASES_PATH", "data/reference/location_aliases.json"
+            ).strip()
+            or "data/reference/location_aliases.json",
         )
 
     def with_overrides(
@@ -77,6 +82,7 @@ class PipelineConfig:
         tech_score_threshold: float | None = None,
         geo_filter_region: str | None = None,
         geo_filter_postcodes: tuple[str, ...] | None = None,
+        location_aliases_path: str | None = None,
     ) -> Self:
         """Return a new config with specified overrides (for CLI options)."""
         return replace(
@@ -90,6 +96,9 @@ class PipelineConfig:
             geo_filter_postcodes=self.geo_filter_postcodes
             if geo_filter_postcodes is None
             else geo_filter_postcodes,
+            location_aliases_path=self.location_aliases_path
+            if location_aliases_path is None
+            else location_aliases_path,
         )
 
 

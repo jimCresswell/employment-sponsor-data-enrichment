@@ -6,7 +6,7 @@ from typing import TypedDict
 
 from pydantic import TypeAdapter, ValidationError
 
-from ...io_contracts import CompanyProfileIO, SearchItemIO
+from ...io_contracts import CompanyProfileIO, LocationProfileIO, SearchItemIO
 
 
 class IncomingDataError(ValueError):
@@ -45,6 +45,19 @@ class CompanyProfileInput(TypedDict, total=False):
     registered_office_address: RegisteredOfficeAddressInput | None
 
 
+class LocationProfileInput(TypedDict, total=False):
+    canonical_name: str | None
+    aliases: list[str] | None
+    regions: list[str] | None
+    localities: list[str] | None
+    postcode_prefixes: list[str] | None
+    notes: str | None
+
+
+class LocationAliasesInput(TypedDict, total=False):
+    locations: list[LocationProfileInput]
+
+
 def validate_as[SchemaT](schema: type[SchemaT], payload: object) -> SchemaT:
     try:
         return TypeAdapter(schema).validate_python(payload)
@@ -63,6 +76,21 @@ def validate_json_as[SchemaT](schema: type[SchemaT], payload: str | bytes | byte
 
 def _as_str(value: object) -> str:
     return value if isinstance(value, str) else ""
+
+
+def _as_str_list(value: object) -> list[str]:
+    if value is None:
+        return []
+    try:
+        items = validate_as(list[object], value)
+    except IncomingDataError:
+        return []
+    cleaned: list[str] = []
+    for item in items:
+        text = str(item).strip()
+        if text:
+            cleaned.append(text)
+    return cleaned
 
 
 def _coerce_sic_codes(value: object) -> list[str]:
@@ -123,3 +151,22 @@ def parse_companies_house_profile(payload: object) -> CompanyProfileIO:
             "postal_code": _as_str(address.get("postal_code")),
         },
     }
+
+
+def parse_location_aliases(payload: object) -> list[LocationProfileIO]:
+    aliases = validate_as(LocationAliasesInput, payload)
+    raw_locations = aliases.get("locations", [])
+    locations: list[LocationProfileIO] = []
+    for raw_location in raw_locations:
+        location = validate_as(LocationProfileInput, raw_location)
+        locations.append(
+            {
+                "canonical_name": _as_str(location.get("canonical_name")),
+                "aliases": _as_str_list(location.get("aliases")),
+                "regions": _as_str_list(location.get("regions")),
+                "localities": _as_str_list(location.get("localities")),
+                "postcode_prefixes": _as_str_list(location.get("postcode_prefixes")),
+                "notes": _as_str(location.get("notes")),
+            }
+        )
+    return locations

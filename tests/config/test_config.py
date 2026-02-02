@@ -21,6 +21,7 @@ def test_with_overrides_preserves_fields() -> None:
         tech_score_threshold=0.6,
         geo_filter_region="London",
         geo_filter_postcodes=("EC",),
+        location_aliases_path="data/reference/location_aliases.json",
     )
 
     updated = base.with_overrides(tech_score_threshold=0.4, geo_filter_region="Leeds")
@@ -28,6 +29,7 @@ def test_with_overrides_preserves_fields() -> None:
     assert updated.tech_score_threshold == 0.4
     assert updated.geo_filter_region == "Leeds"
     assert updated.geo_filter_postcodes == ("EC",)
+    assert updated.location_aliases_path == "data/reference/location_aliases.json"
 
     assert updated.ch_api_key == base.ch_api_key
     assert updated.ch_timeout_seconds == base.ch_timeout_seconds

@@ -62,3 +62,20 @@ class CompanyProfileIO(TypedDict):
     date_of_creation: str
     sic_codes: list[str]
     registered_office_address: RegisteredOfficeAddressIO
+
+
+class LocationProfileIO(TypedDict):
+    """Location alias payload shape."""
+
+    canonical_name: str
+    aliases: list[str]
+    regions: list[str]
+    localities: list[str]
+    postcode_prefixes: list[str]
+    notes: str
+
+
+class LocationAliasesIO(TypedDict):
+    """Location aliases file payload shape."""
+
+    locations: list[LocationProfileIO]

@@ -102,6 +102,10 @@ uv run uk-sponsor stage3 --threshold 0.40
 uv run uk-sponsor run-all --region London --threshold 0.50
 ```
 
+Location aliases live in `data/reference/location_aliases.json` and expand region/locality/postcode matching
+(for example, `--region Manchester` matches Salford and M* postcodes). Override the file location with
+`LOCATION_ALIASES_PATH` if needed.
+
 ## Architecture
 
 ### Architecture Direction
@@ -131,6 +135,7 @@ src/uk_sponsor_pipeline/
 │   └── resilience.py
 ├── domain/
 │   ├── companies_house.py
+│   ├── location_profiles.py
 │   ├── organisation_identity.py
 │   ├── scoring.py
 │   └── sponsor_register.py

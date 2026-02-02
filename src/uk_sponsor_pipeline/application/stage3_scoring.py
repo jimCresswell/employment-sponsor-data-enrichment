@@ -5,6 +5,7 @@ Improvements over original:
 - Transparent feature contributions
 - Explainability output (stage3_explain.csv)
 - Geographic filtering support
+- Location alias profiles for region/locality/postcode matching
 - Configurable thresholds via CLI/env
 """
 
@@ -15,9 +16,16 @@ from pathlib import Path
 import pandas as pd
 
 from ..config import PipelineConfig
+from ..domain.location_profiles import (
+    GeoFilter,
+    LocationProfile,
+    build_geo_filter,
+    build_location_profiles,
+)
+from ..domain.location_profiles import matches_geo_filter as domain_matches_geo_filter
 from ..domain.scoring import ScoringFeatures, calculate_features
 from ..infrastructure import LocalFileSystem
-from ..infrastructure.io.validation import validate_as
+from ..infrastructure.io.validation import parse_location_aliases, validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem
 from ..schemas import (
@@ -29,41 +37,18 @@ from ..schemas import (
 from ..types import Stage2EnrichedRow
 
 
-def _matches_geographic_filter(
-    row: Stage2EnrichedRow,
-    region: str | None,
-    postcodes: tuple[str, ...],
-) -> bool:
-    """Check if company matches geographic filters."""
-    if not region and not postcodes:
-        return True  # No filter = all pass
-
-    row_region = row["ch_address_region"].lower()
-    locality = row["ch_address_locality"].lower()
-    postcode = row["ch_address_postcode"].upper()
-
-    # Check region filter
-    if region:
-        target = region.lower()
-        region_match = target in row_region or target in locality
-        if region_match:
-            return True
-
-    # Check postcode prefix filter
-    if postcodes:
-        postcode_match = any(postcode.startswith(p.upper()) for p in postcodes)
-        if postcode_match:
-            return True
-
-    return not region and not postcodes  # Only pass if no filters specified
+def _load_location_profiles(path: Path, fs: FileSystem) -> list[LocationProfile]:
+    if not fs.exists(path):
+        raise RuntimeError(
+            "Location aliases file not found. Create data/reference/location_aliases.json "
+            "or set LOCATION_ALIASES_PATH to a valid file."
+        )
+    payload = fs.read_json(path)
+    return build_location_profiles(parse_location_aliases(payload))
 
 
-def _matches_geographic_filter_row(
-    row: pd.Series[str], region: str | None, postcodes: tuple[str, ...]
-) -> bool:
-    return _matches_geographic_filter(
-        validate_as(Stage2EnrichedRow, row.to_dict()), region, postcodes
-    )
+def _matches_geographic_filter_row(row: pd.Series[str], geo_filter: GeoFilter) -> bool:
+    return domain_matches_geo_filter(validate_as(Stage2EnrichedRow, row.to_dict()), geo_filter)
 
 
 def run_stage3(
@@ -137,10 +122,15 @@ def run_stage3(
 
     # Apply geographic filter if specified
     if config.geo_filter_region or config.geo_filter_postcodes:
+        aliases_path = Path(config.location_aliases_path)
+        profiles = _load_location_profiles(aliases_path, fs)
+        geo_filter = build_geo_filter(
+            config.geo_filter_region, config.geo_filter_postcodes, profiles
+        )
         geo_mask = shortlist.apply(
             _matches_geographic_filter_row,
             axis=1,
-            args=(config.geo_filter_region, config.geo_filter_postcodes),
+            args=(geo_filter,),
         )
         shortlist = shortlist[geo_mask]
         logger.info("Geographic filter: %s companies match", int(geo_mask.sum()))

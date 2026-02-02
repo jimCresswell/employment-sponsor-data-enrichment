@@ -109,6 +109,7 @@ This plan is the authoritative entry point for the refactor. It captures the key
 - `resume=False` now writes to a timestamped output subdirectory to avoid stale data reuse.
 - Region filtering enforces a single region; multiple regions are rejected with a clear error.
 - Phase 4 complete: `normalization.py` removed, `organisation_identity.py` added (including `simple_similarity`); Stage 1 rules moved into `domain/sponsor_register.py`; Stage 1 now flattens structured locations at IO boundaries only; README updated; new domain tests added.
+- Phase 8 complete: location aliases added with London/Manchester profiles; domain matching + Stage 3 geographic filtering use aliases; README and tests updated.
 
 ### Resumption checklist (fresh session)
 
@@ -494,7 +495,7 @@ If `stages/` remains, each function must be a pure delegate to the application s
   - Location aliases exist for London and Manchester in a canonical file.
   - Unit tests cover profile resolution and matching.
   - Stage 3 geographic filtering uses aliases (region/locality/postcode prefixes).
-- Status: ⏳ Pending.
+- Status: ✅ Completed.
 
 ### Phase 8.5 — Configurable Companies House Source (API or File)
 

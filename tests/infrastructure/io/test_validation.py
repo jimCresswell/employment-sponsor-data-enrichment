@@ -5,6 +5,7 @@ from __future__ import annotations
 from uk_sponsor_pipeline.infrastructure.io.validation import (
     parse_companies_house_profile,
     parse_companies_house_search,
+    parse_location_aliases,
 )
 
 
@@ -63,3 +64,27 @@ def test_parse_companies_house_profile_coerces_sic_codes() -> None:
             "postal_code": "EC1A 1BB",
         },
     }
+
+
+def test_parse_location_aliases_defaults_missing_fields() -> None:
+    payload: dict[str, object] = {
+        "locations": [
+            {
+                "canonical_name": "London",
+                "aliases": ["Greater London"],
+            }
+        ]
+    }
+
+    locations = parse_location_aliases(payload)
+
+    assert locations == [
+        {
+            "canonical_name": "London",
+            "aliases": ["Greater London"],
+            "regions": [],
+            "localities": [],
+            "postcode_prefixes": [],
+            "notes": "",
+        }
+    ]
