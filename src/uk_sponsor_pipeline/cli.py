@@ -4,7 +4,8 @@ Commands:
 - extract: Fetch latest sponsor register from GOV.UK
 - transform-register: Filter to Skilled Worker + A-rated, aggregate by org
 - transform-enrich: Enrich with Companies House data
-- transform-score: Score for tech-likelihood, produce shortlist
+- transform-score: Score for tech-likelihood (scored output)
+- usage-shortlist: Filter scored output into shortlist and explainability
 - run-all: Execute all steps sequentially
 """
 
@@ -21,17 +22,19 @@ from .application.pipeline import run_pipeline
 from .application.transform_enrich import run_transform_enrich
 from .application.transform_register import TransformRegisterResult, run_transform_register
 from .application.transform_score import run_transform_score
+from .application.usage import run_usage_shortlist
 from .config import PipelineConfig
 
 app = typer.Typer(
     add_completion=False,
-    help="UK sponsor register pipeline: extract → transform → enrich → score → shortlist",
+    help=("UK sponsor register pipeline: extract → transform → enrich → score → usage-shortlist"),
 )
 
 DEFAULT_RAW_DIR = Path("data/raw")
 DEFAULT_REGISTER_OUT = Path("data/interim/sponsor_register_filtered.csv")
 DEFAULT_PROCESSED_DIR = Path("data/processed")
 DEFAULT_ENRICHED_IN = Path("data/processed/companies_house_enriched.csv")
+DEFAULT_SCORED_IN = Path("data/processed/companies_scored.csv")
 
 
 def _single_region(region: list[str] | None) -> str | None:
@@ -180,6 +183,34 @@ def transform_score(
             help="Directory for output files",
         ),
     ] = DEFAULT_PROCESSED_DIR,
+) -> None:
+    """Transform score: score for tech-likelihood and write scored output."""
+    config = PipelineConfig.from_env()
+
+    outs = run_transform_score(enriched_path=enriched_path, out_dir=out_dir, config=config)
+    rprint("[green]✓ Transform score complete:[/green]")
+    for k, v in outs.items():
+        rprint(f"  {k}: {v}")
+
+
+@app.command(name="usage-shortlist")
+def usage_shortlist(
+    scored_path: Annotated[
+        Path,
+        typer.Option(
+            "--input",
+            "-i",
+            help="Path to scored Companies House CSV",
+        ),
+    ] = DEFAULT_SCORED_IN,
+    out_dir: Annotated[
+        Path,
+        typer.Option(
+            "--output-dir",
+            "-o",
+            help="Directory for output files",
+        ),
+    ] = DEFAULT_PROCESSED_DIR,
     threshold: Annotated[
         float | None,
         typer.Option(
@@ -208,13 +239,8 @@ def transform_score(
         ),
     ] = None,
 ) -> None:
-    """Transform score: score for tech-likelihood and produce shortlist.
-
-    Supports geographic filtering with --region and --postcode-prefix options.
-    """
-    # Load base config and apply CLI overrides
+    """Usage shortlist: filter scored output into shortlist and explainability."""
     config = PipelineConfig.from_env()
-
     if threshold is not None or region or postcode_prefix:
         config = config.with_overrides(
             tech_score_threshold=threshold,
@@ -222,8 +248,8 @@ def transform_score(
             geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
         )
 
-    outs = run_transform_score(enriched_path=enriched_path, out_dir=out_dir, config=config)
-    rprint("[green]✓ Transform score complete:[/green]")
+    outs = run_usage_shortlist(scored_path=scored_path, out_dir=out_dir, config=config)
+    rprint("[green]✓ Usage shortlist complete:[/green]")
     for k, v in outs.items():
         rprint(f"  {k}: {v}")
 
@@ -264,7 +290,7 @@ def run_all(
 ) -> None:
     """Run all pipeline steps sequentially.
 
-    Executes: extract → transform-register → transform-enrich → transform-score
+    Executes: extract → transform-register → transform-enrich → transform-score → usage-shortlist
     Geographic filters apply to the final shortlist.
     """
     config = PipelineConfig.from_env()
@@ -286,5 +312,5 @@ def run_all(
     rprint(f"[green]✓ Enriched: {result.enrich['enriched']}[/green]")
 
     rprint("\n[bold green]═══ Pipeline Complete ═══[/bold green]")
-    rprint(f"Final shortlist: {result.score['shortlist']}")
-    rprint(f"Explainability: {result.score['explain']}")
+    rprint(f"Final shortlist: {result.usage['shortlist']}")
+    rprint(f"Explainability: {result.usage['explain']}")

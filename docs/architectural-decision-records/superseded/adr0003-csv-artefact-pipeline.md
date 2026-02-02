@@ -4,7 +4,7 @@ Date: 2026-02-01
 
 ## Status
 
-Superseded by ADR 0012
+Superseded by ADR 0012 (see ADR 0017 for usage-shortlist separation)
 
 ## Context
 
@@ -16,7 +16,7 @@ Use a step-based pipeline with CSV artefacts at each boundary:
 - Extract → raw CSV
 - Transform Register → filtered + aggregated CSV
 - Transform Enrich → enriched CSVs (matched, unmatched, candidates)
-- Transform Score → scored and shortlisted CSVs
+- Transform Score → scored CSV (shortlist/explain outputs are now produced by usage-shortlist)
 
 Artefacts are stored under `data/raw`, `data/interim`, and `data/processed`.
 

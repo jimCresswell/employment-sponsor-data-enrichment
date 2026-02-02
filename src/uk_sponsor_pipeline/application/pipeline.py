@@ -5,7 +5,7 @@ Example:
     >>> from uk_sponsor_pipeline.application.pipeline import run_pipeline
     >>> config = PipelineConfig.from_env()
     >>> result = run_pipeline(config=config, skip_download=True)
-    >>> result.score["shortlist"]
+    >>> result.usage["shortlist"]
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from .extract import ExtractResult, extract_register
 from .transform_enrich import run_transform_enrich
 from .transform_register import TransformRegisterResult, run_transform_register
 from .transform_score import run_transform_score
+from .usage import run_usage_shortlist
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,7 @@ class PipelineRunResult:
     register: TransformRegisterResult
     enrich: dict[str, Path]
     score: dict[str, Path]
+    usage: dict[str, Path]
 
 
 def run_pipeline(
@@ -48,7 +50,7 @@ def run_pipeline(
     http_session: HttpSession | None = None,
     session: HttpSession | None = None,
 ) -> PipelineRunResult:
-    """Run extract → transform-register → transform-enrich → transform-score.
+    """Run extract → transform-register → transform-enrich → transform-score → usage-shortlist.
 
     Args:
         config: Pipeline configuration (required; load once at entry point).
@@ -58,7 +60,7 @@ def run_pipeline(
         register_out_path: Output path for the register transform CSV.
         enrich_out_dir: Directory for transform-enrich outputs.
         cache_dir: Directory for Companies House API cache.
-        score_out_dir: Directory for transform-score outputs.
+        score_out_dir: Directory for transform-score outputs (scored + usage outputs).
         resume: If True, transform-enrich resumes from existing artefacts.
         fs: Optional filesystem for testing.
         http_client: Optional Companies House HTTP client.
@@ -104,9 +106,17 @@ def run_pipeline(
         fs=fs,
     )
 
+    usage_outs = run_usage_shortlist(
+        scored_path=score_outs["scored"],
+        out_dir=score_out_dir,
+        config=config,
+        fs=fs,
+    )
+
     return PipelineRunResult(
         extract=extract_result,
         register=register_result,
         enrich=enrich_outs,
         score=score_outs,
+        usage=usage_outs,
     )

@@ -22,7 +22,8 @@ This document is the **single source of truth** for the refactor. Assume no othe
 - Phase 0–5 are complete and gated.
 - Phase 6 is complete.
 - Phase 7 (docs/ADR audit), Phase 8 (location aliases), Phase 8.5 (Companies House source), and Phase 9 (terminology rename) are complete.
-- Phase 10 (usage split) and Phase 11 (final tidy up) are pending.
+- Phase 10 (usage split) is complete.
+- Phase 11 (final tidy up) is complete.
 - Domain is the core: domain code must not import application, CLI, or infrastructure.
 
 ## Target End State (Acceptance Criteria)
@@ -53,6 +54,7 @@ These criteria define the final, measurable outcomes for this plan:
   - `src/uk_sponsor_pipeline/application/transform_register.py`
   - `src/uk_sponsor_pipeline/application/transform_enrich.py`
   - `src/uk_sponsor_pipeline/application/transform_score.py`
+  - `src/uk_sponsor_pipeline/application/usage.py`
 - Legacy wrapper modules have been removed; there is no wrapper package.
 - Infrastructure IO boundaries are centralised in:
   - `src/uk_sponsor_pipeline/infrastructure/io/http.py`
@@ -64,8 +66,7 @@ These criteria define the final, measurable outcomes for this plan:
 
 ## Remaining Work Summary (Fresh Session Checklist)
 
-- Phase 10: split ETL transforms from usage/query logic with independent usage execution.
-- Phase 11: final tidy up (remove scaffolding tests, final docs/ADR/terminology sweep).
+- None. All phases complete.
 
 ## Current State and Decisions (2026-02-01)
 
@@ -91,7 +92,7 @@ This plan is the authoritative entry point for the refactor. It captures the key
 - Transform Enrich search errors are fail‑fast with clear messages; resume artefacts are still written.
 - New tests cover config preservation and fail‑fast behaviour (`tests/test_config.py`, Transform Enrich/Transform Score tests).
 - ADR 0012 added; ADR 0003 marked superseded; README updated with architecture direction and config pass‑through guidance.
-- Phase 0 complete: characterisation tests added under `tests/characterisation/` with a local README.
+- Phase 0 complete: characterisation tests added under `tests/characterisation/` with a local README (removed in Phase 11 once permanent tests were in place).
 - Phase 1 complete: shared logger factory in `src/uk_sponsor_pipeline/observability/logging.py`; Transform Register/Transform Enrich/Transform Score logging standardised; README and ADR 0012 updated.
 - Phase 2 complete: infrastructure split into `src/uk_sponsor_pipeline/infrastructure/io/` plus `resilience.py`; resilience protocols added to `protocols.py`; test fakes moved to `tests/fakes/`; README and ADR 0005 updated.
 - Phase 3 complete: Companies House candidate scoring and mapping extracted to `src/uk_sponsor_pipeline/domain/companies_house.py` with new domain tests; Transform Enrich now delegates to the domain module; README updated with domain structure.
@@ -111,13 +112,14 @@ This plan is the authoritative entry point for the refactor. It captures the key
 - Phase 8 complete: location aliases added with London/Manchester profiles; domain matching + Transform Score geographic filtering use aliases; README and tests updated.
 - Phase 8.5 complete: configurable Companies House source (API or file) with validated file inputs; Transform Enrich uses source abstraction; README and ADR updated.
 - Phase 9 complete: legacy terminology removed across code/docs; wrapper package removed; CLI commands and artefact names are semantic.
+- Phase 10 complete: Transform Score writes scored output only; usage-shortlist added for filters and explainability; pipeline and CLI updated; README and ADRs aligned (ADR 0017 added).
 
 ### Resumption checklist (fresh session)
 
 - Read `.agent/directives/AGENT.md` and `.agent/directives/rules.md`.
 - Run the full gates (`uv run check`) before starting Phase 0 or any new phase.
 - Confirm ADR 0012 is present and ADR 0003 is marked superseded.
-- Confirm characterisation tests live under `tests/characterisation/` and are marked as temporary scaffolding.
+- Confirm permanent tests cover prior characterisation coverage; scaffolding tests removed in Phase 11.
 - Use this plan as the single source of truth; update it if the repo state diverges.
 
 ### Known Divergences (Must Address Early)
@@ -282,7 +284,7 @@ This plan replaces legacy labels with semantic names while keeping artefact boun
 
 - `transform-register` → Transform: sponsor register filtering + aggregation.
 - `transform-enrich` → Transform: Companies House enrichment.
-- `transform-score` → Transform (scoring) + Usage (shortlist filtering). Split required in Phase 10.
+- `transform-score` → Transform (scoring) + Usage (shortlist filtering). Split completed in Phase 10.
 
 ### Domains
 
@@ -475,7 +477,7 @@ No wrapper package remains; application modules are the single source of truth.
   - Docs and ADRs match current code structure.
   - Test files renamed to match current module structure.
   - `import-linter` rules in place and passing via `uv run lint`.
-  - Scaffolding characterisation tests remain until Phase 11 completes.
+- Scaffolding characterisation tests removed in Phase 11 after permanent tests were added.
 - Gates: `format → typecheck → lint → test → coverage`.
 - Status: ✅ Completed.
 
@@ -550,11 +552,11 @@ register file (schema validation + deterministic artefact output).
   - A usage command can run without recomputing scoring.
   - Scored artefacts are produced without filters; usage filters are applied in a separate step.
   - All usage selection logic lives outside domain scoring and does not mutate transform artefacts.
-- Status: ⏳ Pending.
+- Status: ✅ Completed.
 
 ### Phase 11 — Final Tidy Up (Docs + Scaffolding Removal)
 
-- Remove scaffolding characterisation tests once Phases 7–10 are complete and stable.
+- Remove scaffolding characterisation tests once Phases 7–10 are complete and stable. ✅ Completed.
 - Re-audit ADRs and README references for semantic naming consistency (no legacy terminology).
 - Final pass on module docstrings and usage examples to ensure alignment with CLI and artefact names.
 - DoD:
@@ -562,7 +564,7 @@ register file (schema validation + deterministic artefact output).
   - `rg -n "legacy-term"` in `src/`, `tests/`, `README.md`, and `docs/` returns no matches.
   - Docs and ADRs are fully aligned with the final module structure and CLI names.
 - Gates: `format → typecheck → lint → test → coverage`.
-- Status: ⏳ Pending.
+- Status: ✅ Completed.
 
 ## Acceptance Criteria
 

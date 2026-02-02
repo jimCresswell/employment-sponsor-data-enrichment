@@ -71,5 +71,5 @@ def test_run_pipeline_skips_download_and_returns_outputs() -> None:
     )
 
     assert result.extract is None
-    shortlist = fs.read_csv(result.score["shortlist"])
+    shortlist = fs.read_csv(result.usage["shortlist"])
     assert shortlist["Organisation Name"].tolist() == ["Acme Ltd"]

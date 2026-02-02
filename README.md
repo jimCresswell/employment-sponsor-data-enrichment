@@ -5,8 +5,8 @@ A data pipeline that transforms the UK Home Office sponsor register into a short
 ## Pipeline Overview
 
 ```text
-GOV.UK Sponsor Register → Transform Register → Transform Enrich → Transform Score → Shortlist
-       (CSV)                    (CSV)               (CSV)              (CSV)
+GOV.UK Sponsor Register → Transform Register → Transform Enrich → Transform Score → Usage Shortlist
+       (CSV)                    (CSV)               (CSV)              (CSV)            (CSV)
 ```
 
 | Step               | Input       | Output                                      | What it does                                        |
@@ -14,7 +14,8 @@ GOV.UK Sponsor Register → Transform Register → Transform Enrich → Transfor
 | extract            | GOV.UK page | `data/raw/*.csv`                            | Scrapes page, downloads CSV, validates schema       |
 | transform-register | Raw CSV     | `data/interim/sponsor_register_filtered.csv` | Filters Skilled Worker + A-rated, aggregates by org |
 | transform-enrich   | Register CSV | `data/processed/companies_house_*.csv`     | Enriches via Companies House API                    |
-| transform-score    | Enriched CSV | `data/processed/companies_*.csv`           | Scores for tech-likelihood, outputs shortlist       |
+| transform-score    | Enriched CSV | `data/processed/companies_scored.csv`      | Scores for tech-likelihood                          |
+| usage-shortlist    | Scored CSV   | `data/processed/companies_shortlist.csv` and `data/processed/companies_explain.csv` | Filters scored output into shortlist + explain      |
 
 Steps describe artefact boundaries for audit and resume. They are not architectural boundaries; orchestration and shared standards live in the application pipeline (see `docs/architectural-decision-records/adr0012-artefact-boundaries-and-orchestration.md`).
 
@@ -55,6 +56,7 @@ uv run uk-sponsor extract
 uv run uk-sponsor transform-register
 uv run uk-sponsor transform-enrich
 uv run uk-sponsor transform-score
+uv run uk-sponsor usage-shortlist
 ```
 
 `uv run <command>` executes tools inside the project environment.
@@ -133,20 +135,21 @@ The file format is JSON:
 
 ### Geographic Filtering
 
-Filter the final shortlist by region or postcode (single region only):
+Usage shortlist applies geographic filters to scored output (run `transform-score` first or use
+`run-all`). Filter the final shortlist by region or postcode (single region only):
 
 ```bash
 # Filter to London companies only
-uv run uk-sponsor transform-score --region London
+uv run uk-sponsor usage-shortlist --region London
 
 # Single region only
-uv run uk-sponsor transform-score --region London
+uv run uk-sponsor usage-shortlist --region London
 
 # Postcode prefix filtering
-uv run uk-sponsor transform-score --postcode-prefix EC --postcode-prefix SW
+uv run uk-sponsor usage-shortlist --postcode-prefix EC --postcode-prefix SW
 
 # Adjust score threshold (default: 0.55)
-uv run uk-sponsor transform-score --threshold 0.40
+uv run uk-sponsor usage-shortlist --threshold 0.40
 
 # Full pipeline with filters
 uv run uk-sponsor run-all --region London --threshold 0.50
@@ -178,7 +181,8 @@ src/uk_sponsor_pipeline/
 │   ├── pipeline.py
 │   ├── transform_register.py
 │   ├── transform_enrich.py
-│   └── transform_score.py
+│   ├── transform_score.py
+│   └── usage.py
 ├── infrastructure/     # Concrete implementations (DI pattern)
 │   ├── io/
 │   │   ├── filesystem.py
@@ -316,6 +320,9 @@ Companies are scored on multiple features:
 - **possible** (≥0.35): Worth investigating
 - **unlikely** (<0.35): Probably not tech
 
+Usage shortlist applies thresholds and geographic filters to the scored artefact to produce the
+final shortlist and explainability outputs.
+
 ## Output Files
 
 When running Transform Enrich with `--no-resume`, outputs are written under a timestamped
@@ -333,8 +340,8 @@ subdirectory of `data/processed/` (paths below reflect the default `--resume` be
 | `data/processed/companies_house_checkpoint.csv`       | Resume checkpoint of processed orgs           |
 | `data/processed/companies_house_resume_report.json`   | Resume report for interrupted or partial runs |
 | `data/processed/companies_scored.csv`                 | All companies with scores                     |
-| `data/processed/companies_shortlist.csv`              | Filtered shortlist                            |
-| `data/processed/companies_explain.csv`                | Score breakdown for shortlist                 |
+| `data/processed/companies_shortlist.csv`              | Filtered shortlist (usage output)             |
+| `data/processed/companies_explain.csv`                | Score breakdown for shortlist (usage output)  |
 
 ## Contributing
 
@@ -392,7 +399,7 @@ CH_CIRCUIT_BREAKER_TIMEOUT_SECONDS=60  # Seconds before half-open probe
 CH_BATCH_SIZE=250             # Organisations per batch (incremental output)
 CH_MIN_MATCH_SCORE=0.72       # Minimum score to accept a match
 CH_SEARCH_LIMIT=5             # Candidates per search
-TECH_SCORE_THRESHOLD=0.55     # Minimum score for shortlist
+TECH_SCORE_THRESHOLD=0.55     # Minimum score for shortlist (usage)
 GEO_FILTER_REGIONS=           # Single region filter (one value only)
 GEO_FILTER_POSTCODES=         # Comma-separated postcode prefix filter
 ```

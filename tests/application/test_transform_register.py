@@ -7,6 +7,7 @@ import pandas as pd
 
 from uk_sponsor_pipeline.application.transform_register import run_transform_register
 from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
+from uk_sponsor_pipeline.schemas import TRANSFORM_REGISTER_OUTPUT_COLUMNS
 
 
 def test_transform_register_filters_and_aggregates(
@@ -24,7 +25,7 @@ def test_transform_register_filters_and_aggregates(
 
     df = pd.read_csv(out_path, dtype=str).fillna("")
 
-    assert "org_name_normalised" in df.columns
+    assert list(df.columns) == list(TRANSFORM_REGISTER_OUTPUT_COLUMNS)
     assert result.unique_orgs == 4  # 5 rows with 1 duplicate normalised
 
     acme = df[df["org_name_normalised"] == "acme software"].iloc[0]
@@ -37,6 +38,7 @@ def test_transform_register_filters_and_aggregates(
     assert isinstance(stats.get("total_raw_rows"), int)
     assert isinstance(stats.get("filtered_rows"), int)
     assert isinstance(stats.get("unique_orgs_normalised"), int)
+    assert isinstance(stats.get("processed_at_utc"), str)
     assert stats["total_raw_rows"] == 5
     assert stats["filtered_rows"] == 5
     assert stats["unique_orgs_normalised"] == 4

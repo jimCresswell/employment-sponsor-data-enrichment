@@ -8,6 +8,7 @@ from tests.fakes import FakeHttpClient, InMemoryFileSystem
 from uk_sponsor_pipeline.application.transform_enrich import run_transform_enrich
 from uk_sponsor_pipeline.application.transform_register import run_transform_register
 from uk_sponsor_pipeline.application.transform_score import run_transform_score
+from uk_sponsor_pipeline.application.usage import run_usage_shortlist
 from uk_sponsor_pipeline.config import PipelineConfig
 
 
@@ -87,5 +88,12 @@ def test_pipeline_end_to_end_in_memory(
         fs=in_memory_fs,
     )
 
-    shortlist = in_memory_fs.read_csv(score_outs["shortlist"])
+    usage_outs = run_usage_shortlist(
+        scored_path=score_outs["scored"],
+        out_dir=Path("processed"),
+        config=PipelineConfig(tech_score_threshold=0.0),
+        fs=in_memory_fs,
+    )
+
+    shortlist = in_memory_fs.read_csv(usage_outs["shortlist"])
     assert shortlist["Organisation Name"].tolist() == ["Acme Ltd"]

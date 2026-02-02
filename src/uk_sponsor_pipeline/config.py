@@ -36,7 +36,7 @@ class PipelineConfig:
     # Scoring
     tech_score_threshold: float = 0.55
 
-    # Geographic filters (applied during scoring)
+    # Geographic filters (applied during usage)
     geo_filter_region: str | None = None
     geo_filter_postcodes: tuple[str, ...] = field(default_factory=tuple)
     location_aliases_path: str = "data/reference/location_aliases.json"

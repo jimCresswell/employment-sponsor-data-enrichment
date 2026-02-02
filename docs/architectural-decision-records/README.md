@@ -6,7 +6,6 @@ This directory contains the ADRs for the UK Sponsor → Tech Hiring Pipeline.
 
 - `adr0001-record-architecture-decisions.md`
 - `adr0002-python-3-14-and-uv-tooling.md`
-- `adr0003-csv-artefact-pipeline.md`
 - `adr0004-config-loaded-at-cli-and-passed-through.md`
 - `adr0005-dependency-injection-for-io-and-http.md`
 - `adr0006-network-isolated-test-strategy.md`
@@ -20,3 +19,8 @@ This directory contains the ADRs for the UK Sponsor → Tech Hiring Pipeline.
 - `adr0014-io-boundaries-consolidation.md`
 - `adr0015-observability-logging.md`
 - `adr0016-configurable-companies-house-source.md`
+- `adr0017-usage-shortlist-separation.md`
+
+## Superseded
+
+- `superseded/adr0003-csv-artefact-pipeline.md`
