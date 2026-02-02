@@ -113,6 +113,16 @@ source_modules = ["uk_sponsor_pipeline.domain"]
 forbidden_modules = ["uk_sponsor_pipeline.cli"]
 
 [[tool.importlinter.contracts]]
+name = "Application must not import infrastructure"
+type = "forbidden"
+source_modules = ["uk_sponsor_pipeline.application"]
+forbidden_modules = ["uk_sponsor_pipeline.infrastructure"]
+ignore_imports = [
+  "uk_sponsor_pipeline.application.** -> uk_sponsor_pipeline.infrastructure.io.validation",
+]
+unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
 name = "Infrastructure must not import domain or types"
 type = "forbidden"
 source_modules = ["uk_sponsor_pipeline.infrastructure"]

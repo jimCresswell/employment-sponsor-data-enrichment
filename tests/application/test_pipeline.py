@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from tests.fakes import FakeHttpClient, InMemoryFileSystem
 from uk_sponsor_pipeline.application.pipeline import run_pipeline
@@ -73,3 +74,21 @@ def test_run_pipeline_skips_download_and_returns_outputs() -> None:
     assert result.extract is None
     shortlist = fs.read_csv(result.usage["shortlist"])
     assert shortlist["Organisation Name"].tolist() == ["Acme Ltd"]
+
+
+def test_run_pipeline_requires_filesystem() -> None:
+    with pytest.raises(RuntimeError) as exc_info:
+        run_pipeline(
+            config=PipelineConfig(
+                ch_api_key="test-key",
+                ch_sleep_seconds=0,
+                ch_min_match_score=0.0,
+                ch_search_limit=5,
+                ch_max_rpm=600,
+            ),
+            skip_download=True,
+            fs=None,
+            http_client=FakeHttpClient(),
+        )
+
+    assert "FileSystem" in str(exc_info.value)

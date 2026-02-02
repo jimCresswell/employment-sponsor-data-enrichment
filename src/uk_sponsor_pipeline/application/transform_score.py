@@ -14,7 +14,6 @@ import pandas as pd
 
 from ..config import PipelineConfig
 from ..domain.scoring import ScoringFeatures, calculate_features
-from ..infrastructure import LocalFileSystem
 from ..infrastructure.io.validation import validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem
@@ -24,6 +23,42 @@ from ..schemas import (
     validate_columns,
 )
 from ..types import TransformEnrichRow
+
+
+def _normalise_invalid_match_score(value: object) -> str:
+    text = str(value).strip()
+    return text if text else "<empty>"
+
+
+def _format_invalid_match_scores(values: pd.Series) -> str:
+    unique_values = sorted(
+        {_normalise_invalid_match_score(value) for value in values.unique().tolist()}
+    )
+    if not unique_values:
+        return "<unknown>"
+    sample = ", ".join(unique_values[:5])
+    if len(unique_values) > 5:
+        return f"{sample}, ..."
+    return sample
+
+
+def _parse_match_score(values: pd.Series) -> pd.Series:
+    try:
+        numeric = pd.to_numeric(values, errors="raise")
+    except Exception as exc:
+        coerced = pd.to_numeric(values, errors="coerce")
+        invalid_values = values[coerced.isna()]
+        sample = _format_invalid_match_scores(invalid_values)
+        raise RuntimeError(
+            f"Transform score: match_score must be numeric. Invalid values: {sample}"
+        ) from exc
+    if numeric.isna().any():
+        invalid_values = values[numeric.isna()]
+        sample = _format_invalid_match_scores(invalid_values)
+        raise RuntimeError(
+            f"Transform score: match_score must be numeric. Invalid values: {sample}"
+        )
+    return numeric
 
 
 def run_transform_score(
@@ -38,7 +73,7 @@ def run_transform_score(
         enriched_path: Path to enriched Companies House CSV.
         out_dir: Directory for output files.
         config: Pipeline configuration (required; load at entry point).
-        fs: Optional filesystem for testing.
+        fs: Filesystem (required; inject at entry point).
 
     Returns:
         Dict with path to scored file.
@@ -49,7 +84,8 @@ def run_transform_score(
             "PipelineConfig.from_env() and pass it through."
         )
 
-    fs = fs or LocalFileSystem()
+    if fs is None:
+        raise RuntimeError("FileSystem is required. Inject it at the entry point.")
     logger = get_logger("uk_sponsor_pipeline.transform_score")
     enriched_path = Path(enriched_path)
     out_dir = Path(out_dir)
@@ -63,7 +99,7 @@ def run_transform_score(
     )
 
     # Ensure match_score is numeric for correct sorting
-    df["match_score"] = pd.to_numeric(df["match_score"], errors="coerce").fillna(0.0)
+    df["match_score"] = _parse_match_score(df["match_score"])
 
     logger.info("Scoring: %s companies", len(df))
 

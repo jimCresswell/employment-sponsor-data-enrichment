@@ -3,8 +3,14 @@
 Usage example:
     >>> from uk_sponsor_pipeline.application.usage import run_usage_shortlist
     >>> from uk_sponsor_pipeline.config import PipelineConfig
+    >>> from uk_sponsor_pipeline.infrastructure import LocalFileSystem
     >>> config = PipelineConfig.from_env()
-    >>> run_usage_shortlist(scored_path="data/processed/companies_scored.csv", config=config)
+    >>> fs = LocalFileSystem()
+    >>> run_usage_shortlist(
+    ...     scored_path="data/processed/companies_scored.csv",
+    ...     config=config,
+    ...     fs=fs,
+    ... )
 """
 
 from __future__ import annotations
@@ -21,7 +27,6 @@ from ..domain.location_profiles import (
     build_location_profiles,
 )
 from ..domain.location_profiles import matches_geo_filter as domain_matches_geo_filter
-from ..infrastructure import LocalFileSystem
 from ..infrastructure.io.validation import parse_location_aliases, validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem
@@ -62,7 +67,7 @@ def run_usage_shortlist(
         scored_path: Path to scored Companies House CSV.
         out_dir: Directory for output files.
         config: Pipeline configuration (required; load at entry point).
-        fs: Optional filesystem for testing.
+        fs: Filesystem (required; inject at entry point).
 
     Returns:
         Dict with paths to shortlist and explain files.
@@ -73,7 +78,8 @@ def run_usage_shortlist(
             "PipelineConfig.from_env() and pass it through."
         )
 
-    fs = fs or LocalFileSystem()
+    if fs is None:
+        raise RuntimeError("FileSystem is required. Inject it at the entry point.")
     logger = get_logger("uk_sponsor_pipeline.usage_shortlist")
     scored_path = Path(scored_path)
     out_dir = Path(out_dir)

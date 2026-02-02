@@ -17,7 +17,6 @@ import pandas as pd
 
 from ..domain.organisation_identity import normalise_org_name
 from ..domain.sponsor_register import RawSponsorRow, build_sponsor_register_snapshot
-from ..infrastructure import LocalFileSystem
 from ..infrastructure.io.validation import validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem
@@ -105,12 +104,13 @@ def run_transform_register(
         raw_dir: Directory containing raw CSV files.
         out_path: Output path for filtered/aggregated CSV.
         reports_dir: Directory for stats report.
-        fs: Optional filesystem for testing.
+        fs: Filesystem (required; inject at entry point).
 
     Returns:
         TransformRegisterResult with paths and counts.
     """
-    fs = fs or LocalFileSystem()
+    if fs is None:
+        raise RuntimeError("FileSystem is required. Inject it at the entry point.")
     logger = get_logger("uk_sponsor_pipeline.transform_register")
     raw_dir = Path(raw_dir)
     out_path = Path(out_path)

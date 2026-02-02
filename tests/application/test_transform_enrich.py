@@ -22,6 +22,7 @@ from uk_sponsor_pipeline.exceptions import (
     CircuitBreakerOpen,
     RateLimitError,
 )
+from uk_sponsor_pipeline.infrastructure import LocalFileSystem
 from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
 from uk_sponsor_pipeline.schemas import (
     TRANSFORM_ENRICH_CANDIDATES_COLUMNS,
@@ -35,6 +36,7 @@ class TestTransformEnrichAuthIntegration:
 
     def test_api_key_is_passed_to_session(self, tmp_path: Path) -> None:
         """Verify the API key from config is correctly added to session headers."""
+        fs = LocalFileSystem()
         # Create minimal transform_register input
         transform_register_csv = tmp_path / "sponsor_register_filtered.csv"
         transform_register_csv.write_text(
@@ -70,6 +72,7 @@ class TestTransformEnrichAuthIntegration:
                 config=config,
                 http_client=mock_http,
                 resume=False,
+                fs=fs,
             )
         except Exception:
             pass  # We just want to verify the mock was called
@@ -240,6 +243,7 @@ class TestTransformEnrichCandidateOrdering:
             config=config,
             http_client=DummyHttp(),
             resume=False,
+            fs=LocalFileSystem(),
         )
 
         candidates_df = pd.read_csv(outs["candidates"], dtype=str).fillna("")
@@ -618,6 +622,68 @@ def test_transform_enrich_requires_config() -> None:
     assert "PipelineConfig" in str(exc_info.value)
 
 
+def test_transform_enrich_requires_filesystem() -> None:
+    config = PipelineConfig(
+        ch_api_key="",
+        ch_source_type="file",
+        ch_source_path="data/reference/companies_house.json",
+    )
+
+    with pytest.raises(RuntimeError) as exc_info:
+        run_transform_enrich(
+            register_path=Path("data/interim/sponsor_register_filtered.csv"),
+            config=config,
+            fs=None,
+        )
+
+    assert "FileSystem" in str(exc_info.value)
+
+
+def test_transform_enrich_requires_http_client_for_api(
+    in_memory_fs: InMemoryFileSystem,
+) -> None:
+    register_path = Path("data/interim/sponsor_register_filtered.csv")
+    in_memory_fs.write_csv(
+        pd.DataFrame(
+            [
+                {
+                    "Organisation Name": "Acme Ltd",
+                    "org_name_normalised": "acme",
+                    "has_multiple_towns": "False",
+                    "has_multiple_counties": "False",
+                    "Town/City": "London",
+                    "County": "Greater London",
+                    "Type & Rating": "A rating",
+                    "Route": "Skilled Worker",
+                    "raw_name_variants": "Acme Ltd",
+                }
+            ]
+        ),
+        register_path,
+    )
+
+    config = PipelineConfig(
+        ch_api_key="test-key",
+        ch_sleep_seconds=0,
+        ch_max_rpm=600,
+        ch_min_match_score=0.0,
+        ch_search_limit=1,
+    )
+
+    with pytest.raises(RuntimeError) as exc_info:
+        run_transform_enrich(
+            register_path=register_path,
+            out_dir=Path("data/processed"),
+            cache_dir=Path("data/cache"),
+            config=config,
+            http_client=None,
+            resume=False,
+            fs=in_memory_fs,
+        )
+
+    assert "HttpClient" in str(exc_info.value)
+
+
 def test_transform_enrich_profile_fetch_errors_fail_fast(
     in_memory_fs: InMemoryFileSystem,
     fake_http_client: FakeHttpClient,
@@ -745,6 +811,7 @@ def test_resume_false_writes_to_new_output_dir(
         config=config,
         http_client=DummyHttp(),
         resume=False,
+        fs=LocalFileSystem(),
     )
 
     assert outs["enriched"].parent != out_dir

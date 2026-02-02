@@ -1,5 +1,6 @@
 """Tests for CLI wiring and overrides."""
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -7,6 +8,7 @@ from typer.testing import CliRunner
 
 from uk_sponsor_pipeline import cli
 from uk_sponsor_pipeline.config import PipelineConfig
+from uk_sponsor_pipeline.protocols import FileSystem
 
 runner = CliRunner()
 
@@ -24,7 +26,10 @@ def test_cli_usage_shortlist_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     def fake_run_usage_shortlist(
-        scored_path: str, out_dir: str, config: PipelineConfig
+        scored_path: str | Path,
+        out_dir: str | Path,
+        config: PipelineConfig,
+        fs: FileSystem,
     ) -> dict[str, str]:
         captured["config"] = config
         return {"shortlist": "short.csv", "explain": "explain.csv"}

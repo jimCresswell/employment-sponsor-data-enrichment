@@ -24,6 +24,8 @@ from .application.transform_register import TransformRegisterResult, run_transfo
 from .application.transform_score import run_transform_score
 from .application.usage import run_usage_shortlist
 from .config import PipelineConfig
+from .infrastructure import LocalFileSystem, RequestsSession, build_companies_house_client
+from .protocols import FileSystem, HttpClient, HttpSession
 
 app = typer.Typer(
     add_completion=False,
@@ -35,6 +37,33 @@ DEFAULT_REGISTER_OUT = Path("data/interim/sponsor_register_filtered.csv")
 DEFAULT_PROCESSED_DIR = Path("data/processed")
 DEFAULT_ENRICHED_IN = Path("data/processed/companies_house_enriched.csv")
 DEFAULT_SCORED_IN = Path("data/processed/companies_scored.csv")
+DEFAULT_CACHE_DIR = Path("data/cache/companies_house")
+
+
+def _build_filesystem() -> FileSystem:
+    return LocalFileSystem()
+
+
+def _build_http_session() -> HttpSession:
+    return RequestsSession()
+
+
+def _build_http_client(config: PipelineConfig, cache_dir: Path) -> HttpClient | None:
+    if config.ch_source_type != "api" or not config.ch_api_key:
+        return None
+    return build_companies_house_client(
+        api_key=config.ch_api_key,
+        cache_dir=cache_dir,
+        max_rpm=config.ch_max_rpm,
+        min_delay_seconds=config.ch_sleep_seconds,
+        circuit_breaker_threshold=config.ch_circuit_breaker_threshold,
+        circuit_breaker_timeout_seconds=config.ch_circuit_breaker_timeout_seconds,
+        max_retries=config.ch_max_retries,
+        backoff_factor=config.ch_backoff_factor,
+        max_backoff_seconds=config.ch_backoff_max_seconds,
+        jitter_seconds=config.ch_backoff_jitter_seconds,
+        timeout_seconds=config.ch_timeout_seconds,
+    )
 
 
 def _single_region(region: list[str] | None) -> str | None:
@@ -65,7 +94,14 @@ def extract(
     ] = DEFAULT_RAW_DIR,
 ) -> None:
     """Extract the latest sponsor register CSV from GOV.UK."""
-    result: ExtractResult = extract_register(url_override=url, data_dir=data_dir)
+    fs = _build_filesystem()
+    session = _build_http_session()
+    result: ExtractResult = extract_register(
+        url_override=url,
+        data_dir=data_dir,
+        session=session,
+        fs=fs,
+    )
     rprint(f"[green]✓ Downloaded:[/green] {result.output_path}")
     rprint(f"  Hash: {result.sha256_hash[:16]}...")
     rprint(f"  Valid schema: {result.schema_valid}")
@@ -90,7 +126,12 @@ def transform_register(
     ] = DEFAULT_REGISTER_OUT,
 ) -> None:
     """Transform register: filter to Skilled Worker + A-rated and aggregate by organisation."""
-    result: TransformRegisterResult = run_transform_register(raw_dir=raw_dir, out_path=out_path)
+    fs = _build_filesystem()
+    result: TransformRegisterResult = run_transform_register(
+        raw_dir=raw_dir,
+        out_path=out_path,
+        fs=fs,
+    )
     rprint(f"[green]✓ Transform register complete:[/green] {result.output_path}")
     rprint(
         f"  {result.total_raw_rows:,} raw → {result.filtered_rows:,} filtered → "
@@ -151,14 +192,21 @@ def transform_enrich(
     Resume: --resume and check data/processed/companies_house_resume_report.json.
     """
     config = PipelineConfig.from_env()
+    fs = _build_filesystem()
+    http_session = _build_http_session()
+    http_client = _build_http_client(config, DEFAULT_CACHE_DIR)
     outs = run_transform_enrich(
         register_path=register_path,
         out_dir=out_dir,
+        cache_dir=DEFAULT_CACHE_DIR,
         resume=resume,
         batch_start=batch_start,
         batch_count=batch_count,
         batch_size=batch_size,
         config=config,
+        http_client=http_client,
+        http_session=http_session,
+        fs=fs,
     )
     rprint("[green]✓ Transform enrich complete:[/green]")
     for k, v in outs.items():
@@ -187,7 +235,8 @@ def transform_score(
     """Transform score: score for tech-likelihood and write scored output."""
     config = PipelineConfig.from_env()
 
-    outs = run_transform_score(enriched_path=enriched_path, out_dir=out_dir, config=config)
+    fs = _build_filesystem()
+    outs = run_transform_score(enriched_path=enriched_path, out_dir=out_dir, config=config, fs=fs)
     rprint("[green]✓ Transform score complete:[/green]")
     for k, v in outs.items():
         rprint(f"  {k}: {v}")
@@ -248,7 +297,8 @@ def usage_shortlist(
             geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
         )
 
-    outs = run_usage_shortlist(scored_path=scored_path, out_dir=out_dir, config=config)
+    fs = _build_filesystem()
+    outs = run_usage_shortlist(scored_path=scored_path, out_dir=out_dir, config=config, fs=fs)
     rprint("[green]✓ Usage shortlist complete:[/green]")
     for k, v in outs.items():
         rprint(f"  {k}: {v}")
@@ -301,7 +351,18 @@ def run_all(
             geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
         )
 
-    result = run_pipeline(config=config, skip_download=skip_download)
+    fs = _build_filesystem()
+    http_session = _build_http_session()
+    http_client = _build_http_client(config, DEFAULT_CACHE_DIR)
+    result = run_pipeline(
+        config=config,
+        skip_download=skip_download,
+        cache_dir=DEFAULT_CACHE_DIR,
+        fs=fs,
+        http_client=http_client,
+        http_session=http_session,
+        session=http_session,
+    )
 
     if skip_download:
         rprint("[yellow]Skipping download (--skip-download)[/yellow]")

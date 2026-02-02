@@ -9,9 +9,13 @@ These rules are mandatory for all work in this repository. For goals and outputs
 - No compatibility layers, no backward compatibility. Clean breaks only. Replace and delete old paths.
 - No trivial aliases, refactor instead.
 - DRY + YAGNI + KISS.
+- Optimise for architectural excellence, and choose long-term correctness over short-term convenience.
 - Keep boundaries explicit: protocols for interfaces, infrastructure for implementations.
 - Each module has a single responsibility and a narrow public API; keep helpers private.
 - Dependency direction is one-way: domain/application code must not import infrastructure.
+- Application modules must not instantiate concrete infrastructure; the composition root (CLI/pipeline) builds dependencies and injects them via protocols.
+- Fail fast with helpful error messages.
+- All logic must be strict, not permissive.
 - Delete unused code, unused files, and dead branches.
 - Never disable linting, formatting, type checking, or tests.
 - Use conventional commit messages (e.g. `feat: ...`, `fix: ...`).

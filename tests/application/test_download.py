@@ -78,3 +78,63 @@ def test_extract_fails_on_invalid_schema(in_memory_fs: InMemoryFileSystem) -> No
 
     assert "Missing columns" in str(exc_info.value)
     assert "County" in str(exc_info.value)
+
+
+def test_extract_requires_filesystem() -> None:
+    csv_content = (
+        b"Organisation Name,Town/City,County,Type & Rating,Route\n"
+        b"Acme Ltd,London,Greater London,A rating,Skilled Worker\n"
+    )
+    session = DummySession(DummyResponse(csv_content))
+
+    with pytest.raises(RuntimeError) as exc_info:
+        extract_register(
+            url_override="https://example.com/register.csv",
+            data_dir="data/raw",
+            reports_dir="reports",
+            session=session,
+            fs=None,
+        )
+
+    assert "FileSystem" in str(exc_info.value)
+
+
+def test_extract_requires_session(in_memory_fs: InMemoryFileSystem) -> None:
+    with pytest.raises(RuntimeError) as exc_info:
+        extract_register(
+            url_override="https://example.com/register.csv",
+            data_dir="data/raw",
+            reports_dir="reports",
+            session=None,
+            fs=in_memory_fs,
+        )
+
+    assert "HttpSession" in str(exc_info.value)
+
+
+def test_extract_fails_on_ambiguous_csv_links(in_memory_fs: InMemoryFileSystem) -> None:
+    html = b"""
+    <html>
+      <body>
+        <a href="https://assets.publishing.service.gov.uk/worker.csv">
+          Worker and Temporary Worker register
+        </a>
+        <a href="https://assets.publishing.service.gov.uk/worker-archive.csv">
+          Worker and Temporary Worker register (archive)
+        </a>
+      </body>
+    </html>
+    """
+    session = DummySession(DummyResponse(html))
+
+    with pytest.raises(RuntimeError) as exc_info:
+        extract_register(
+            data_dir="data/raw",
+            reports_dir="reports",
+            session=session,
+            fs=in_memory_fs,
+        )
+
+    message = str(exc_info.value)
+    assert "Multiple candidate CSV links" in message
+    assert "--url" in message

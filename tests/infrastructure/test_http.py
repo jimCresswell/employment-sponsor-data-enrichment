@@ -318,6 +318,34 @@ class TestCachedHttpClient:
 
         assert circuit_breaker.consecutive_failures == 1
 
+    def test_non_network_error_does_not_record_failure(self) -> None:
+        """Does not record circuit breaker failures for non-network errors."""
+        session = MagicMock(spec=requests.Session)
+        response = MagicMock()
+        response.status_code = 200
+        response.text = "not-json"
+        response.raise_for_status.return_value = None
+        response.json.return_value = ["not", "an", "object"]
+        session.get.return_value = response
+
+        cache = MagicMock()
+        cache.get.return_value = None
+        rate_limiter = RateLimiter(max_rpm=600, min_delay_seconds=0)
+        circuit_breaker = CircuitBreaker(threshold=3)
+        retry_policy = RetryPolicy(max_retries=0, backoff_factor=0, jitter_seconds=0)
+        client = CachedHttpClient(
+            session=session,
+            cache=cache,
+            rate_limiter=rate_limiter,
+            circuit_breaker=circuit_breaker,
+            retry_policy=retry_policy,
+        )
+
+        with pytest.raises(RuntimeError):
+            client.get_json("https://example.com", None)
+
+        assert circuit_breaker.consecutive_failures == 0
+
     def test_success_resets_circuit_breaker(self) -> None:
         """Successful request resets circuit breaker failures."""
         session = MagicMock(spec=requests.Session)

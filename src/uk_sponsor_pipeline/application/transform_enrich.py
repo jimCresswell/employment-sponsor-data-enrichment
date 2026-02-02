@@ -34,7 +34,6 @@ from ..domain.organisation_identity import (
     simple_similarity,
 )
 from ..exceptions import AuthenticationError, CircuitBreakerOpen, RateLimitError
-from ..infrastructure import LocalFileSystem, build_companies_house_client
 from ..infrastructure.io.validation import validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem, HttpClient, HttpSession
@@ -188,11 +187,11 @@ def run_transform_enrich(
     Args:
         register_path: Path to register transform output CSV.
         out_dir: Directory for output files.
-        cache_dir: Directory for API response cache.
+        cache_dir: Directory for API response cache (used by the injected HTTP client).
         config: Pipeline configuration (required; load at entry point).
-        http_client: HTTP client (creates default if None).
+        http_client: HTTP client (required for API source; inject at entry point).
         resume: If True, skip already-processed organisations.
-        fs: Optional filesystem for testing.
+        fs: Filesystem (required; inject at entry point).
         batch_start: 1-based batch index to start from (after resume filtering).
         batch_count: Number of batches to run (None = run all remaining batches).
         batch_size: Override batch size for this run (default: config.ch_batch_size).
@@ -211,13 +210,17 @@ def run_transform_enrich(
             "PipelineConfig.from_env() and pass it through."
         )
 
+    if fs is None:
+        raise RuntimeError("FileSystem is required. Inject it at the entry point.")
+
     if config.ch_source_type == "api" and not config.ch_api_key:
         raise RuntimeError("Missing CH_API_KEY. Set it in .env or environment variables.")
 
-    fs = fs or LocalFileSystem()
+    if config.ch_source_type == "api" and http_client is None:
+        raise RuntimeError("HttpClient is required when CH_SOURCE_TYPE is 'api'.")
+
     register_path = Path(register_path)
     out_dir = Path(out_dir)
-    cache_dir = Path(cache_dir)
 
     # Output paths
     logger = get_logger("uk_sponsor_pipeline.transform_enrich")
@@ -271,21 +274,6 @@ def run_transform_enrich(
         logger.info("Resuming: %s orgs already processed", len(already_processed))
 
     # Set up Companies House source
-    if config.ch_source_type == "api":
-        if http_client is None:
-            http_client = build_companies_house_client(
-                api_key=config.ch_api_key,
-                cache_dir=cache_dir,
-                max_rpm=config.ch_max_rpm,
-                min_delay_seconds=config.ch_sleep_seconds,
-                circuit_breaker_threshold=config.ch_circuit_breaker_threshold,
-                circuit_breaker_timeout_seconds=config.ch_circuit_breaker_timeout_seconds,
-                max_retries=config.ch_max_retries,
-                backoff_factor=config.ch_backoff_factor,
-                max_backoff_seconds=config.ch_backoff_max_seconds,
-                jitter_seconds=config.ch_backoff_jitter_seconds,
-                timeout_seconds=config.ch_timeout_seconds,
-            )
     source: CompaniesHouseSource = build_companies_house_source(
         config=config,
         fs=fs,

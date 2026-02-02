@@ -11,7 +11,6 @@ from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
-from ..infrastructure import LocalFileSystem, RequestsSession
 from ..infrastructure.io.validation import validate_as
 from ..observability import get_logger
 from ..protocols import FileSystem, HttpSession
@@ -52,7 +51,11 @@ def _calculate_sha256(content: bytes) -> str:
 
 
 def _find_best_csv_link(soup: BeautifulSoup) -> str | None:
-    """Find the best CSV link from the page, preferring specific patterns."""
+    """Find the best CSV link from the page, preferring specific patterns.
+
+    Raises:
+        RuntimeError: If multiple links match the top-ranked pattern.
+    """
     csv_links: list[tuple[int, str, str]] = []  # (priority, link_text, url)
 
     for a in soup.find_all("a", href=True):
@@ -86,7 +89,17 @@ def _find_best_csv_link(soup: BeautifulSoup) -> str | None:
 
     # Sort by priority (lower is better), return best match
     csv_links.sort(key=lambda x: x[0])
-    return csv_links[0][2]
+    best_priority = csv_links[0][0]
+    best_links = [link for link in csv_links if link[0] == best_priority]
+    unique_urls = sorted({link[2] for link in best_links})
+    if len(unique_urls) > 1:
+        candidates = ", ".join(unique_urls[:5])
+        raise RuntimeError(
+            "Multiple candidate CSV links matched the best pattern on the GOV.UK "
+            "sponsor register page. Use --url to specify the correct CSV. "
+            f"Candidates: {candidates}"
+        )
+    return unique_urls[0]
 
 
 def _validate_csv_schema(content: bytes) -> None:
@@ -115,22 +128,25 @@ def extract_register(
         url_override: Direct URL to CSV (bypasses page scraping).
         data_dir: Directory to save downloaded CSV.
         reports_dir: Directory to save manifest.
-        session: Optional HTTP session for testing.
-        fs: Optional filesystem for testing.
+        session: HTTP session (required; inject at entry point).
+        fs: Filesystem (required; inject at entry point).
 
     Returns:
         ExtractResult with path, hash, and validation status.
 
     Raises:
-        RuntimeError: If no CSV link found, download fails, or schema validation fails.
+        RuntimeError: If dependencies are missing, no CSV link found, download fails,
+            or schema validation fails.
     """
     data_dir = Path(data_dir)
     reports_dir = Path(reports_dir)
-    fs = fs or LocalFileSystem()
+    if fs is None:
+        raise RuntimeError("FileSystem is required. Inject it at the entry point.")
     fs.mkdir(data_dir, parents=True)
     fs.mkdir(reports_dir, parents=True)
 
-    session = session or RequestsSession()
+    if session is None:
+        raise RuntimeError("HttpSession is required. Inject it at the entry point.")
     logger = get_logger("uk_sponsor_pipeline.extract")
 
     # Determine asset URL

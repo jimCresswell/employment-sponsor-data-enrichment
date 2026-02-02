@@ -137,7 +137,7 @@ class CachedHttpClient(HttpClient):
     - 401 errors raise AuthenticationError immediately (fatal)
     - 429 errors trigger backoff and retry
     - Transient errors retry with exponential backoff
-    - Other errors are recorded by circuit breaker
+    - Other request failures are recorded by circuit breaker
     - All requests respect rate limiting, including failures
     """
 
@@ -192,7 +192,7 @@ class CachedHttpClient(HttpClient):
                     continue
                 self.circuit_breaker.record_failure()
                 raise
-            except Exception:
+            except requests.RequestException:
                 self.circuit_breaker.record_failure()
                 raise
 
@@ -246,7 +246,6 @@ class CachedHttpClient(HttpClient):
                     payload: object = r.json()
                     data = validate_as(dict[str, object], payload)
                 except Exception as exc:
-                    self.circuit_breaker.record_failure()
                     raise RuntimeError("Companies House response must be a JSON object.") from exc
 
             # Record success

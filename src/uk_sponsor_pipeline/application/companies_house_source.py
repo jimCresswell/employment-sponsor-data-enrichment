@@ -29,7 +29,6 @@ from typing import Protocol, override
 from urllib.parse import quote
 
 from ..config import PipelineConfig
-from ..infrastructure.io.http import RequestsSession
 from ..infrastructure.io.validation import (
     parse_companies_house_file,
     parse_companies_house_profile,
@@ -150,8 +149,9 @@ def _load_file_payload(
     if not path:
         raise RuntimeError("CH_SOURCE_PATH is required when CH_SOURCE_TYPE is 'file'.")
     if path.startswith("http://") or path.startswith("https://"):
-        session = http_session or RequestsSession()
-        content = session.get_text(path, timeout_seconds=timeout_seconds)
+        if http_session is None:
+            raise RuntimeError("HttpSession is required to load a file source from a URL.")
+        content = http_session.get_text(path, timeout_seconds=timeout_seconds)
         return validate_json_as(dict[str, object], content)
     file_path = Path(path)
     return fs.read_json(file_path)

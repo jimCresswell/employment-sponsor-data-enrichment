@@ -234,23 +234,42 @@ class FakeHttpClient:
         return self.responses.get(cache_key, {})
 ```
 
-Application entry points require a `PipelineConfig` instance; environment variables are read once at the CLI entry point and passed through. For programmatic use:
+Application entry points require a `PipelineConfig` instance and injected dependencies; environment
+variables are read once at the CLI entry point and passed through. For programmatic use:
 
 ```python
 from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.application.transform_enrich import run_transform_enrich
 from uk_sponsor_pipeline.application.transform_score import run_transform_score
+from uk_sponsor_pipeline.infrastructure import LocalFileSystem, build_companies_house_client
 
 config = PipelineConfig.from_env()
+fs = LocalFileSystem()
+http_client = build_companies_house_client(
+    api_key=config.ch_api_key,
+    cache_dir="data/cache/companies_house",
+    max_rpm=config.ch_max_rpm,
+    min_delay_seconds=config.ch_sleep_seconds,
+    circuit_breaker_threshold=config.ch_circuit_breaker_threshold,
+    circuit_breaker_timeout_seconds=config.ch_circuit_breaker_timeout_seconds,
+    max_retries=config.ch_max_retries,
+    backoff_factor=config.ch_backoff_factor,
+    max_backoff_seconds=config.ch_backoff_max_seconds,
+    jitter_seconds=config.ch_backoff_jitter_seconds,
+    timeout_seconds=config.ch_timeout_seconds,
+)
 run_transform_enrich(
     register_path="data/interim/sponsor_register_filtered.csv",
     out_dir="data/processed",
     config=config,
+    http_client=http_client,
+    fs=fs,
 )
 run_transform_score(
     enriched_path="data/processed/companies_house_enriched.csv",
     out_dir="data/processed",
     config=config,
+    fs=fs,
 )
 ```
 
