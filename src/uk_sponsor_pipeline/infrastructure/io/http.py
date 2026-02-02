@@ -31,12 +31,15 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 from ...exceptions import AuthenticationError, RateLimitError
-from ...protocols import Cache, CircuitBreaker, HttpSession, RateLimiter, RetryPolicy
+from ...observability import get_logger
+from ...protocols import Cache, CircuitBreaker, HttpClient, HttpSession, RateLimiter, RetryPolicy
 from ..resilience import CircuitBreaker as CircuitBreakerImpl
 from ..resilience import RateLimiter as RateLimiterImpl
 from ..resilience import RetryPolicy as RetryPolicyImpl
 from .filesystem import DiskCache
 from .validation import IncomingDataError, validate_as, validate_json_as
+
+logger = get_logger("uk_sponsor_pipeline.infrastructure.http")
 
 
 def build_companies_house_client(
@@ -83,7 +86,7 @@ def is_auth_error(error: Exception) -> bool:
         if error.response is not None and error.response.status_code == 401:
             return True
     error_str = str(error).lower()
-    return "401" in error_str or "unauthorized" in error_str
+    return "401" in error_str or "unauthorized" in error_str or "unauthorised" in error_str
 
 
 def is_rate_limit_error(error: Exception) -> bool:
@@ -127,7 +130,7 @@ def _response_details(response: requests.Response) -> str:
     return f"status={response.status_code}, body={body}"
 
 
-class CachedHttpClient:
+class CachedHttpClient(HttpClient):
     """HTTP client with caching, rate limiting, and circuit breaker.
 
     Provides robust error handling:
@@ -155,6 +158,7 @@ class CachedHttpClient:
         self.retry_policy = retry_policy or RetryPolicyImpl()
         self.timeout_seconds = timeout_seconds
 
+    @override
     def get_json(self, url: str, cache_key: str | None = None) -> dict[str, object]:
         """Fetch JSON from URL with caching and rate limiting.
 
@@ -197,7 +201,7 @@ class CachedHttpClient:
                 self.circuit_breaker.record_failure()
                 details = _response_details(r)
                 raise AuthenticationError(
-                    f"Companies House API returned 401 Unauthorized ({details})"
+                    f"Companies House API returned 401 Unauthorised ({details})"
                 )
 
             if r.status_code == 403:
@@ -219,7 +223,7 @@ class CachedHttpClient:
                 self.circuit_breaker.record_failure()
                 if r.status_code == 429:
                     details = _response_details(r)
-                    print(f"Rate limit response: {details}")
+                    logger.warning("Rate limit response: %s", details)
                     raise RateLimitError(retry_after or 60)
                 r.raise_for_status()
 

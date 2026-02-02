@@ -8,7 +8,7 @@
 ## Completed (Current Baseline)
 - Unified HTTP client with caching, rate limiting, retry/backoff, and circuit breaker.
 - Schema validation at stage boundaries.
-- Stage 1/2/3 behavior hardened with deterministic scoring and explainability output.
+- Stage 1/2/3 behaviour hardened with deterministic scoring and explainability output.
 - CLI overrides for thresholds and geographic filters.
 - uv-first developer tooling with lint/format/typecheck/test commands.
 - Network-blocking test harness for isolation.
@@ -18,7 +18,7 @@
 ## Remaining Work (Critical)
 1. **Confirm automatic batching support (top priority)**
    - Verify Stage 2 runs in batches by default via `CH_BATCH_SIZE`.
-   - Ensure batching behavior is observable and reliable without manual intervention.
+   - Ensure batching behaviour is observable and reliable without manual intervention.
 2. **Config + docs alignment**
    - Ensure docs list only supported features and flags; remove any references to legacy or dropped items.
 

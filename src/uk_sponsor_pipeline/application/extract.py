@@ -10,10 +10,10 @@ from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
-from rich import print as rprint
 
 from ..infrastructure import LocalFileSystem, RequestsSession
 from ..infrastructure.io.validation import validate_as
+from ..observability import get_logger
 from ..protocols import FileSystem, HttpSession
 from ..schemas import RAW_REQUIRED_COLUMNS
 
@@ -89,21 +89,17 @@ def _find_best_csv_link(soup: BeautifulSoup) -> str | None:
     return csv_links[0][2]
 
 
-def _validate_csv_schema(content: bytes) -> bool:
+def _validate_csv_schema(content: bytes) -> None:
     """Validate that CSV has required columns."""
     try:
-        # Read first line to get headers
-        first_line = content.split(b"\n")[0].decode("utf-8-sig")
-        # Strip quotes and whitespace from each header
-        headers = {h.strip().strip('"').strip("'") for h in first_line.split(",")}
-        missing = RAW_REQUIRED_COLUMNS - headers
-        if missing:
-            rprint(f"[yellow]Warning: Missing columns: {missing}[/yellow]")
-            return False
-        return True
-    except Exception as e:
-        rprint(f"[yellow]Warning: Could not validate schema: {e}[/yellow]")
-        return False
+        first_line = content.split(b"\n", 1)[0].decode("utf-8-sig")
+    except Exception as exc:
+        raise RuntimeError("Could not validate CSV schema headers.") from exc
+    headers = {h.strip().strip('"').strip("'") for h in first_line.split(",")}
+    missing = RAW_REQUIRED_COLUMNS - headers
+    if missing:
+        missing_list = ", ".join(sorted(missing))
+        raise RuntimeError(f"CSV schema validation failed. Missing columns: {missing_list}.")
 
 
 def extract_register(
@@ -126,7 +122,7 @@ def extract_register(
         ExtractResult with path, hash, and validation status.
 
     Raises:
-        RuntimeError: If no CSV link found or download fails.
+        RuntimeError: If no CSV link found, download fails, or schema validation fails.
     """
     data_dir = Path(data_dir)
     reports_dir = Path(reports_dir)
@@ -135,13 +131,14 @@ def extract_register(
     fs.mkdir(reports_dir, parents=True)
 
     session = session or RequestsSession()
+    logger = get_logger("uk_sponsor_pipeline.extract")
 
     # Determine asset URL
     asset_url: str | None = url_override
     if asset_url:
-        rprint(f"[cyan]Using override URL:[/cyan] {asset_url}")
+        logger.info("Using override URL: %s", asset_url)
     else:
-        rprint(f"[cyan]Fetching GOV.UK page:[/cyan] {GOVUK_PAGE}")
+        logger.info("Fetching GOV.UK page: %s", GOVUK_PAGE)
         html = validate_as(str, session.get_text(GOVUK_PAGE, timeout_seconds=30))
         soup = BeautifulSoup(html, "lxml")
 
@@ -158,13 +155,14 @@ def extract_register(
     filename = _safe_filename_from_url(asset_url)
     out_path = data_dir / filename
 
-    rprint(f"[cyan]Downloading:[/cyan] {asset_url}")
+    logger.info("Downloading: %s", asset_url)
     content = validate_as(bytes, session.get_bytes(asset_url, timeout_seconds=120))
     fs.write_bytes(content, out_path)
 
     # Calculate hash and validate schema
     sha256_hash = _calculate_sha256(content)
-    schema_valid = _validate_csv_schema(content)
+    _validate_csv_schema(content)
+    schema_valid = True
 
     downloaded_at = datetime.now(UTC).isoformat()
 
@@ -189,9 +187,6 @@ def extract_register(
         downloaded_at_utc=downloaded_at,
     )
 
-    if not schema_valid:
-        rprint("[yellow]⚠ CSV schema validation failed. Check columns.[/yellow]")
-    else:
-        rprint(f"[green]✓ Downloaded {len(content):,} bytes, SHA256: {sha256_hash[:16]}...[/green]")
+    logger.info("Downloaded %s bytes, SHA256: %s", f"{len(content):,}", sha256_hash[:16])
 
     return result

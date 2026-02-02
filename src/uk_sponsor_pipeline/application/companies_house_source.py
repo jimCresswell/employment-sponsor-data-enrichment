@@ -25,7 +25,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, override
 from urllib.parse import quote
 
 from ..config import PipelineConfig
@@ -57,12 +57,13 @@ class CompaniesHouseSource(Protocol):
 
 
 @dataclass(frozen=True)
-class ApiCompaniesHouseSource:
+class ApiCompaniesHouseSource(CompaniesHouseSource):
     """API-backed Companies House source using HttpClient."""
 
     http_client: HttpClient
     search_limit: int
 
+    @override
     def search(self, query: str) -> list[SearchItem]:
         search_url = (
             f"{CH_BASE}/search/companies?q={quote(query)}&items_per_page={self.search_limit}"
@@ -72,6 +73,7 @@ class ApiCompaniesHouseSource:
         items_io = parse_companies_house_search(payload)
         return validate_as(list[SearchItem], items_io)
 
+    @override
     def profile(self, company_number: str) -> CompanyProfile:
         profile_url = f"{CH_BASE}/company/{company_number}"
         cache_key = _cache_key("profile", company_number)
@@ -81,7 +83,7 @@ class ApiCompaniesHouseSource:
 
 
 @dataclass(frozen=True)
-class FileCompaniesHouseSource:
+class FileCompaniesHouseSource(CompaniesHouseSource):
     """File-backed Companies House source."""
 
     searches: tuple[CompaniesHouseSearchEntryIO, ...]
@@ -93,10 +95,12 @@ class FileCompaniesHouseSource:
         object.__setattr__(self, "_search_map", _build_search_map(self.searches))
         object.__setattr__(self, "_profile_map", _build_profile_map(self.profiles))
 
+    @override
     def search(self, query: str) -> list[SearchItem]:
         key = _normalise_key(query)
         return self._search_map.get(key, [])
 
+    @override
     def profile(self, company_number: str) -> CompanyProfile:
         key = _normalise_key(company_number)
         profile = self._profile_map.get(key)
@@ -162,8 +166,8 @@ def _normalise_for_cache(value: str) -> str:
 
 
 def _cache_key(prefix: str, *parts: str) -> str:
-    normalized = "_".join(_normalise_for_cache(p) for p in parts if p)
-    h = hashlib.sha256(normalized.encode()).hexdigest()[:16]
+    normalised = "_".join(_normalise_for_cache(p) for p in parts if p)
+    h = hashlib.sha256(normalised.encode()).hexdigest()[:16]
     return f"{prefix}:{h}"
 
 

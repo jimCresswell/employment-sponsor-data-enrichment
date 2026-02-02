@@ -20,7 +20,7 @@ RAW_REQUIRED_COLUMNS = frozenset(
 # Transform register output: filtered and aggregated sponsors
 TRANSFORM_REGISTER_OUTPUT_COLUMNS = (
     "Organisation Name",
-    "org_name_normalized",
+    "org_name_normalised",
     "has_multiple_towns",
     "has_multiple_counties",
     "Town/City",

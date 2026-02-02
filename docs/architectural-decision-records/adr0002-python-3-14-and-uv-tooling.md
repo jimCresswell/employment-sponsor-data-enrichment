@@ -8,11 +8,11 @@ Accepted
 
 ## Context
 
-The project needs fast, reproducible environment management with consistent formatting, linting, and type checking. The tooling should be simple to run and easy to standardize across contributors.
+The project needs fast, reproducible environment management with consistent formatting, linting, and type checking. The tooling should be simple to run and easy to standardise across contributors.
 
 ## Decision
 
-Standardize on Python 3.14+ and use `uv` for environment and command execution. Use:
+Standardise on Python 3.14+ and use `uv` for environment and command execution. Use:
 
 - `ruff` for linting and formatting
 - `pyright` for type checking

@@ -271,7 +271,7 @@ This creates/updates:
 
 - `uv build`
 
-Sanity test the artifact:
+Sanity test the artefact:
 
 - `pip install dist/yourtool-*.whl`
 - `yourtool --version`

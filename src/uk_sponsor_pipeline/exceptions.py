@@ -13,7 +13,7 @@ class PipelineError(Exception):
 
 
 class AuthenticationError(PipelineError):
-    """Raised when API authentication fails (401 Unauthorized).
+    """Raised when API authentication fails (401 Unauthorised).
 
     This is a fatal error - the pipeline should stop immediately.
     """

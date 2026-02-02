@@ -29,11 +29,11 @@ def test_transform_register_output_schema_and_stats(
     stats = in_memory_fs.read_json(reports_dir / "register_stats.json")
     assert isinstance(stats.get("total_raw_rows"), int)
     assert isinstance(stats.get("filtered_rows"), int)
-    assert isinstance(stats.get("unique_orgs_normalized"), int)
+    assert isinstance(stats.get("unique_orgs_normalised"), int)
     assert isinstance(stats.get("processed_at_utc"), str)
     assert stats["total_raw_rows"] == 5
     assert stats["filtered_rows"] == 5
-    assert stats["unique_orgs_normalized"] == 4
+    assert stats["unique_orgs_normalised"] == 4
 
-    acme_row = output_df[output_df["org_name_normalized"] == "acme software"].iloc[0]
+    acme_row = output_df[output_df["org_name_normalised"] == "acme software"].iloc[0]
     assert "ACME SOFTWARE LIMITED" in acme_row["raw_name_variants"]

@@ -13,7 +13,7 @@ from uk_sponsor_pipeline.infrastructure.io.validation import validate_as
 from uk_sponsor_pipeline.types import CompanyProfile, SearchItem, TransformRegisterRow
 
 
-def _normalize(value: str) -> str:
+def _normalise(value: str) -> str:
     return value.lower().strip()
 
 
@@ -24,7 +24,7 @@ def _similarity(a: str, b: str) -> float:
 def _transform_register_row(**overrides: str) -> TransformRegisterRow:
     row: TransformRegisterRow = {
         "Organisation Name": "Acme",
-        "org_name_normalized": "acme",
+        "org_name_normalised": "acme",
         "has_multiple_towns": "False",
         "has_multiple_counties": "False",
         "Town/City": "London",
@@ -58,7 +58,7 @@ def test_score_candidates_applies_bonuses() -> None:
         items=items,
         query_used="Acme",
         similarity_fn=_similarity,
-        normalize_fn=_normalize,
+        normalise_fn=_normalise,
     )
 
     assert len(scored) == 1

@@ -28,7 +28,7 @@ from ..types import (
 )
 
 SimilarityFn = Callable[[str, str], float]
-NormalizeFn = Callable[[str], str]
+NormaliseFn = Callable[[str], str]
 
 
 @dataclass
@@ -90,7 +90,7 @@ def score_candidates(
     items: list[SearchItem],
     query_used: str,
     similarity_fn: SimilarityFn,
-    normalize_fn: NormalizeFn,
+    normalise_fn: NormaliseFn,
 ) -> list[CandidateMatch]:
     """Score candidate companies from search results."""
     out: list[CandidateMatch] = []
@@ -106,11 +106,11 @@ def score_candidates(
         name_sim = similarity_fn(org_norm, title)
 
         locality_bonus = 0.0
-        if town_norm and (town_norm in normalize_fn(loc) or town_norm in normalize_fn(region)):
+        if town_norm and (town_norm in normalise_fn(loc) or town_norm in normalise_fn(region)):
             locality_bonus = 0.08
 
         region_bonus = 0.0
-        if county_norm and county_norm in normalize_fn(region):
+        if county_norm and county_norm in normalise_fn(region):
             region_bonus = 0.05
 
         status_bonus = 0.05 if (status or "").lower() == "active" else 0.0

@@ -10,7 +10,7 @@ def make_enrich_row(**overrides: str | float) -> TransformEnrichRow:
     """Build a valid TransformEnrichRow with optional overrides."""
     row: TransformEnrichRow = {
         "Organisation Name": "Acme Ltd",
-        "org_name_normalized": "acme",
+        "org_name_normalised": "acme",
         "has_multiple_towns": "False",
         "has_multiple_counties": "False",
         "Town/City": "London",

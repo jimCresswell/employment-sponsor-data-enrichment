@@ -6,6 +6,7 @@ All tests are network-isolated - socket connections are blocked by default.
 from __future__ import annotations
 
 import socket
+from collections.abc import Iterator
 
 import pandas as pd
 import pytest
@@ -29,7 +30,7 @@ def _blocked_socket_connect(self: socket.socket, *args: object, **kwargs: object
 
 
 @pytest.fixture(autouse=True)
-def block_network_access(monkeypatch: pytest.MonkeyPatch):
+def block_network_access(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Block all network access in tests.
 
     This fixture runs automatically for all tests and prevents any real

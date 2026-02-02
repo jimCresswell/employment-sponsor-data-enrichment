@@ -8,7 +8,7 @@ TransformRegisterRow = TypedDict(
     "TransformRegisterRow",
     {
         "Organisation Name": str,
-        "org_name_normalized": str,
+        "org_name_normalised": str,
         "has_multiple_towns": str,
         "has_multiple_counties": str,
         "Town/City": str,
@@ -80,7 +80,7 @@ TransformEnrichUnmatchedRow = TypedDict(
     "TransformEnrichUnmatchedRow",
     {
         "Organisation Name": str,
-        "org_name_normalized": str,
+        "org_name_normalised": str,
         "has_multiple_towns": str,
         "has_multiple_counties": str,
         "Town/City": str,
@@ -100,7 +100,7 @@ TransformEnrichRow = TypedDict(
     "TransformEnrichRow",
     {
         "Organisation Name": str,
-        "org_name_normalized": str,
+        "org_name_normalised": str,
         "has_multiple_towns": str,
         "has_multiple_counties": str,
         "Town/City": str,
@@ -167,7 +167,7 @@ TransformScoreRow = TypedDict(
     "TransformScoreRow",
     {
         "Organisation Name": str,
-        "org_name_normalized": str,
+        "org_name_normalised": str,
         "has_multiple_towns": str,
         "has_multiple_counties": str,
         "Town/City": str,

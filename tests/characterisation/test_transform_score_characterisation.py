@@ -18,7 +18,7 @@ from uk_sponsor_pipeline.types import TransformEnrichRow
 def _transform_enrich_row(**overrides: str | float) -> TransformEnrichRow:
     row: TransformEnrichRow = {
         "Organisation Name": "Acme Ltd",
-        "org_name_normalized": "acme",
+        "org_name_normalised": "acme",
         "has_multiple_towns": "False",
         "has_multiple_counties": "False",
         "Town/City": "London",
@@ -58,7 +58,7 @@ def test_transform_score_outputs_are_deterministic(in_memory_fs: InMemoryFileSys
             _transform_enrich_row(
                 **{
                     "Organisation Name": "Care Services Ltd",
-                    "org_name_normalized": "care services",
+                    "org_name_normalised": "care services",
                     "match_score": 0.4,
                     "ch_company_name": "CARE SERVICES LTD",
                     "ch_sic_codes": "87100",

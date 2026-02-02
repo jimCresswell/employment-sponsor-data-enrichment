@@ -8,7 +8,7 @@ import pytest
 class TestNetworkBlocking:
     """Verify that the network blocking fixture works."""
 
-    def test_socket_connect_is_blocked(self):
+    def test_socket_connect_is_blocked(self) -> None:
         """Attempting to connect a socket should raise RuntimeError."""
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -18,7 +18,7 @@ class TestNetworkBlocking:
         finally:
             sock.close()
 
-    def test_requests_would_fail_without_mock(self):
+    def test_requests_would_fail_without_mock(self) -> None:
         """Importing requests and trying to use it would fail without mocking."""
         import requests
 

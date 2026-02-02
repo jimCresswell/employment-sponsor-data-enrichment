@@ -14,7 +14,7 @@ from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.domain.companies_house import (
     CandidateMatch,
     MatchScore,
-    NormalizeFn,
+    NormaliseFn,
     SimilarityFn,
 )
 from uk_sponsor_pipeline.exceptions import (
@@ -34,7 +34,7 @@ class TestTransformEnrichAuthIntegration:
         # Create minimal transform_register input
         transform_register_csv = tmp_path / "sponsor_register_filtered.csv"
         transform_register_csv.write_text(
-            "Organisation Name,org_name_normalized,has_multiple_towns,has_multiple_counties,"
+            "Organisation Name,org_name_normalised,has_multiple_towns,has_multiple_counties,"
             "Town/City,County,Type & Rating,Route,raw_name_variants\n"
             "Test Company Ltd,test company,False,False,London,Greater London,"
             "A rating,Skilled Worker,Test Company Ltd\n"
@@ -82,7 +82,7 @@ class TestTransformEnrichCandidateOrdering:
     ) -> None:
         transform_register_csv = tmp_path / "sponsor_register_filtered.csv"
         transform_register_csv.write_text(
-            "Organisation Name,org_name_normalized,has_multiple_towns,has_multiple_counties,"
+            "Organisation Name,org_name_normalised,has_multiple_towns,has_multiple_counties,"
             "Town/City,County,Type & Rating,Route,raw_name_variants\n"
             "Acme Ltd,acme,False,False,London,Greater London,A rating,Skilled Worker,Acme Ltd\n"
         )
@@ -143,7 +143,7 @@ class TestTransformEnrichCandidateOrdering:
             items: list[SearchItem],
             query_used: str,
             similarity_fn: SimilarityFn,
-            normalize_fn: NormalizeFn,
+            normalise_fn: NormaliseFn,
         ) -> list[CandidateMatch]:
             return scores.pop(0)
 
@@ -181,7 +181,7 @@ class TestTransformEnrichResume:
             [
                 {
                     "Organisation Name": "Alpha Ltd",
-                    "org_name_normalized": "alpha ltd",
+                    "org_name_normalised": "alpha ltd",
                     "has_multiple_towns": "False",
                     "has_multiple_counties": "False",
                     "Town/City": "London",
@@ -192,7 +192,7 @@ class TestTransformEnrichResume:
                 },
                 {
                     "Organisation Name": "Beta Ltd",
-                    "org_name_normalized": "beta ltd",
+                    "org_name_normalised": "beta ltd",
                     "has_multiple_towns": "False",
                     "has_multiple_counties": "False",
                     "Town/City": "Manchester",
@@ -229,7 +229,7 @@ class TestTransformEnrichResume:
             items: list[SearchItem],
             query_used: str,
             similarity_fn: SimilarityFn,
-            normalize_fn: NormalizeFn,
+            normalise_fn: NormaliseFn,
         ) -> list[CandidateMatch]:
             score = MatchScore(0.5, 0.5, 0.0, 0.0, 0.0)
             return [
@@ -301,7 +301,7 @@ class TestTransformEnrichResume:
             [
                 {
                     "Organisation Name": "Alpha Ltd",
-                    "org_name_normalized": "alpha ltd",
+                    "org_name_normalised": "alpha ltd",
                     "has_multiple_towns": "False",
                     "has_multiple_counties": "False",
                     "Town/City": "London",
@@ -312,7 +312,7 @@ class TestTransformEnrichResume:
                 },
                 {
                     "Organisation Name": "Beta Ltd",
-                    "org_name_normalized": "beta ltd",
+                    "org_name_normalised": "beta ltd",
                     "has_multiple_towns": "False",
                     "has_multiple_counties": "False",
                     "Town/City": "Manchester",
@@ -323,7 +323,7 @@ class TestTransformEnrichResume:
                 },
                 {
                     "Organisation Name": "Gamma Ltd",
-                    "org_name_normalized": "gamma ltd",
+                    "org_name_normalised": "gamma ltd",
                     "has_multiple_towns": "False",
                     "has_multiple_counties": "False",
                     "Town/City": "Leeds",
@@ -360,7 +360,7 @@ class TestTransformEnrichResume:
             items: list[SearchItem],
             query_used: str,
             similarity_fn: SimilarityFn,
-            normalize_fn: NormalizeFn,
+            normalise_fn: NormaliseFn,
         ) -> list[CandidateMatch]:
             score = MatchScore(0.5, 0.5, 0.0, 0.0, 0.0)
             return [
@@ -432,7 +432,7 @@ class TestTransformEnrichFailFast:
                 [
                     {
                         "Organisation Name": "Failing Co",
-                        "org_name_normalized": "failing co",
+                        "org_name_normalised": "failing co",
                         "has_multiple_towns": "False",
                         "has_multiple_counties": "False",
                         "Town/City": "London",
@@ -490,7 +490,7 @@ def test_transform_enrich_profile_fetch_errors_fail_fast(
             [
                 {
                     "Organisation Name": "Acme Ltd",
-                    "org_name_normalized": "acme ltd",
+                    "org_name_normalised": "acme ltd",
                     "has_multiple_towns": "False",
                     "has_multiple_counties": "False",
                     "Town/City": "London",
@@ -533,7 +533,7 @@ def test_transform_enrich_profile_fetch_errors_fail_fast(
         items: list[SearchItem],
         query_used: str,
         similarity_fn: SimilarityFn,
-        normalize_fn: NormalizeFn,
+        normalise_fn: NormaliseFn,
     ) -> list[CandidateMatch]:
         score = MatchScore(0.9, 0.8, 0.05, 0.03, 0.02)
         return [
@@ -571,7 +571,7 @@ def test_resume_false_writes_to_new_output_dir(
 ) -> None:
     transform_register_csv = tmp_path / "sponsor_register_filtered.csv"
     transform_register_csv.write_text(
-        "Organisation Name,org_name_normalized,has_multiple_towns,has_multiple_counties,"
+        "Organisation Name,org_name_normalised,has_multiple_towns,has_multiple_counties,"
         "Town/City,County,Type & Rating,Route,raw_name_variants\n"
         "Acme Ltd,acme,False,False,London,Greater London,A rating,Skilled Worker,Acme Ltd\n"
     )
@@ -616,7 +616,7 @@ def test_transform_enrich_file_source_uses_local_payload(in_memory_fs: InMemoryF
             [
                 {
                     "Organisation Name": "Acme Ltd",
-                    "org_name_normalized": "acme",
+                    "org_name_normalised": "acme",
                     "has_multiple_towns": "False",
                     "has_multiple_counties": "False",
                     "Town/City": "London",
@@ -701,7 +701,7 @@ def test_transform_enrich_invalid_source_type_raises(in_memory_fs: InMemoryFileS
             [
                 {
                     "Organisation Name": "Acme Ltd",
-                    "org_name_normalized": "acme",
+                    "org_name_normalised": "acme",
                     "has_multiple_towns": "False",
                     "has_multiple_counties": "False",
                     "Town/City": "London",

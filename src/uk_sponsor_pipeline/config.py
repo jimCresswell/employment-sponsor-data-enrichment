@@ -1,4 +1,4 @@
-"""Centralized, injectable configuration for the UK Sponsor Pipeline."""
+"""Centralised, injectable configuration for the UK Sponsor Pipeline."""
 
 from __future__ import annotations
 

@@ -1,10 +1,10 @@
 """Sponsor register domain rules for register filtering and aggregation.
 
 Usage example:
-    from uk_sponsor_pipeline.domain.organisation_identity import normalize_org_name
+    from uk_sponsor_pipeline.domain.organisation_identity import normalise_org_name
     from uk_sponsor_pipeline.domain.sponsor_register import build_sponsor_register_snapshot
 
-    snapshot = build_sponsor_register_snapshot(rows, normalize_fn=normalize_org_name)
+    snapshot = build_sponsor_register_snapshot(rows, normalise_fn=normalise_org_name)
     aggregated = snapshot.aggregated
 """
 
@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import TypedDict
 
-NormalizeFn = Callable[[str], str]
+NormaliseFn = Callable[[str], str]
 
 
 RawSponsorRow = TypedDict(
@@ -35,7 +35,7 @@ class AggregatedOrganisation:
     """Aggregated organisation record with structured locations."""
 
     organisation_name: str
-    org_name_normalized: str
+    org_name_normalised: str
     raw_name_variants: tuple[str, ...]
     towns: tuple[str, ...]
     counties: tuple[str, ...]
@@ -60,7 +60,7 @@ class RegisterStatsData:
     a_rated_rows: int
     filtered_rows: int
     unique_orgs_raw: int
-    unique_orgs_normalized: int
+    unique_orgs_normalised: int
     duplicates_merged: int
     top_towns: list[tuple[str, int]]
     top_counties: list[tuple[str, int]]
@@ -103,13 +103,13 @@ def _is_a_rated(type_rating: str) -> bool:
 
 
 def build_sponsor_register_snapshot(
-    rows: Iterable[RawSponsorRow], *, normalize_fn: NormalizeFn
+    rows: Iterable[RawSponsorRow], *, normalise_fn: NormaliseFn
 ) -> SponsorRegisterSnapshot:
     """Filter and aggregate sponsor register rows for the register transform.
 
     Args:
         rows: Raw sponsor register rows.
-        normalize_fn: Organisation name normalisation function.
+        normalise_fn: Organisation name normalisation function.
 
     Returns:
         SponsorRegisterSnapshot with filtered rows, aggregation, and stats.
@@ -135,18 +135,18 @@ def build_sponsor_register_snapshot(
     order: list[str] = []
 
     for row in filtered_rows:
-        normalized = normalize_fn(row["Organisation Name"])
-        if normalized not in aggregated_map:
-            aggregated_map[normalized] = {
+        normalised = normalise_fn(row["Organisation Name"])
+        if normalised not in aggregated_map:
+            aggregated_map[normalised] = {
                 "Organisation Name": [],
                 "Town/City": [],
                 "County": [],
                 "Type & Rating": [],
                 "Route": [],
             }
-            order.append(normalized)
+            order.append(normalised)
 
-        bucket = aggregated_map[normalized]
+        bucket = aggregated_map[normalised]
         bucket["Organisation Name"].append(row["Organisation Name"])
         bucket["Town/City"].append(row["Town/City"])
         bucket["County"].append(row["County"])
@@ -154,8 +154,8 @@ def build_sponsor_register_snapshot(
         bucket["Route"].append(row["Route"])
 
     aggregated: list[AggregatedOrganisation] = []
-    for normalized in sorted(order):
-        bucket = aggregated_map[normalized]
+    for normalised in sorted(order):
+        bucket = aggregated_map[normalised]
         raw_name_variants = _unique_preserve_order(bucket["Organisation Name"])
         towns = _unique_preserve_order(bucket["Town/City"])
         counties = _unique_preserve_order(bucket["County"])
@@ -165,7 +165,7 @@ def build_sponsor_register_snapshot(
         aggregated.append(
             AggregatedOrganisation(
                 organisation_name=organisation_name,
-                org_name_normalized=normalized,
+                org_name_normalised=normalised,
                 raw_name_variants=raw_name_variants,
                 towns=towns,
                 counties=counties,
@@ -174,8 +174,8 @@ def build_sponsor_register_snapshot(
             )
         )
 
-    unique_orgs_normalized = len(aggregated)
-    duplicates_merged = unique_orgs_raw - unique_orgs_normalized
+    unique_orgs_normalised = len(aggregated)
+    duplicates_merged = unique_orgs_raw - unique_orgs_normalised
 
     stats = RegisterStatsData(
         total_raw_rows=total_raw_rows,
@@ -183,7 +183,7 @@ def build_sponsor_register_snapshot(
         a_rated_rows=a_rated_rows,
         filtered_rows=len(filtered_rows),
         unique_orgs_raw=unique_orgs_raw,
-        unique_orgs_normalized=unique_orgs_normalized,
+        unique_orgs_normalised=unique_orgs_normalised,
         duplicates_merged=duplicates_merged,
         top_towns=town_counts.most_common(10),
         top_counties=county_counts.most_common(10),

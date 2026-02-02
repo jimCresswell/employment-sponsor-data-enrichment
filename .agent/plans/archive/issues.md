@@ -3,7 +3,7 @@
 ## 2026-01-31
 
 1. **Stage 2 (Companies House) – Authentication failure**
-   - Error: `AuthenticationError: Companies House API returned 401 Unauthorized`
+   - Error: `AuthenticationError: Companies House API returned 401 Unauthorised`
    - Impact: Stage 2 halted immediately; Stage 3 not executed.
    - Measured:
      - `.env` value is a valid UUID format with no whitespace or quotes.

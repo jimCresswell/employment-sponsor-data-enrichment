@@ -27,8 +27,17 @@ def _emit(message: str) -> None:
 
 
 def lint() -> None:
-    _run_or_exit(["ruff", "check", "src", "tests", *sys.argv[1:]])
-    _run_or_exit(["lint-imports"])
+    steps: list[list[str]] = [
+        ["ruff", "check", "src", "tests", "--ignore-noqa", *sys.argv[1:]],
+        [sys.executable, "scripts/check_inline_ignores.py"],
+        [sys.executable, "scripts/check_us_spelling.py"],
+        ["lint-imports"],
+    ]
+    for args in steps:
+        code = _run(args)
+        if code != 0:
+            raise SystemExit(code)
+    raise SystemExit(0)
 
 
 def format_code() -> None:
@@ -41,6 +50,10 @@ def format_check() -> None:
 
 def typecheck() -> None:
     raise SystemExit(_run(["pyright", *sys.argv[1:]]))
+
+
+def spelling_check() -> None:
+    _run_or_exit([sys.executable, "scripts/check_us_spelling.py", *sys.argv[1:]])
 
 
 def test() -> None:
@@ -63,7 +76,9 @@ def check() -> None:
     steps: list[tuple[str, list[str]]] = [
         ("format", ["ruff", "format", "src", "tests"]),
         ("typecheck", ["pyright"]),
-        ("lint", ["ruff", "check", "src", "tests"]),
+        ("lint", ["ruff", "check", "src", "tests", "--ignore-noqa"]),
+        ("lint-inline-ignores", [sys.executable, "scripts/check_inline_ignores.py"]),
+        ("lint-us-spelling", [sys.executable, "scripts/check_us_spelling.py"]),
         ("import-linter", ["lint-imports"]),
         ("test", ["pytest"]),
         (

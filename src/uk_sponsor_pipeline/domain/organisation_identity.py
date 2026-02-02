@@ -3,7 +3,7 @@
 Usage example:
     from uk_sponsor_pipeline.domain.organisation_identity import (
         generate_query_variants,
-        normalize_org_name,
+        normalise_org_name,
         simple_similarity,
     )
 
@@ -50,15 +50,15 @@ TRADING_AS_PATTERNS = (
 
 
 @dataclass
-class NormalizedName:
+class NormalisedName:
     """Result of name normalisation."""
 
     raw: str
-    normalized: str
+    normalised: str
     variants: list[str]  # Alternative query names
 
 
-def normalize_org_name(name: str) -> str:
+def normalise_org_name(name: str) -> str:
     """Normalise organisation name for matching.
 
     Transformations:
@@ -132,16 +132,16 @@ def generate_query_variants(name: str) -> list[str]:
         return []
 
     variants: list[str] = [name.strip()]
-    seen_normalized: set[str] = {normalize_org_name(name)}
+    seen_normalised: set[str] = {normalise_org_name(name)}
 
     def add_variant(v: str) -> None:
         v = v.strip()
         if not v:
             return
-        norm = normalize_org_name(v)
-        if norm and norm not in seen_normalized:
+        norm = normalise_org_name(v)
+        if norm and norm not in seen_normalised:
             variants.append(v)
-            seen_normalized.add(norm)
+            seen_normalised.add(norm)
 
     trading = extract_trading_name(name)
     if trading:
@@ -165,7 +165,7 @@ def generate_query_variants(name: str) -> list[str]:
 
 
 def _token_sort_key(name: str) -> str:
-    toks = normalize_org_name(name).split()
+    toks = normalise_org_name(name).split()
     toks.sort()
     return " ".join(toks)
 

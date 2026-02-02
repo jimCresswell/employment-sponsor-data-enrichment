@@ -35,15 +35,14 @@ These criteria define the final, measurable outcomes for this plan:
 - ETL transforms produce immutable artefacts; usage/query steps only read artefacts and write usage outputs.
 - Domain is core and remains free of application/CLI/infrastructure imports (import-linter passes).
 - Full gates pass: `format → typecheck → lint → test → coverage`.
-- A repo-wide scan exists at `reports/terminology-usage.txt` to guide renames; it is not exhaustive and must not replace comprehensive validation.
 
 ## Latest Completed Work (Phase 4 Summary)
 
-- `normalization.py` removed; replaced by `domain/organisation_identity.py` (includes `simple_similarity`).
+- `normalisation.py` removed; replaced by `domain/organisation_identity.py` (includes `simple_similarity`).
 - Transform Register rules moved into `domain/sponsor_register.py`; Transform Register delegates to domain.
 - Town/county now handled as structured collections in core logic; flattened only at IO boundaries.
 - README updated to reflect new module layout.
-- New tests: `tests/test_domain_sponsor_register.py`; `tests/test_normalization.py` now targets the domain module.
+- New tests: `tests/test_domain_sponsor_register.py`; `tests/test_normalisation.py` now targets the domain module.
 - Full gates passed via `uv run check`.
 
 ## Current Structure Snapshot (Required Context for Fresh Session)
@@ -106,7 +105,7 @@ This plan is the authoritative entry point for the refactor. It captures the key
 - Transform Enrich profile fetch errors are now fail‑fast; no `profile_error` continuation.
 - `resume=False` now writes to a timestamped output subdirectory to avoid stale data reuse.
 - Region filtering enforces a single region; multiple regions are rejected with a clear error.
-- Phase 4 complete: `normalization.py` removed, `organisation_identity.py` added (including `simple_similarity`); Transform Register rules moved into `domain/sponsor_register.py`; Transform Register now flattens structured locations at IO boundaries only; README updated; new domain tests added.
+- Phase 4 complete: `normalisation.py` removed, `organisation_identity.py` added (including `simple_similarity`); Transform Register rules moved into `domain/sponsor_register.py`; Transform Register now flattens structured locations at IO boundaries only; README updated; new domain tests added.
 - Phase 7 complete: docs/ADR audit and test renames aligned with application/domain structure.
 - Phase 8 complete: location aliases added with London/Manchester profiles; domain matching + Transform Score geographic filtering use aliases; README and tests updated.
 - Phase 8.5 complete: configurable Companies House source (API or file) with validated file inputs; Transform Enrich uses source abstraction; README and ADR updated.
@@ -289,8 +288,8 @@ This plan replaces legacy labels with semantic names while keeping artefact boun
 - `src/uk_sponsor_pipeline/domain/sponsor_register.py`
   - Transform Register parsing, filtering, aggregation rules.
 - `src/uk_sponsor_pipeline/domain/organisation_identity.py`
-  - Move existing `normalization.py` here + extract `_simple_similarity()` from Transform Enrich.
-  - Contains: `NormalizedName`, `normalize_org_name()`, `generate_query_variants()`, `simple_similarity()`.
+  - Move existing `normalisation.py` here + extract `_simple_similarity()` from Transform Enrich.
+  - Contains: `NormalisedName`, `normalise_org_name()`, `generate_query_variants()`, `simple_similarity()`.
 - `src/uk_sponsor_pipeline/domain/companies_house.py`
   - Candidate scoring (uses `simple_similarity` from `organisation_identity`), match selection, profile-to-row mapping.
 - `src/uk_sponsor_pipeline/domain/scoring.py`
@@ -401,7 +400,7 @@ No wrapper package remains; application modules are the single source of truth.
 
 ### Phase 4 — Domain Extraction (Identity + Transform Register)
 
-- Move `normalization.py` → `domain/organisation_identity.py` (mostly a move, not a rewrite).
+- Move `normalisation.py` → `domain/organisation_identity.py` (mostly a move, not a rewrite).
 - Extract `_simple_similarity()` from `application/transform_enrich.py` → `domain/organisation_identity.py`.
 - Move Transform Register rules to `domain/sponsor_register.py`.
 - Replace pipe-joined town/county handling with structured collections in core logic; flatten to strings only at IO boundaries.

@@ -54,7 +54,8 @@ These rules are mandatory for all work in this repository. For goals and outputs
 - Use snake_case for modules and functions.
 - Keep Ruff and Pyright clean; fix root causes instead of suppressing.
 - Avoid `Any` outside IO boundaries; validate external data into strict `TypedDict` or dataclass shapes immediately after ingestion.
-- Ruff `ANN401` must be enabled; allow per-file ignores only for explicit IO boundary modules.
+- Ruff `ANN401` must be enabled; per-file ignores are not permitted.
+- Inline suppressions (`noqa`, `type: ignore`, `pyright: ignore`, `pylint: disable`) are forbidden; exceptions must be configured in tool config files only.
 - Use British spelling in all documentation, comments, and user-facing text.
 - Protocol implementations must mark overridden methods with `@override`.
 - Private names (prefixed with `_`) must not be imported or used outside their module; make them public or provide a public wrapper.
@@ -78,7 +79,7 @@ These rules are mandatory for all work in this repository. For goals and outputs
 - Do not disable linting, formatting, type checking, or tests.
 - Run the full gate sequence every time, in order: `format` → `typecheck` → `lint` → `test` → `coverage`.
 - Do not run partial gates; use `uv run check` or the explicit full sequence.
-- All linting runs via `uv run lint` (ruff + import-linter once wired).
+- All linting runs via `uv run lint` (ruff + inline ignore check + US spelling scan + import-linter).
 
 ## Tooling
 

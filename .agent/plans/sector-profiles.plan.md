@@ -2,7 +2,7 @@
 
 ## Goal
 
-Make Stage 3 sector‑agnostic by externalizing scoring signals (SIC mappings, keywords, weights, thresholds) into profiles that can be selected via CLI or environment, while preserving current tech behaviour as the default profile.
+Make Stage 3 sector‑agnostic by externalising scoring signals (SIC mappings, keywords, weights, thresholds) into profiles that can be selected via CLI or environment, while preserving current tech behaviour as the default profile.
 
 Note: we should also look into defining location profiles, e.g. mapping London to a town, city, collection of postcodes, etc. so that the user idea of "London" is consistent with the varied data we have.
 

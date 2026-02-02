@@ -18,7 +18,7 @@ Use a step-based pipeline with CSV artefacts at each boundary:
 - Transform Enrich → enriched CSVs (matched, unmatched, candidates)
 - Transform Score → scored and shortlisted CSVs
 
-Artifacts are stored under `data/raw`, `data/interim`, and `data/processed`.
+Artefacts are stored under `data/raw`, `data/interim`, and `data/processed`.
 
 ## Consequences
 

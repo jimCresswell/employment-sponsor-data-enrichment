@@ -28,7 +28,10 @@ def test_lint_calls_ruff(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(SystemExit) as exc_info:
         devtools.lint()
     _assert_exit_ok(exc_info)
-    assert calls[0][:4] == ["ruff", "check", "src", "tests"]
+    assert calls[0][:5] == ["ruff", "check", "src", "tests", "--ignore-noqa"]
+    assert calls[1] == [devtools.sys.executable, "scripts/check_inline_ignores.py"]
+    assert calls[2] == [devtools.sys.executable, "scripts/check_us_spelling.py"]
+    assert calls[3] == ["lint-imports"]
 
 
 def test_format_calls_ruff(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -77,6 +80,15 @@ def test_coverage_calls_pytest(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "--cov-fail-under=85" in calls[0]
 
 
+def test_spelling_check_calls_script(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _capture_run(monkeypatch)
+    monkeypatch.setattr(devtools.sys, "argv", ["devtools"])
+    with pytest.raises(SystemExit) as exc_info:
+        devtools.spelling_check()
+    _assert_exit_ok(exc_info)
+    assert calls[0] == [devtools.sys.executable, "scripts/check_us_spelling.py"]
+
+
 def test_check_runs_quality_gates_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _capture_run(monkeypatch)
     emitted: list[str] = []
@@ -91,7 +103,9 @@ def test_check_runs_quality_gates_in_order(monkeypatch: pytest.MonkeyPatch) -> N
     assert calls == [
         ["ruff", "format", "src", "tests"],
         ["pyright"],
-        ["ruff", "check", "src", "tests"],
+        ["ruff", "check", "src", "tests", "--ignore-noqa"],
+        [devtools.sys.executable, "scripts/check_inline_ignores.py"],
+        [devtools.sys.executable, "scripts/check_us_spelling.py"],
         ["lint-imports"],
         ["pytest"],
         [

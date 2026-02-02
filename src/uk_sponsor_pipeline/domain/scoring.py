@@ -6,7 +6,7 @@ Usage example:
 
     row: TransformEnrichRow = {
         "Organisation Name": "Acme Ltd",
-        "org_name_normalized": "acme",
+        "org_name_normalised": "acme",
         "has_multiple_towns": "False",
         "has_multiple_counties": "False",
         "Town/City": "London",

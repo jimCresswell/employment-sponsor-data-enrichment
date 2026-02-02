@@ -137,8 +137,8 @@ class TestIsAuthError:
         error = Exception("401 Client Error: Unauthorized")
         assert is_auth_error(error) is True
 
-    def test_detects_unauthorized_in_string(self) -> None:
-        """Detects 'Unauthorized' in error message string."""
+    def test_detects_unauthorised_in_string(self) -> None:
+        """Detects 'Unauthorised' in error message string."""
         error = Exception("Request was Unauthorized by server")
         assert is_auth_error(error) is True
 

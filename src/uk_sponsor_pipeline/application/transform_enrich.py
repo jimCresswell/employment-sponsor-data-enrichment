@@ -30,7 +30,7 @@ from ..domain.companies_house import (
 )
 from ..domain.organisation_identity import (
     generate_query_variants,
-    normalize_org_name,
+    normalise_org_name,
     simple_similarity,
 )
 from ..exceptions import AuthenticationError, CircuitBreakerOpen, RateLimitError
@@ -93,7 +93,7 @@ def _as_str(value: object) -> str:
 def _coerce_register_row(raw: dict[str, object]) -> TransformRegisterRow:
     return {
         "Organisation Name": _as_str(raw.get("Organisation Name")),
-        "org_name_normalized": _as_str(raw.get("org_name_normalized")),
+        "org_name_normalised": _as_str(raw.get("org_name_normalised")),
         "has_multiple_towns": _as_str(raw.get("has_multiple_towns")),
         "has_multiple_counties": _as_str(raw.get("has_multiple_counties")),
         "Town/City": _as_str(raw.get("Town/City")),
@@ -191,7 +191,7 @@ def run_transform_enrich(
         cache_dir: Directory for API response cache.
         config: Pipeline configuration (required; load at entry point).
         http_client: HTTP client (creates default if None).
-        resume: If True, skip already-processed organizations.
+        resume: If True, skip already-processed organisations.
         fs: Optional filesystem for testing.
         batch_start: 1-based batch index to start from (after resume filtering).
         batch_count: Number of batches to run (None = run all remaining batches).
@@ -244,7 +244,7 @@ def run_transform_enrich(
     )
     total_register_orgs = len(df)
 
-    # Normalize batching inputs
+    # Normalise batching inputs
     batch_size_value = batch_size if batch_size is not None else config.ch_batch_size
     batch_size_value = max(1, int(batch_size_value))
     batch_start = int(batch_start)
@@ -293,7 +293,7 @@ def run_transform_enrich(
         http_session=http_session,
     )
 
-    # Process organizations in batches
+    # Process organisations in batches
     raw_rows = validate_as(list[dict[str, object]], df.to_dict(orient="records"))
     rows = _coerce_register_rows(raw_rows)
     to_process_all = [
@@ -325,7 +325,7 @@ def run_transform_enrich(
             else f"{overall_batch_start}-{overall_batch_end}"
         )
     logger.info(
-        "Processing %s organizations (batch size %s, batch start %s, batches %s/%s, "
+        "Processing %s organisations (batch size %s, batch start %s, batches %s/%s, "
         "overall batch %s/%s)",
         len(to_process),
         batch_size_value,
@@ -382,9 +382,9 @@ def run_transform_enrich(
             org = row["Organisation Name"]
             town = row.get("Town/City", "")
             county = row.get("County", "")
-            org_norm = normalize_org_name(org)
-            town_norm = normalize_org_name(town)
-            county_norm = normalize_org_name(county)
+            org_norm = normalise_org_name(org)
+            town_norm = normalise_org_name(town)
+            county_norm = normalise_org_name(county)
 
             # Generate query variants
             query_variants = generate_query_variants(org)
@@ -412,7 +412,7 @@ def run_transform_enrich(
                     items=items,
                     query_used=query,
                     similarity_fn=simple_similarity,
-                    normalize_fn=normalize_org_name,
+                    normalise_fn=normalise_org_name,
                 )
                 all_candidates.extend(scored)
 

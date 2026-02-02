@@ -287,11 +287,15 @@ uv run format-check
 # Type check
 uv run typecheck
 
+# US spelling check
+uv run spelling-check
+
 # Full quality gate run (format → typecheck → lint → test → coverage)
 uv run check
 ```
 
-`uv run lint` is the single lint entry point. It currently runs ruff; import‑linter will be added here as part of the refactor plan.
+`uv run lint` is the single lint entry point. It runs ruff, the inline ignore check, the US spelling scan, and import‑linter.
+The spelling scan checks identifiers, comments/docstrings, and string literals, but ignores string literals used for comparisons or matching (external tokens) and skips inline/fenced code in docs.
 
 ## Scoring Model (Transform Score)
 

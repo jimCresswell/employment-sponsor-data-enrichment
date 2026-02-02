@@ -1,9 +1,39 @@
 """Tests for extract step with filesystem injection."""
 
 from pathlib import Path
+from typing import override
+
+import pytest
 
 from tests.fakes import InMemoryFileSystem
 from uk_sponsor_pipeline.application.extract import extract_register
+from uk_sponsor_pipeline.protocols import HttpSession
+
+
+class DummyResponse:
+    def __init__(self, content: bytes) -> None:
+        self.content = content
+        self.status_code = 200
+        self.text = content.decode("utf-8", errors="ignore")
+
+    def raise_for_status(self) -> None:
+        return None
+
+
+class DummySession(HttpSession):
+    def __init__(self, response: DummyResponse) -> None:
+        self.response = response
+        self.calls: list[str] = []
+
+    @override
+    def get_text(self, url: str, *, timeout_seconds: float) -> str:
+        self.calls.append(url)
+        return self.response.text
+
+    @override
+    def get_bytes(self, url: str, *, timeout_seconds: float) -> bytes:
+        self.calls.append(url)
+        return self.response.content
 
 
 def test_extract_with_in_memory_fs(in_memory_fs: InMemoryFileSystem) -> None:
@@ -11,28 +41,6 @@ def test_extract_with_in_memory_fs(in_memory_fs: InMemoryFileSystem) -> None:
         b"Organisation Name,Town/City,County,Type & Rating,Route\n"
         b"Acme Ltd,London,Greater London,A rating,Skilled Worker\n"
     )
-
-    class DummyResponse:
-        def __init__(self, content: bytes) -> None:
-            self.content = content
-            self.status_code = 200
-            self.text = content.decode("utf-8", errors="ignore")
-
-        def raise_for_status(self) -> None:
-            return None
-
-    class DummySession:
-        def __init__(self, response: DummyResponse) -> None:
-            self.response = response
-            self.calls: list[str] = []
-
-        def get_text(self, url: str, *, timeout_seconds: float) -> str:
-            self.calls.append(url)
-            return self.response.text
-
-        def get_bytes(self, url: str, *, timeout_seconds: float) -> bytes:
-            self.calls.append(url)
-            return self.response.content
 
     session = DummySession(DummyResponse(csv_content))
 
@@ -50,3 +58,23 @@ def test_extract_with_in_memory_fs(in_memory_fs: InMemoryFileSystem) -> None:
     assert isinstance(manifest.get("asset_url"), str)
     assert manifest["schema_valid"] is True
     assert manifest["asset_url"] == "https://example.com/register.csv"
+
+
+def test_extract_fails_on_invalid_schema(in_memory_fs: InMemoryFileSystem) -> None:
+    csv_content = (
+        b"Organisation Name,Town/City,Type & Rating,Route\n"
+        b"Acme Ltd,London,A rating,Skilled Worker\n"
+    )
+    session = DummySession(DummyResponse(csv_content))
+
+    with pytest.raises(RuntimeError) as exc_info:
+        extract_register(
+            url_override="https://example.com/register.csv",
+            data_dir="data/raw",
+            reports_dir="reports",
+            session=session,
+            fs=in_memory_fs,
+        )
+
+    assert "Missing columns" in str(exc_info.value)
+    assert "County" in str(exc_info.value)

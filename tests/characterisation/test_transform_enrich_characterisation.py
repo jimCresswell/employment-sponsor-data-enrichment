@@ -22,7 +22,7 @@ def _transform_register_input_df() -> pd.DataFrame:
         [
             {
                 "Organisation Name": "Acme Ltd",
-                "org_name_normalized": "acme",
+                "org_name_normalised": "acme",
                 "has_multiple_towns": "False",
                 "has_multiple_counties": "False",
                 "Town/City": "London",

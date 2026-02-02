@@ -1,7 +1,7 @@
 """Transform register: filter to Skilled Worker + A-rated and aggregate by organisation.
 
 Improvements over original:
-- Adds org_name_normalized for matching
+- Adds org_name_normalised for matching
 - Preserves org_name_raw and all variants
 - Outputs stats JSON with counts and distributions
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..domain.organisation_identity import normalize_org_name
+from ..domain.organisation_identity import normalise_org_name
 from ..domain.sponsor_register import RawSponsorRow, build_sponsor_register_snapshot
 from ..infrastructure import LocalFileSystem
 from ..infrastructure.io.validation import validate_as
@@ -45,7 +45,7 @@ class TransformRegisterStats:
     a_rated_rows: int
     filtered_rows: int  # Both conditions
     unique_orgs_raw: int
-    unique_orgs_normalized: int
+    unique_orgs_normalised: int
     duplicates_merged: int
     top_towns: list[tuple[str, int]]
     top_counties: list[tuple[str, int]]
@@ -142,7 +142,7 @@ def run_transform_register(
     raw_rows = validate_as(list[dict[str, object]], df.to_dict(orient="records"))
     rows = _coerce_raw_rows(raw_rows)
 
-    snapshot = build_sponsor_register_snapshot(rows, normalize_fn=normalize_org_name)
+    snapshot = build_sponsor_register_snapshot(rows, normalise_fn=normalise_org_name)
     logger.info("Filtered: %s rows (Skilled Worker + A-rated)", f"{snapshot.stats.filtered_rows:,}")
 
     aggregated_rows: list[dict[str, object]] = []
@@ -150,7 +150,7 @@ def run_transform_register(
         aggregated_rows.append(
             {
                 "Organisation Name": record.organisation_name,
-                "org_name_normalized": record.org_name_normalized,
+                "org_name_normalised": record.org_name_normalised,
                 "has_multiple_towns": record.has_multiple_towns,
                 "has_multiple_counties": record.has_multiple_counties,
                 "Town/City": _join_unique(record.towns),
@@ -178,7 +178,7 @@ def run_transform_register(
         a_rated_rows=snapshot.stats.a_rated_rows,
         filtered_rows=snapshot.stats.filtered_rows,
         unique_orgs_raw=snapshot.stats.unique_orgs_raw,
-        unique_orgs_normalized=snapshot.stats.unique_orgs_normalized,
+        unique_orgs_normalised=snapshot.stats.unique_orgs_normalised,
         duplicates_merged=snapshot.stats.duplicates_merged,
         top_towns=snapshot.stats.top_towns,
         top_counties=snapshot.stats.top_counties,
@@ -194,7 +194,7 @@ def run_transform_register(
         "a_rated_rows": stats.a_rated_rows,
         "filtered_rows": stats.filtered_rows,
         "unique_orgs_raw": stats.unique_orgs_raw,
-        "unique_orgs_normalized": stats.unique_orgs_normalized,
+        "unique_orgs_normalised": stats.unique_orgs_normalised,
         "duplicates_merged": stats.duplicates_merged,
         "top_towns": dict(stats.top_towns),
         "top_counties": dict(stats.top_counties),

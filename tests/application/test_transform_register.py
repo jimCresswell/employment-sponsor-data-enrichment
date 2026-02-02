@@ -1,4 +1,4 @@
-"""Tests for register transform behavior."""
+"""Tests for register transform behaviour."""
 
 import json
 from pathlib import Path
@@ -24,10 +24,10 @@ def test_transform_register_filters_and_aggregates(
 
     df = pd.read_csv(out_path, dtype=str).fillna("")
 
-    assert "org_name_normalized" in df.columns
-    assert result.unique_orgs == 4  # 5 rows with 1 duplicate normalized
+    assert "org_name_normalised" in df.columns
+    assert result.unique_orgs == 4  # 5 rows with 1 duplicate normalised
 
-    acme = df[df["org_name_normalized"] == "acme software"].iloc[0]
+    acme = df[df["org_name_normalised"] == "acme software"].iloc[0]
     assert "ACME SOFTWARE LIMITED" in acme["raw_name_variants"]
 
     stats = validate_as(
@@ -36,7 +36,7 @@ def test_transform_register_filters_and_aggregates(
     )
     assert isinstance(stats.get("total_raw_rows"), int)
     assert isinstance(stats.get("filtered_rows"), int)
-    assert isinstance(stats.get("unique_orgs_normalized"), int)
+    assert isinstance(stats.get("unique_orgs_normalised"), int)
     assert stats["total_raw_rows"] == 5
     assert stats["filtered_rows"] == 5
-    assert stats["unique_orgs_normalized"] == 4
+    assert stats["unique_orgs_normalised"] == 4
