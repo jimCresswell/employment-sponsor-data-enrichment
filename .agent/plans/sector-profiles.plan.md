@@ -1,14 +1,16 @@
-# Plan: Sector Profiles for Stage 3 Scoring (Configurable)
+# Plan: Sector Profiles for Transform-Score (Configurable)
 
 ## Goal
 
-Make Stage 3 sector‑agnostic by externalising scoring signals (SIC mappings, keywords, weights, thresholds) into profiles that can be selected via CLI or environment, while preserving current tech behaviour as the default profile.
+Make transform-score sector‑agnostic by externalising scoring signals (SIC mappings, keywords,
+weights, thresholds) into profiles that can be selected via CLI or environment, while preserving
+current tech behaviour as the default profile.
 
 Note: we should also look into defining location profiles, e.g. mapping London to a town, city, collection of postcodes, etc. so that the user idea of "London" is consistent with the varied data we have.
 
 ## Non‑Goals
 
-- No change to Stage 1 or Stage 2 behaviour.
+- No change to extract, transform-register, or transform-enrich behaviour.
 - No new UI or database features.
 
 ## Proposed Design
@@ -27,7 +29,7 @@ Note: we should also look into defining location profiles, e.g. mapping London t
 
 ### CLI + Env
 
-- Add `--sector-profile` (path) and `--sector` (named profile) to Stage 3.
+- Add `--sector-profile` (path) and `--sector` (named profile) to transform-score.
 - Add env var `SECTOR_PROFILE` (path) and `SECTOR_NAME` (named profile).
 - Default: current tech profile if none provided.
 
@@ -35,7 +37,7 @@ Note: we should also look into defining location profiles, e.g. mapping London t
 
 - `domain/scoring/` consumes a `ScoringProfile` object.
 - A loader module reads profile files and validates schema.
-- Stage 3 uses the loader, then passes the profile into scoring.
+- Transform-score uses the loader, then passes the profile into scoring.
 
 ## TDD Strategy
 

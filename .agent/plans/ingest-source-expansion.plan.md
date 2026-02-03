@@ -30,8 +30,8 @@ optional source. Legacy CLI commands and the JSON file source are removed.
 
 ### CLI
 
-- Add `refresh-sponsor --url <csv-url> [--snapshot-root <path>]`.
-- Add `refresh-companies-house --url <zip-or-csv-url> [--snapshot-root <path>]`.
+- Add `refresh-sponsor --url <csv-url> [--snapshot-root <path>]`. Progress bar is emitted by the CLI only.
+- Add `refresh-companies-house --url <zip-or-csv-url> [--snapshot-root <path>]`. Progress bar is emitted by the CLI only.
 - Remove `extract` and `transform-register` commands entirely.
 - `run-all` becomes cache-only and fails fast if clean snapshot paths are not resolved.
 
@@ -43,21 +43,16 @@ Add new config fields and env vars, read once in the CLI and passed through:
 - `SPONSOR_CLEAN_PATH`.
 - `CH_CLEAN_PATH`.
 - `CH_TOKEN_INDEX_DIR`.
-- `CH_COMPANY_INDEX_PATH`.
 - Optional `CH_FILE_MAX_CANDIDATES` (default 500).
 
 If paths are not set, the CLI resolves the latest snapshot under `SNAPSHOT_ROOT` and passes resolved paths into application steps.
 
 ### Protocols
 
-Extend `HttpSession` and `FileSystem` to support streaming and indexed access:
+Extend `HttpSession` and `FileSystem` to support streaming:
 
 - `HttpSession.iter_bytes(url, timeout_seconds, chunk_size)`.
 - `FileSystem.write_bytes_stream(path, chunks)`.
-- `FileSystem.iter_lines(path)`.
-- `FileSystem.read_line_at(path, offset)`.
-
-Offsets are byte offsets; streaming and line iteration should preserve byte fidelity.
 
 ### Types and Exceptions
 
@@ -81,7 +76,6 @@ Companies House snapshot directory contains:
 - `raw.csv`.
 - `clean.csv`.
 - `index_tokens_<bucket>.csv` (bucketed token index).
-- `index_company_offsets.csv` (company_number, byte_offset).
 - `manifest.json`.
 
 Snapshot directory creation fails fast if the target date already exists.
@@ -133,7 +127,6 @@ Companies House:
 - Companies House Extracted CSV Write: `raw.csv` when source is a zip.
 - Companies House Clean Snapshot Write: `clean.csv`.
 - Companies House Token Index Write: `index_tokens_<bucket>.csv`.
-- Companies House Company Offset Index Write: `index_company_offsets.csv`.
 - Companies House Snapshot Manifest Write: `manifest.json`.
 
 ## Cleaning Rules
@@ -147,16 +140,18 @@ Companies House:
 
 ### Companies House Bulk CSV
 
-- Download the bulk file from the URL input, stream to `raw.zip` or `raw.csv`.
+- Download the bulk file from the URL input, stream to `raw.zip` or `raw.csv` (never read whole file into memory).
+- Progress bar is emitted by the CLI only (byte stream for download, row count for processing).
 - If zip, extract the CSV to `raw.csv`.
 - Validate all expected columns from `ch-data-product-fields.md`.
 - Preserve all columns as strings; blanks are valid and kept as empty strings.
 - Preserve `CompanyNumber` exactly as supplied (including prefix and zero padding).
 - Validate `URI` equals `http://data.companieshouse.gov.uk/doc/company/{CompanyNumber}`.
 - Do not remap SIC codes; keep condensed codes exactly as supplied.
-- Produce `clean.csv` with the full schema and stable column order.
-- Candidate cleaning actions pending first file inspection: trimming outer whitespace and
-  any additional normalisation beyond the rules above.
+- Produce `clean.csv` with the full schema and stable column order using a standard CSV parser
+  that handles quoted fields and embedded newlines.
+- Candidate cleaning actions pending first file inspection: trimming outer whitespace and any
+  additional normalisation beyond the rules above.
 
 ### Field Mapping for Enrichment
 
@@ -193,8 +188,10 @@ When constructing search items and profiles from bulk rows:
 
 ### Profile Lookup
 
-- Build `index_company_offsets.csv` with `company_number,byte_offset` while writing `clean.csv`.
-- Use `read_line_at` to fetch the exact row for a company number and map to `CompanyProfile`.
+- Load `clean.csv` into an in-memory map keyed by `CompanyNumber` using a standard CSV parser.
+- Use the in-memory map for profile lookup during enrichment. Memory budget assumes 16 GB RAM.
+- Alternative (not implemented now): if memory pressure is observed, explore bucketed profile files
+  as a future option, not a parallel mechanism in the initial implementation.
 
 ### Scoring
 
@@ -218,6 +215,10 @@ When constructing search items and profiles from bulk rows:
 - Refresh sponsor fails on missing columns.
 - Refresh Companies House handles zip and CSV URLs and produces all artefacts.
 - Refresh Companies House fails fast on URI mismatch.
+- **Network Isolation**: Download logic is tested using `HttpSession` fakes that simulate streaming chunks; no real network calls.
+- **Streaming Verification**: Verify `write_bytes_stream` writes small chunks (e.g., 10 bytes) without buffering the full file.
+- **CSV Robustness**: Quoted fields with commas, embedded newlines, and UTF-8 characters are parsed correctly.
+- **Line Ending Robustness**: CRLF and LF inputs both parse correctly.
 - Token index buckets include expected tokens and company numbers.
 - Token filtering builds a candidate set with correct hit counts and capping.
 - File source `search` returns candidates mapped from bulk rows.
@@ -234,3 +235,6 @@ When constructing search items and profiles from bulk rows:
 - All work is TDD-first, with strict typing and no `Any` outside IO boundaries.
 - Snapshot date must be ISO `YYYY-MM-DD`. Manifest timestamps are ISO 8601 with UTC offsets.
 - Schema is validated against a canonical header list; do not infer schema from data.
+- Download speed may be sub-second, but progress bars are still required.
+- Memory pressure triggers exploration of bucketed profile files as a future option,
+  not as a parallel mechanism in the initial implementation.

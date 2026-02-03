@@ -69,7 +69,9 @@ Staleness of 1–2 months is acceptable in exchange for reproducibility and perf
 1. Manifest detail is extended (core + counts + git SHA + tool version + command line).
 1. Snapshot selection defaults to latest when paths are not set.
 1. `CH_SOURCE_TYPE` remains `api` or `file`, where `file` means bulk snapshot + index.
-1. File-based access is on-disk index with offset lookups.
+1. File-based access parses `clean.csv` with a standard CSV parser and loads profiles into memory.
+1. If memory pressure is observed, bucketed profile files are a future option, not a
+   parallel mechanism in the initial implementation.
 1. Single-threaded streaming is the default for bulk downloads.
 1. Condensed Companies House SIC codes are authoritative and must not be remapped.
 
@@ -103,7 +105,7 @@ Each snapshot manifest contains:
 1. `sha256_hash_raw` and `sha256_hash_clean`.
 1. `bytes_raw`.
 1. `row_counts` (raw and clean counts where applicable).
-1. `artefacts` (relative paths to raw, clean, index, and stats files).
+1. `artefacts` (relative paths to raw, clean, token index, and stats files).
 1. `git_sha`.
 1. `tool_version`.
 1. `command_line`.
