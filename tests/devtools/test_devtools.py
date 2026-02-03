@@ -30,7 +30,7 @@ def test_lint_calls_ruff(monkeypatch: pytest.MonkeyPatch) -> None:
     _assert_exit_ok(exc_info)
     assert calls[0][:5] == ["ruff", "check", "src", "tests", "--ignore-noqa"]
     assert calls[1] == [devtools.sys.executable, "scripts/check_inline_ignores.py"]
-    assert calls[2] == [devtools.sys.executable, "scripts/check_us_spelling.py"]
+    assert calls[2] == [devtools.sys.executable, "scripts/check_us_spelling.py", "--no-list"]
     assert calls[3] == ["lint-imports"]
 
 
@@ -105,7 +105,7 @@ def test_check_runs_quality_gates_in_order(monkeypatch: pytest.MonkeyPatch) -> N
         ["pyright"],
         ["ruff", "check", "src", "tests", "--ignore-noqa"],
         [devtools.sys.executable, "scripts/check_inline_ignores.py"],
-        [devtools.sys.executable, "scripts/check_us_spelling.py"],
+        [devtools.sys.executable, "scripts/check_us_spelling.py", "--no-list"],
         ["lint-imports"],
         ["pytest"],
         [

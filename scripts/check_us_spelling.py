@@ -20,31 +20,6 @@ import tomllib
 from breame.data.spelling_constants import AMERICAN_ENGLISH_SPELLINGS
 
 
-DEFAULT_INCLUDE_EXTENSIONS: tuple[str, ...] = (
-    ".md",
-    ".py",
-    ".toml",
-    ".txt",
-    ".yaml",
-    ".yml",
-)
-DEFAULT_EXCLUDE_DIRS: tuple[str, ...] = (
-    ".git",
-    ".import_linter_cache",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".venv",
-    "__pycache__",
-    "data",
-    "dist",
-    "reports",
-)
-DEFAULT_EXCLUDE_FILES: tuple[str, ...] = (
-    ".coverage",
-    "uv.lock",
-)
-
 # Domain-standard terms where enforcing conversion is not desirable.
 EXCLUDED_US_SPELLINGS: frozenset[str] = frozenset(
     {
@@ -547,6 +522,18 @@ def _render_findings(findings: Sequence[Finding]) -> list[str]:
     return lines
 
 
+def _render_summary(findings: Sequence[Finding]) -> str:
+    seen: set[tuple[str, str]] = set()
+    parts: list[str] = []
+    for finding in findings:
+        key = (finding.word.lower(), finding.suggestion.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        parts.append(f"{finding.word} -> {finding.suggestion}")
+    return ", ".join(parts)
+
+
 def render_report(
     result: ScanResult,
     mapping: Mapping[str, str],
@@ -558,6 +545,9 @@ def render_report(
         lines.append(
             f"American spellings found: {len(result.findings)} occurrence(s) in {file_count} file(s)."
         )
+        summary = _render_summary(result.findings)
+        if summary:
+            lines.append(f"Detected US spellings: {summary}")
         lines.append("")
         lines.extend(_render_findings(result.findings))
     else:
@@ -596,6 +586,18 @@ def _ensure_bool(value: object, name: str, default: bool) -> bool:
     return value
 
 
+def _require_str_list(value: object, name: str) -> list[str]:
+    if value is None:
+        raise ValueError(f"{name} is required in [tool.us_spelling]")
+    return _ensure_str_list(value, name)
+
+
+def _require_bool(value: object, name: str) -> bool:
+    if value is None:
+        raise ValueError(f"{name} is required in [tool.us_spelling]")
+    return _ensure_bool(value, name, False)
+
+
 def _build_mapping(base_mapping: Mapping[str, str]) -> dict[str, str]:
     filtered: dict[str, str] = {}
     for us_word, uk_word in base_mapping.items():
@@ -607,30 +609,28 @@ def _build_mapping(base_mapping: Mapping[str, str]) -> dict[str, str]:
 
 def load_config(root: Path) -> SpellingConfig:
     pyproject_path = root / "pyproject.toml"
-    config = SpellingConfig(
-        root=root,
-        include_extensions=DEFAULT_INCLUDE_EXTENSIONS,
-        exclude_dirs=DEFAULT_EXCLUDE_DIRS,
-        exclude_files=DEFAULT_EXCLUDE_FILES,
-        include_list=True,
-    )
     if not pyproject_path.exists():
-        return config
+        raise FileNotFoundError("pyproject.toml not found; configure [tool.us_spelling].")
 
     data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     tool_table = _ensure_mapping(data.get("tool"))
     spelling_table = _ensure_mapping(tool_table.get("us_spelling"))
+    if not spelling_table:
+        raise ValueError("Missing [tool.us_spelling] in pyproject.toml.")
 
-    include_extensions = _ensure_str_list(spelling_table.get("include_extensions"), "include_extensions")
-    exclude_dirs = _ensure_str_list(spelling_table.get("exclude_dirs"), "exclude_dirs")
-    exclude_files = _ensure_str_list(spelling_table.get("exclude_files"), "exclude_files")
-    include_list = _ensure_bool(spelling_table.get("include_list"), "include_list", True)
+    include_extensions = _require_str_list(
+        spelling_table.get("include_extensions"),
+        "include_extensions",
+    )
+    exclude_dirs = _require_str_list(spelling_table.get("exclude_dirs"), "exclude_dirs")
+    exclude_files = _require_str_list(spelling_table.get("exclude_files"), "exclude_files")
+    include_list = _require_bool(spelling_table.get("include_list"), "include_list")
 
     return SpellingConfig(
         root=root,
-        include_extensions=tuple(include_extensions) or config.include_extensions,
-        exclude_dirs=tuple(exclude_dirs) or config.exclude_dirs,
-        exclude_files=tuple(exclude_files) or config.exclude_files,
+        include_extensions=tuple(include_extensions),
+        exclude_dirs=tuple(exclude_dirs),
+        exclude_files=tuple(exclude_files),
         include_list=include_list,
     )
 

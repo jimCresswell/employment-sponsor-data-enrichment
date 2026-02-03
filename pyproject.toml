@@ -69,6 +69,8 @@ quote-style = "double"
 include_extensions = [".md", ".py", ".toml", ".txt", ".yaml", ".yml"]
 exclude_dirs = [
   ".git",
+  ".agent/research",
+  ".agent/reference",
   ".import_linter_cache",
   ".mypy_cache",
   ".pytest_cache",

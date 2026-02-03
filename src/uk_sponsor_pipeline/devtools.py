@@ -30,7 +30,7 @@ def lint() -> None:
     steps: list[list[str]] = [
         ["ruff", "check", "src", "tests", "--ignore-noqa", *sys.argv[1:]],
         [sys.executable, "scripts/check_inline_ignores.py"],
-        [sys.executable, "scripts/check_us_spelling.py"],
+        [sys.executable, "scripts/check_us_spelling.py", "--no-list"],
         ["lint-imports"],
     ]
     for args in steps:
@@ -78,7 +78,7 @@ def check() -> None:
         ("typecheck", ["pyright"]),
         ("lint", ["ruff", "check", "src", "tests", "--ignore-noqa"]),
         ("lint-inline-ignores", [sys.executable, "scripts/check_inline_ignores.py"]),
-        ("lint-us-spelling", [sys.executable, "scripts/check_us_spelling.py"]),
+        ("lint-us-spelling", [sys.executable, "scripts/check_us_spelling.py", "--no-list"]),
         ("import-linter", ["lint-imports"]),
         ("test", ["pytest"]),
         (
