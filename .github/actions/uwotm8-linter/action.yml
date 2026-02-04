@@ -1,0 +1,22 @@
+name: "uwotm8 Linter"
+description: "AST-based linter to detect US spellings in Python code"
+inputs:
+  root:
+    description: "Root directory to scan"
+    required: false
+    default: "."
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install Dependencies
+      shell: bash
+      run: pip install breame
+
+    - name: Run Linter
+      shell: bash
+      run: python -m uk_sponsor_pipeline.devtools.uwotm8_linter --root "${{ inputs.root }}"

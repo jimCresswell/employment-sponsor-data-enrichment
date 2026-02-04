@@ -63,15 +63,14 @@ Staleness of 1–2 months is acceptable in exchange for reproducibility and perf
 1. File-based matching uses a token inverted index and existing scoring with `CH_MIN_MATCH_SCORE`.
 1. Snapshot date derives from source filename if possible, otherwise download date (ISO `YYYY-MM-DD`).
 1. Index format is CSV; SQLite escalation threshold is >30 minutes per full run.
-1. Clean Companies House output preserves the full bulk schema.
+1. Clean Companies House output uses a canonical internal schema; raw CSV is retained in snapshots.
 1. URI validation is fail-fast.
 1. Cache root is `data/cache/snapshots` and raw + clean artefacts are retained.
 1. Manifest detail is extended (core + counts + git SHA + tool version + command line).
 1. Snapshot selection defaults to latest when paths are not set.
 1. `CH_SOURCE_TYPE` remains `api` or `file`, where `file` means bulk snapshot + index.
-1. File-based access parses `clean.csv` with a standard CSV parser and loads profiles into memory.
-1. If memory pressure is observed, bucketed profile files are a future option, not a
-   parallel mechanism in the initial implementation.
+1. File-based access parses `clean.csv` with a standard CSV parser and uses either a minimal
+   in-memory profile map or bucketed profile files, depending on memory constraints.
 1. Single-threaded streaming is the default for bulk downloads.
 1. Condensed Companies House SIC codes are authoritative and must not be remapped.
 
@@ -122,7 +121,8 @@ Each snapshot manifest contains:
 1. Confirm the exact bulk CSV header list (including previous-name fields and ordering).
 1. Confirm Companies House bulk filename pattern for deriving snapshot date (ISO `YYYY-MM-DD`).
 1. Confirm ZIP layout and encoding expectations for the bulk file.
-1. Define the meaning of "clean" for Companies House after inspecting a real bulk file.
+1. Finalise the canonical schema and any additional normalisation beyond header trimming and
+   SIC code prefix parsing, based on further inspection if needed.
 
 ## Assumptions and Defaults
 

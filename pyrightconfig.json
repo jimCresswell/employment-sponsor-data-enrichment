@@ -37,5 +37,7 @@
   "reportImplicitOverride": "error",
   "reportCallInDefaultInitializer": "error",
 
-  "reportImportCycles": "warning"
+  "reportImportCycles": "warning",
+
+  "stubPath": "stubs"
 }

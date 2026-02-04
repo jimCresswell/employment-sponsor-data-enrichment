@@ -30,7 +30,7 @@ def lint() -> None:
     steps: list[list[str]] = [
         ["ruff", "check", "src", "tests", "--ignore-noqa", *sys.argv[1:]],
         [sys.executable, "scripts/check_inline_ignores.py"],
-        [sys.executable, "scripts/check_us_spelling.py", "--no-list"],
+        [sys.executable, "-m", "uk_sponsor_pipeline.devtools.uwotm8_linter", "--no-list"],
         ["lint-imports"],
     ]
     for args in steps:
@@ -53,7 +53,9 @@ def typecheck() -> None:
 
 
 def spelling_check() -> None:
-    _run_or_exit([sys.executable, "scripts/check_us_spelling.py", *sys.argv[1:]])
+    _run_or_exit(
+        [sys.executable, "-m", "uk_sponsor_pipeline.devtools.uwotm8_linter", *sys.argv[1:]]
+    )
 
 
 def test() -> None:
@@ -78,7 +80,10 @@ def check() -> None:
         ("typecheck", ["pyright"]),
         ("lint", ["ruff", "check", "src", "tests", "--ignore-noqa"]),
         ("lint-inline-ignores", [sys.executable, "scripts/check_inline_ignores.py"]),
-        ("lint-us-spelling", [sys.executable, "scripts/check_us_spelling.py", "--no-list"]),
+        (
+            "lint-us-spelling",
+            [sys.executable, "-m", "uk_sponsor_pipeline.devtools.uwotm8_linter", "--no-list"],
+        ),
         ("import-linter", ["lint-imports"]),
         ("test", ["pytest"]),
         (

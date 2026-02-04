@@ -8,7 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from scripts.check_us_spelling import US_UK_MAPPING, SpellingConfig, run, scan_repo
+from uk_sponsor_pipeline.devtools.uwotm8_linter import (
+    US_UK_MAPPING,
+    SpellingConfig,
+    run,
+    scan_repo,
+)
 
 
 @dataclass(frozen=True)

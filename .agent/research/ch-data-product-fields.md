@@ -1,89 +1,168 @@
-# Free Data Product - Data Fields
+# Companies House Free Data Product - Raw CSV Headers
 
-The bulk download CSV uses a fixed, flat schema. The data in the files will conform to the following specification. Max size values are reproduced from the source.
+This document records the **raw CSV headers as supplied** in the Companies House
+Free Data Product (Basic Company Data). These are the *real-world* column names
+observed in `BasicCompanyDataAsOneFile-2026-02-01.csv`.
 
-## Company
+Important: the raw header line contains **leading spaces** on some columns.
+**Always trim header names** (`.strip()`) before validation, mapping, or comparison.
 
-| Field | Max size | Notes |
-| --- | --- | --- |
-| CompanyName | 160 | Current registered name. |
-| CompanyNumber | 8 | Primary identifier. Preserve exactly as supplied (including prefix and zero padding). |
-| CompanyCategory | 100 | Legal form (`corporate_body_type_desc`). |
-| CompanyStatus | 70 | Lifecycle status (`action_code_desc`). |
-| CountryofOrigin | 50 | Original registration country. |
-| DissolutionDate | 10 | Only populated if dissolved. |
-| IncorporationDate | 10 | Incorporation date. |
-| URI | 47 | Canonical Companies House URI; must match the deterministic mapping rule. |
+This file documents raw headers only. **Canonical/internal headers are a separate
+concept** and must be defined explicitly by the pipeline (see the ingest plan).
 
-## Registered Office Address
+## Raw CSV Header List (trimmed, in order)
 
-| Field | Max size | Notes |
-| --- | --- | --- |
-| Careof | 100 | Optional. |
-| POBox | 10 | Optional. |
-| AddressLine1 | 300 | House number and street. |
-| AddressLine2 | 300 | Area. |
-| PostTown | 50 | |
-| County | 50 | Region. |
-| Country | 50 | |
-| PostCode | 20 | |
+```text
+CompanyName
+CompanyNumber
+RegAddress.CareOf
+RegAddress.POBox
+RegAddress.AddressLine1
+RegAddress.AddressLine2
+RegAddress.PostTown
+RegAddress.County
+RegAddress.Country
+RegAddress.PostCode
+CompanyCategory
+CompanyStatus
+CountryOfOrigin
+DissolutionDate
+IncorporationDate
+Accounts.AccountRefDay
+Accounts.AccountRefMonth
+Accounts.NextDueDate
+Accounts.LastMadeUpDate
+Accounts.AccountCategory
+Returns.NextDueDate
+Returns.LastMadeUpDate
+Mortgages.NumMortCharges
+Mortgages.NumMortOutstanding
+Mortgages.NumMortPartSatisfied
+Mortgages.NumMortSatisfied
+SICCode.SicText_1
+SICCode.SicText_2
+SICCode.SicText_3
+SICCode.SicText_4
+LimitedPartnerships.NumGenPartners
+LimitedPartnerships.NumLimPartners
+URI
+PreviousName_1.CONDATE
+PreviousName_1.CompanyName
+PreviousName_2.CONDATE
+PreviousName_2.CompanyName
+PreviousName_3.CONDATE
+PreviousName_3.CompanyName
+PreviousName_4.CONDATE
+PreviousName_4.CompanyName
+PreviousName_5.CONDATE
+PreviousName_5.CompanyName
+PreviousName_6.CONDATE
+PreviousName_6.CompanyName
+PreviousName_7.CONDATE
+PreviousName_7.CompanyName
+PreviousName_8.CONDATE
+PreviousName_8.CompanyName
+PreviousName_9.CONDATE
+PreviousName_9.CompanyName
+PreviousName_10.CONDATE
+PreviousName_10.CompanyName
+ConfStmtNextDueDate
+ConfStmtLastMadeUpDate
+```
+
+## Field Groups (raw header names)
+
+### Company
+
+| Field | Notes |
+| --- | --- |
+| CompanyName | Current registered name. |
+| CompanyNumber | Primary identifier. Preserve exactly as supplied (including prefix and zero padding). |
+| CompanyCategory | Legal form (`corporate_body_type_desc`). |
+| CompanyStatus | Lifecycle status (`action_code_desc`). |
+| CountryOfOrigin | Original registration country. |
+| DissolutionDate | Only populated if dissolved. |
+| IncorporationDate | Incorporation date. |
+| URI | Canonical Companies House URI; must match the deterministic mapping rule. |
+
+### Registered Office Address
+
+| Field | Notes |
+| --- | --- |
+| RegAddress.CareOf | Optional. |
+| RegAddress.POBox | Optional. |
+| RegAddress.AddressLine1 | House number and street. |
+| RegAddress.AddressLine2 | Area. |
+| RegAddress.PostTown | |
+| RegAddress.County | Region. |
+| RegAddress.Country | |
+| RegAddress.PostCode | |
 
 Blank values are valid and common.
 
-## Accounts
+### Accounts
 
-| Field | Max size | Notes |
-| --- | --- | --- |
-| AccountingRefDay | 2 | Day of accounting period. |
-| AccountingRefMonth | 2 | Month of accounting period. |
-| NextDueDate | 10 | Next filing deadline. |
-| LastMadeUpDate | 10 | Last accounts date. |
-| AccountsCategory | 30 | `accounts_type_desc`. |
+| Field | Notes |
+| --- | --- |
+| Accounts.AccountRefDay | Day of accounting period. |
+| Accounts.AccountRefMonth | Month of accounting period. |
+| Accounts.NextDueDate | Next filing deadline. |
+| Accounts.LastMadeUpDate | Last accounts date. |
+| Accounts.AccountCategory | `accounts_type_desc`. |
 
 If no accounts filed, dates may be blank.
 
-## Confirmation Statement (Returns)
+### Returns
 
-| Field | Max size | Notes |
-| --- | --- | --- |
-| ConfStmtNextDueDate | 10 | Next confirmation due. |
-| ConfStmtLastMadeUpDate | 10 | Last made up to date. |
+| Field | Notes |
+| --- | --- |
+| Returns.NextDueDate | Next return due date (legacy). |
+| Returns.LastMadeUpDate | Last made up to date (legacy). |
 
-## Mortgages / Charges
+### Confirmation Statement
 
-| Field | Max size | Notes |
-| --- | --- | --- |
-| NumMortCharges | 6 | Total charges. |
-| NumMortOutstanding | 6 | Outstanding. |
-| NumMortPartSatisfied | 6 | Part satisfied. |
-| NumMortSatisfied | 6 | Fully satisfied. |
+| Field | Notes |
+| --- | --- |
+| ConfStmtNextDueDate | Next confirmation due. |
+| ConfStmtLastMadeUpDate | Last made up to date. |
 
-If all values are blank or zero, no charges exist.
+Both Returns and Confirmation Statement fields exist in the raw CSV.
 
-## SIC Codes (occurs max 4)
+### Mortgages / Charges
 
-| Field | Max size | Notes |
-| --- | --- | --- |
-| SICCode1 | 170 | Condensed Companies House SIC code. |
-| SICCode2 | 170 | Condensed Companies House SIC code. |
-| SICCode3 | 170 | Condensed Companies House SIC code. |
-| SICCode4 | 170 | Condensed Companies House SIC code. |
+| Field | Notes |
+| --- | --- |
+| Mortgages.NumMortCharges | Total charges. |
+| Mortgages.NumMortOutstanding | Outstanding. |
+| Mortgages.NumMortPartSatisfied | Part satisfied. |
+| Mortgages.NumMortSatisfied | Fully satisfied. |
 
-- Max 4 per company.
-- Order is not semantically meaningful.
-- Blank values are valid.
-- These are condensed Companies House SIC codes (not full ONS SIC hierarchies).
+### SIC Codes (occurs max 4)
 
-## Limited Partnerships (conditional)
+| Field | Notes |
+| --- | --- |
+| SICCode.SicText_1 | Condensed SIC code **plus description** (e.g., `99999 - Dormant Company`). |
+| SICCode.SicText_2 | Same as above. |
+| SICCode.SicText_3 | Same as above. |
+| SICCode.SicText_4 | Same as above. |
 
-| Field | Max size | Notes |
-| --- | --- | --- |
-| NumGenPartners | 6 | Only present for LP-type entities. |
-| NumLimPartners | 6 | Only present for LP-type entities. |
+Do not assume the value is code-only. If a canonical code list is required,
+define explicit parsing rules during cleaning.
 
-## Previous Names (occurs max 10)
+### Limited Partnerships (conditional)
 
-| Field | Max size | Notes |
-| --- | --- | --- |
-| Change of Name Date | 10 | Only supplied if name changes occurred. |
-| Company name (previous) | 160 | Only supplied if name changes occurred. |
+| Field | Notes |
+| --- | --- |
+| LimitedPartnerships.NumGenPartners | Only present for LP-type entities. |
+| LimitedPartnerships.NumLimPartners | Only present for LP-type entities. |
+
+### Previous Names (occurs max 10)
+
+The raw CSV includes 10 repeated pairs:
+
+| Field | Notes |
+| --- | --- |
+| PreviousName_n.CONDATE | Change of name date (n = 1..10). |
+| PreviousName_n.CompanyName | Previous company name (n = 1..10). |
+
+If no name changes occurred, these fields are blank.

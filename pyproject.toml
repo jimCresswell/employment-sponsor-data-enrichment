@@ -82,7 +82,7 @@ exclude_dirs = [
   "reports",
 ]
 exclude_files = [".coverage", "uv.lock"]
-include_list = true
+include_list = false
 
 [tool.ruff.lint.mccabe]
 max-complexity = 45

@@ -1,4 +1,8 @@
-"""Scan the repository for American spellings and report suggested British forms."""
+"""Scan the repository for American spellings and report suggested British forms.
+
+This script was inspired by the `uwotm8` package (https://pypi.org/project/uwotm8/),
+and uses the same underlying dictionary.
+"""
 
 from __future__ import annotations
 
@@ -10,15 +14,14 @@ import re
 import sys
 import token
 import tokenize
+import tomllib
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, TypeGuard
 
-import tomllib
 from breame.data.spelling_constants import AMERICAN_ENGLISH_SPELLINGS
-
 
 # Domain-standard terms where enforcing conversion is not desirable.
 EXCLUDED_US_SPELLINGS: frozenset[str] = frozenset(
@@ -101,9 +104,7 @@ def _iter_files(config: SpellingConfig) -> Iterable[Path]:
             continue
 
         dirs[:] = [
-            name
-            for name in dirs
-            if not _is_excluded_by_dirs(relative_dir / name, exclude_dirs)
+            name for name in dirs if not _is_excluded_by_dirs(relative_dir / name, exclude_dirs)
         ]
 
         for filename in files:
@@ -220,8 +221,10 @@ def _scan_python_identifiers(
             findings.extend(_scan_identifier(path, root, mapping, node.name, node.lineno, column))
         elif isinstance(node, ast.arg):
             if node.arg:
-                column = node.col_offset + 1 if node.col_offset is not None else 1
-                findings.extend(_scan_identifier(path, root, mapping, node.arg, node.lineno, column))
+                column = node.col_offset + 1
+                findings.extend(
+                    _scan_identifier(path, root, mapping, node.arg, node.lineno, column)
+                )
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
             column = node.col_offset + 1
             findings.extend(_scan_identifier(path, root, mapping, node.id, node.lineno, column))
@@ -234,7 +237,9 @@ def _scan_python_identifiers(
                     column = (index + 1) if index >= 0 else node.col_offset + 1
                 else:
                     column = index + 2
-                findings.extend(_scan_identifier(path, root, mapping, node.attr, node.lineno, column))
+                findings.extend(
+                    _scan_identifier(path, root, mapping, node.attr, node.lineno, column)
+                )
 
     return findings
 
@@ -242,21 +247,27 @@ def _scan_python_identifiers(
 def _docstring_positions(tree: ast.AST) -> set[tuple[int, int]]:
     positions: set[tuple[int, int]] = set()
 
-    def record(node: ast.AST) -> None:
-        if not hasattr(node, "body"):
+    def record_module(node: ast.Module) -> None:
+        if not node.body:
             return
-        body = getattr(node, "body")
-        if not body:
-            return
-        first = body[0]
+        first = node.body[0]
         if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
             if isinstance(first.value.value, str):
                 positions.add((first.lineno, first.col_offset))
 
-    record(tree)
+    def record_def(node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) -> None:
+        if not node.body:
+            return
+        first = node.body[0]
+        if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+            if isinstance(first.value.value, str):
+                positions.add((first.lineno, first.col_offset))
+
+    if isinstance(tree, ast.Module):
+        record_module(tree)
     for child in ast.walk(tree):
         if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            record(child)
+            record_def(child)
 
     return positions
 
@@ -382,7 +393,11 @@ def _is_matching_call(call: ast.Call) -> bool:
     if isinstance(func, ast.Attribute):
         if func.attr in MATCH_CALL_ATTRIBUTES:
             return True
-        if isinstance(func.value, ast.Name) and func.value.id == "re" and func.attr in REGEX_FUNCTIONS:
+        if (
+            isinstance(func.value, ast.Name)
+            and func.value.id == "re"
+            and func.attr in REGEX_FUNCTIONS
+        ):
             return True
     if isinstance(func, ast.Name) and func.id in REGEX_FUNCTIONS:
         return True
@@ -432,7 +447,7 @@ def _scan_string_literal_node(
     mapping: Mapping[str, str],
     node: ast.Constant,
 ) -> list[Finding]:
-    if not isinstance(node.value, str) or node.lineno is None or node.col_offset is None:
+    if not isinstance(node.value, str):
         return []
     base_line = node.lineno
     base_col = node.col_offset + 1
@@ -516,9 +531,8 @@ def _render_findings(findings: Sequence[Finding]) -> list[str]:
     for path in sorted(grouped.keys(), key=lambda value: value.as_posix()):
         lines.append(path.as_posix())
         for finding in grouped[path]:
-            lines.append(
-                f"  {finding.line_number}:{finding.column_number} {finding.word} -> {finding.suggestion}"
-            )
+            loc = f"{finding.line_number}:{finding.column_number}"
+            lines.append(f"  {loc} {finding.word} -> {finding.suggestion}")
     return lines
 
 
@@ -541,10 +555,10 @@ def render_report(
 ) -> str:
     lines: list[str] = []
     if result.findings:
+        count = len(result.findings)
         file_count = len({finding.path for finding in result.findings})
-        lines.append(
-            f"American spellings found: {len(result.findings)} occurrence(s) in {file_count} file(s)."
-        )
+        msg = f"American spellings found: {count} occurrence(s) in {file_count} file(s)."
+        lines.append(msg)
         summary = _render_summary(result.findings)
         if summary:
             lines.append(f"Detected US spellings: {summary}")
@@ -562,40 +576,56 @@ def render_report(
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _ensure_mapping(value: object) -> Mapping[str, object]:
-    if value is None:
-        return {}
-    if isinstance(value, dict):
-        return value
-    raise ValueError("Expected a table in pyproject.toml")
+def _is_list_of_objects(value: object) -> TypeGuard[list[object]]:
+    """Type guard that narrows object to list[object]."""
+    return isinstance(value, list)
+
+
+def _is_dict_of_objects(value: object) -> TypeGuard[dict[object, object]]:
+    """Type guard that narrows object to dict[object, object]."""
+    return isinstance(value, dict)
 
 
 def _ensure_str_list(value: object, name: str) -> list[str]:
+    """Validate and convert an object to a list of strings."""
     if value is None:
         return []
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        raise ValueError(f"{name} must be a list of strings")
-    return list(value)
+    if isinstance(value, str):
+        msg = f"{name} must be a list"
+        raise TypeError(msg)
+    if not _is_list_of_objects(value):
+        msg = f"{name} must be a list"
+        raise TypeError(msg)
+    result: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            msg = f"{name} items must be strings"
+            raise TypeError(msg)
+        result.append(item)
+    return result
+
+
+def _as_str_object_dict(value: object) -> dict[str, object] | None:
+    """Narrow a value to dict[str, object] if possible."""
+    if value is None:
+        return None
+    if not _is_dict_of_objects(value):
+        return None
+    result: dict[str, object] = {}
+    for key in value:
+        if not isinstance(key, str):
+            return None
+        result[key] = value[key]
+    return result
 
 
 def _ensure_bool(value: object, name: str, default: bool) -> bool:
     if value is None:
         return default
     if not isinstance(value, bool):
-        raise ValueError(f"{name} must be true or false")
+        msg = f"{name} must be boolean"
+        raise TypeError(msg)
     return value
-
-
-def _require_str_list(value: object, name: str) -> list[str]:
-    if value is None:
-        raise ValueError(f"{name} is required in [tool.us_spelling]")
-    return _ensure_str_list(value, name)
-
-
-def _require_bool(value: object, name: str) -> bool:
-    if value is None:
-        raise ValueError(f"{name} is required in [tool.us_spelling]")
-    return _ensure_bool(value, name, False)
 
 
 def _build_mapping(base_mapping: Mapping[str, str]) -> dict[str, str]:
@@ -609,22 +639,60 @@ def _build_mapping(base_mapping: Mapping[str, str]) -> dict[str, str]:
 
 def load_config(root: Path) -> SpellingConfig:
     pyproject_path = root / "pyproject.toml"
-    if not pyproject_path.exists():
-        raise FileNotFoundError("pyproject.toml not found; configure [tool.us_spelling].")
 
-    data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
-    tool_table = _ensure_mapping(data.get("tool"))
-    spelling_table = _ensure_mapping(tool_table.get("us_spelling"))
-    if not spelling_table:
-        raise ValueError("Missing [tool.us_spelling] in pyproject.toml.")
+    # Default configuration
+    default_include_extensions: list[str] = [".py", ".md", ".txt"]
+    default_exclude_dirs: list[str] = [
+        ".git",
+        ".venv",
+        "__pycache__",
+        "node_modules",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+    ]
+    default_exclude_files: list[str] = []
+    default_include_list: bool = False
 
-    include_extensions = _require_str_list(
-        spelling_table.get("include_extensions"),
-        "include_extensions",
-    )
-    exclude_dirs = _require_str_list(spelling_table.get("exclude_dirs"), "exclude_dirs")
-    exclude_files = _require_str_list(spelling_table.get("exclude_files"), "exclude_files")
-    include_list = _require_bool(spelling_table.get("include_list"), "include_list")
+    # Parse pyproject.toml if it exists
+    raw_include_extensions: object = None
+    raw_exclude_dirs: object = None
+    raw_exclude_files: object = None
+    raw_include_list: object = None
+
+    if pyproject_path.exists():
+        try:
+            data: dict[str, object] = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+            tool_table = _as_str_object_dict(data.get("tool"))
+            if tool_table is not None:
+                spelling_table = _as_str_object_dict(tool_table.get("us_spelling"))
+                if spelling_table is not None:
+                    raw_include_extensions = spelling_table.get("include_extensions")
+                    raw_exclude_dirs = spelling_table.get("exclude_dirs")
+                    raw_exclude_files = spelling_table.get("exclude_files")
+                    raw_include_list = spelling_table.get("include_list")
+        except (OSError, tomllib.TOMLDecodeError, KeyError):
+            pass  # Fallback to defaults on any parse error
+
+    if raw_include_extensions is None:
+        include_extensions = default_include_extensions
+    else:
+        include_extensions = _ensure_str_list(raw_include_extensions, "include_extensions")
+
+    if raw_exclude_dirs is None:
+        exclude_dirs = default_exclude_dirs
+    else:
+        exclude_dirs = _ensure_str_list(raw_exclude_dirs, "exclude_dirs")
+
+    if raw_exclude_files is None:
+        exclude_files = default_exclude_files
+    else:
+        exclude_files = _ensure_str_list(raw_exclude_files, "exclude_files")
+
+    if raw_include_list is None:
+        include_list = default_include_list
+    else:
+        include_list = _ensure_bool(raw_include_list, "include_list", default_include_list)
 
     return SpellingConfig(
         root=root,
