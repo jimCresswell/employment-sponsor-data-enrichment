@@ -1,5 +1,7 @@
 """Tests for Transform enrich Companies House integration."""
 
+import csv
+import io
 from datetime import datetime, tzinfo
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -9,6 +11,7 @@ import pytest
 
 from tests.fakes import FakeHttpClient, InMemoryFileSystem
 from uk_sponsor_pipeline.application import transform_enrich as s2
+from uk_sponsor_pipeline.application.companies_house_bulk import CANONICAL_HEADERS_V1
 from uk_sponsor_pipeline.application.transform_enrich import run_transform_enrich
 from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.domain.companies_house import (
@@ -627,7 +630,8 @@ def test_transform_enrich_requires_filesystem() -> None:
     config = PipelineConfig(
         ch_api_key="",
         ch_source_type="file",
-        ch_source_path="data/reference/companies_house.json",
+        ch_clean_path="data/cache/snapshots/companies_house/2026-02-01/clean.csv",
+        ch_token_index_dir="data/cache/snapshots/companies_house/2026-02-01",
     )
 
     with pytest.raises(DependencyMissingError) as exc_info:
@@ -840,46 +844,32 @@ def test_transform_enrich_file_source_uses_local_payload(in_memory_fs: InMemoryF
         register_path,
     )
 
-    ch_file_path = Path("data/reference/companies_house.json")
-    in_memory_fs.write_json(
+    snapshot_dir = Path("data/cache/snapshots/companies_house/2026-02-01")
+    clean_path = snapshot_dir / "clean.csv"
+    in_memory_fs.write_text(",".join(CANONICAL_HEADERS_V1) + "\n", clean_path)
+
+    index_path = snapshot_dir / "index_tokens_a.csv"
+    in_memory_fs.write_text("token,company_number\nacme,12345678\n", index_path)
+
+    profiles_path = snapshot_dir / "profiles_0-9.csv"
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=CANONICAL_HEADERS_V1)
+    writer.writeheader()
+    writer.writerow(
         {
-            "searches": [
-                {
-                    "query": "Acme Ltd",
-                    "items": [
-                        {
-                            "title": "ACME LTD",
-                            "company_number": "12345678",
-                            "company_status": "active",
-                            "address": {
-                                "locality": "London",
-                                "region": "Greater London",
-                                "postal_code": "EC1A 1BB",
-                            },
-                        }
-                    ],
-                }
-            ],
-            "profiles": [
-                {
-                    "company_number": "12345678",
-                    "profile": {
-                        "company_name": "ACME LTD",
-                        "company_status": "active",
-                        "type": "ltd",
-                        "date_of_creation": "2015-01-01",
-                        "sic_codes": ["62020"],
-                        "registered_office_address": {
-                            "locality": "London",
-                            "region": "Greater London",
-                            "postal_code": "EC1A 1BB",
-                        },
-                    },
-                }
-            ],
-        },
-        ch_file_path,
+            "company_number": "12345678",
+            "company_name": "ACME LTD",
+            "company_status": "active",
+            "company_type": "ltd",
+            "date_of_creation": "2015-01-01",
+            "sic_codes": "62020",
+            "address_locality": "London",
+            "address_region": "Greater London",
+            "address_postcode": "EC1A 1BB",
+            "uri": "http://data.companieshouse.gov.uk/doc/company/12345678",
+        }
     )
+    in_memory_fs.write_text(buffer.getvalue(), profiles_path)
 
     config = PipelineConfig(
         ch_api_key="",
@@ -888,7 +878,8 @@ def test_transform_enrich_file_source_uses_local_payload(in_memory_fs: InMemoryF
         ch_min_match_score=0.0,
         ch_search_limit=5,
         ch_source_type="file",
-        ch_source_path=str(ch_file_path),
+        ch_clean_path=str(clean_path),
+        ch_token_index_dir=str(snapshot_dir),
     )
 
     outs = run_transform_enrich(

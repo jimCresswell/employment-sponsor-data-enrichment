@@ -13,7 +13,12 @@ from uuid import uuid4
 
 import uk_sponsor_pipeline
 
-from ..exceptions import SnapshotAlreadyExistsError, SnapshotTimestampError
+from ..exceptions import (
+    SnapshotAlreadyExistsError,
+    SnapshotArtefactMissingError,
+    SnapshotNotFoundError,
+    SnapshotTimestampError,
+)
 from ..protocols import FileSystem
 
 _SNAPSHOT_DATE_PATTERN = re.compile(r"(20\d{2}-\d{2}-\d{2})")
@@ -135,6 +140,45 @@ def build_snapshot_manifest(
         "tool_version": resolved_tool_version,
         "command_line": command_line,
     }
+
+
+def resolve_latest_snapshot_dir(
+    *,
+    snapshot_root: Path,
+    dataset: str,
+    fs: FileSystem,
+) -> Path:
+    dataset_dir = Path(snapshot_root) / dataset
+    manifest_paths = fs.list_files(dataset_dir, pattern="*/manifest.json")
+    candidates: list[tuple[str, float, Path]] = []
+    for manifest_path in manifest_paths:
+        snapshot_dir = manifest_path.parent
+        snapshot_date = snapshot_dir.name
+        if _SNAPSHOT_DATE_PATTERN.fullmatch(snapshot_date) is None:
+            continue
+        candidates.append((snapshot_date, fs.mtime(manifest_path), snapshot_dir))
+    if not candidates:
+        raise SnapshotNotFoundError(dataset, str(snapshot_root))
+    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return candidates[0][2]
+
+
+def resolve_latest_snapshot_path(
+    *,
+    snapshot_root: Path,
+    dataset: str,
+    filename: str,
+    fs: FileSystem,
+) -> Path:
+    snapshot_dir = resolve_latest_snapshot_dir(
+        snapshot_root=snapshot_root,
+        dataset=dataset,
+        fs=fs,
+    )
+    path = snapshot_dir / filename
+    if not fs.exists(path):
+        raise SnapshotArtefactMissingError(str(path))
+    return path
 
 
 def _resolve_git_sha(override: str | None) -> str:

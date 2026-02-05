@@ -19,7 +19,11 @@ def test_with_overrides_preserves_fields() -> None:
         ch_circuit_breaker_timeout_seconds=99.0,
         ch_batch_size=42,
         ch_source_type="file",
-        ch_source_path="data/reference/companies_house.json",
+        snapshot_root="data/cache/snapshots",
+        sponsor_clean_path="data/cache/snapshots/sponsor/2026-02-01/clean.csv",
+        ch_clean_path="data/cache/snapshots/companies_house/2026-02-01/clean.csv",
+        ch_token_index_dir="data/cache/snapshots/companies_house/2026-02-01",
+        ch_file_max_candidates=321,
         tech_score_threshold=0.6,
         geo_filter_region="London",
         geo_filter_postcodes=("EC",),
@@ -43,4 +47,8 @@ def test_with_overrides_preserves_fields() -> None:
     assert updated.ch_circuit_breaker_timeout_seconds == base.ch_circuit_breaker_timeout_seconds
     assert updated.ch_batch_size == base.ch_batch_size
     assert updated.ch_source_type == base.ch_source_type
-    assert updated.ch_source_path == base.ch_source_path
+    assert updated.snapshot_root == base.snapshot_root
+    assert updated.sponsor_clean_path == base.sponsor_clean_path
+    assert updated.ch_clean_path == base.ch_clean_path
+    assert updated.ch_token_index_dir == base.ch_token_index_dir
+    assert updated.ch_file_max_candidates == base.ch_file_max_candidates

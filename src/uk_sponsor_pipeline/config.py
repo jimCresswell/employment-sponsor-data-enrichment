@@ -33,7 +33,11 @@ class PipelineConfig:
     ch_circuit_breaker_timeout_seconds: float = 60.0
     ch_batch_size: int = 250
     ch_source_type: str = "api"
-    ch_source_path: str = ""
+    snapshot_root: str = "data/cache/snapshots"
+    sponsor_clean_path: str = ""
+    ch_clean_path: str = ""
+    ch_token_index_dir: str = ""
+    ch_file_max_candidates: int = 500
 
     # Scoring
     tech_score_threshold: float = 0.55
@@ -72,7 +76,12 @@ class PipelineConfig:
             ),
             ch_batch_size=int(os.getenv("CH_BATCH_SIZE", "250")),
             ch_source_type=os.getenv("CH_SOURCE_TYPE", "api").strip().lower(),
-            ch_source_path=os.getenv("CH_SOURCE_PATH", "").strip(),
+            snapshot_root=os.getenv("SNAPSHOT_ROOT", "data/cache/snapshots").strip()
+            or "data/cache/snapshots",
+            sponsor_clean_path=os.getenv("SPONSOR_CLEAN_PATH", "").strip(),
+            ch_clean_path=os.getenv("CH_CLEAN_PATH", "").strip(),
+            ch_token_index_dir=os.getenv("CH_TOKEN_INDEX_DIR", "").strip(),
+            ch_file_max_candidates=int(os.getenv("CH_FILE_MAX_CANDIDATES", "500")),
             tech_score_threshold=float(os.getenv("TECH_SCORE_THRESHOLD", "0.55")),
             geo_filter_region=_parse_single_region(os.getenv("GEO_FILTER_REGIONS", "")),
             geo_filter_postcodes=_parse_list(os.getenv("GEO_FILTER_POSTCODES", "")),

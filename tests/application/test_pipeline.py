@@ -13,20 +13,23 @@ from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.exceptions import DependencyMissingError
 
 
-def test_run_pipeline_skips_download_and_returns_outputs() -> None:
+def test_run_pipeline_cache_only_returns_outputs() -> None:
     fs = InMemoryFileSystem()
-    raw_dir = Path("data/raw")
-    raw_path = raw_dir / "register.csv"
-    raw_df = pd.DataFrame(
+    register_path = Path("data/cache/snapshots/sponsor/2026-02-01/clean.csv")
+    register_df = pd.DataFrame(
         {
             "Organisation Name": ["Acme Ltd"],
+            "org_name_normalised": ["acme"],
+            "has_multiple_towns": ["False"],
+            "has_multiple_counties": ["False"],
             "Town/City": ["London"],
             "County": ["Greater London"],
             "Type & Rating": ["A rating"],
             "Route": ["Skilled Worker"],
+            "raw_name_variants": ["Acme Ltd"],
         }
     )
-    fs.write_csv(raw_df, raw_path)
+    fs.write_csv(register_df, register_path)
 
     fake_http_client = FakeHttpClient()
     fake_http_client.responses = {
@@ -67,12 +70,11 @@ def test_run_pipeline_skips_download_and_returns_outputs() -> None:
             ch_search_limit=5,
             ch_max_rpm=600,
         ),
-        skip_download=True,
+        register_path=register_path,
         fs=fs,
         http_client=fake_http_client,
     )
 
-    assert result.extract is None
     shortlist = fs.read_csv(result.usage["shortlist"])
     assert shortlist["Organisation Name"].tolist() == ["Acme Ltd"]
 
@@ -87,7 +89,7 @@ def test_run_pipeline_requires_filesystem() -> None:
                 ch_search_limit=5,
                 ch_max_rpm=600,
             ),
-            skip_download=True,
+            register_path=Path("data/cache/snapshots/sponsor/2026-02-01/clean.csv"),
             fs=None,
             http_client=FakeHttpClient(),
         )

@@ -13,9 +13,16 @@ from uk_sponsor_pipeline.application.snapshots import (
     build_snapshot_manifest,
     commit_snapshot,
     derive_snapshot_date,
+    resolve_latest_snapshot_dir,
+    resolve_latest_snapshot_path,
     start_snapshot_write,
 )
-from uk_sponsor_pipeline.exceptions import SnapshotAlreadyExistsError, SnapshotTimestampError
+from uk_sponsor_pipeline.exceptions import (
+    SnapshotAlreadyExistsError,
+    SnapshotArtefactMissingError,
+    SnapshotNotFoundError,
+    SnapshotTimestampError,
+)
 from uk_sponsor_pipeline.infrastructure import LocalFileSystem
 
 
@@ -166,3 +173,47 @@ def test_build_snapshot_manifest_defaults_git_sha_and_version(
 
     assert manifest["git_sha"] == "unknown"
     assert manifest["tool_version"] == "0.0.0+unknown"
+
+
+def test_resolve_latest_snapshot_dir_uses_latest_date(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    snapshot_root = tmp_path / "snapshots"
+    older = snapshot_root / "sponsor" / "2026-02-01"
+    newer = snapshot_root / "sponsor" / "2026-02-03"
+    fs.write_text("{}", older / "manifest.json")
+    fs.write_text("{}", newer / "manifest.json")
+
+    resolved = resolve_latest_snapshot_dir(
+        snapshot_root=snapshot_root,
+        dataset="sponsor",
+        fs=fs,
+    )
+
+    assert resolved == newer
+
+
+def test_resolve_latest_snapshot_dir_raises_when_missing(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    snapshot_root = tmp_path / "snapshots"
+
+    with pytest.raises(SnapshotNotFoundError):
+        resolve_latest_snapshot_dir(
+            snapshot_root=snapshot_root,
+            dataset="sponsor",
+            fs=fs,
+        )
+
+
+def test_resolve_latest_snapshot_path_requires_artefact(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    snapshot_root = tmp_path / "snapshots"
+    snapshot_dir = snapshot_root / "sponsor" / "2026-02-01"
+    fs.write_text("{}", snapshot_dir / "manifest.json")
+
+    with pytest.raises(SnapshotArtefactMissingError):
+        resolve_latest_snapshot_path(
+            snapshot_root=snapshot_root,
+            dataset="sponsor",
+            filename="clean.csv",
+            fs=fs,
+        )

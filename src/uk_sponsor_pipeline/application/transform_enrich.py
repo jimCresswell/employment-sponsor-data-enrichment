@@ -14,6 +14,7 @@ from __future__ import annotations
 import math
 import sys
 import time
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -47,7 +48,7 @@ from ..exceptions import (
 )
 from ..io_validation import validate_as
 from ..observability import get_logger
-from ..protocols import FileSystem, HttpClient, HttpSession
+from ..protocols import FileSystem, HttpClient
 from ..schemas import (
     TRANSFORM_ENRICH_CANDIDATES_COLUMNS,
     TRANSFORM_ENRICH_OUTPUT_COLUMNS,
@@ -63,6 +64,7 @@ from ..types import (
     TransformEnrichUnmatchedRow,
     TransformRegisterRow,
 )
+from .companies_house_index import tokenise_company_name
 from .companies_house_source import CompaniesHouseSource, build_companies_house_source
 
 TRANSFORM_ENRICH_CHECKPOINT_COLUMNS = ("Organisation Name",)
@@ -116,6 +118,18 @@ def _coerce_register_row(raw: dict[str, object]) -> TransformRegisterRow:
 
 def _coerce_register_rows(raw_rows: list[dict[str, object]]) -> list[TransformRegisterRow]:
     return [_coerce_register_row(row) for row in raw_rows]
+
+
+def _build_token_set(rows: Iterable[TransformRegisterRow]) -> set[str]:
+    tokens: set[str] = set()
+    for row in rows:
+        name = row["Organisation Name"]
+        variants = generate_query_variants(name)
+        if not variants:
+            variants = [name]
+        for variant in variants:
+            tokens.update(tokenise_company_name(variant))
+    return tokens
 
 
 def _build_resume_report(
@@ -186,7 +200,6 @@ def run_transform_enrich(
     cache_dir: str | Path = "data/cache/companies_house",
     config: PipelineConfig | None = None,
     http_client: HttpClient | None = None,
-    http_session: HttpSession | None = None,
     resume: bool = True,
     fs: FileSystem | None = None,
     batch_start: int = 1,
@@ -286,14 +299,6 @@ def run_transform_enrich(
     if already_processed:
         logger.info("Resuming: %s orgs already processed", len(already_processed))
 
-    # Set up Companies House source
-    source: CompaniesHouseSource = build_companies_house_source(
-        config=config,
-        fs=fs,
-        http_client=http_client,
-        http_session=http_session,
-    )
-
     # Process organisations in batches
     raw_rows = validate_as(list[dict[str, object]], df.to_dict(orient="records"))
     rows = _coerce_register_rows(raw_rows)
@@ -335,6 +340,17 @@ def run_transform_enrich(
         total_batches,
         overall_range_text,
         total_batches_overall,
+    )
+
+    token_set: set[str] | None = None
+    if config.ch_source_type == "file":
+        token_set = _build_token_set(row for _, row in to_process)
+
+    source: CompaniesHouseSource = build_companies_house_source(
+        config=config,
+        fs=fs,
+        http_client=http_client,
+        token_set=token_set,
     )
 
     batch_enriched: list[TransformEnrichRow] = []

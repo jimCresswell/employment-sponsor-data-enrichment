@@ -10,16 +10,20 @@ Usage example:
     api_source = ApiCompaniesHouseSource(http_client=http_client, search_limit=10)
 
     file_source = FileCompaniesHouseSource(
-        searches=[{"query": "Acme Ltd", "items": []}],
-        profiles=[],
+        fs=fs,
+        token_index={"acme": ["01234567"]},
+        profile_dir=Path("data/cache/snapshots/companies_house/2026-02-01"),
+        max_candidates=500,
     )
 """
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, override
@@ -28,22 +32,29 @@ from urllib.parse import quote
 from ..config import PipelineConfig
 from ..exceptions import (
     CompaniesHouseFileProfileMissingError,
+    CsvSchemaDecodeError,
+    CsvSchemaMissingColumnsError,
     DependencyMissingError,
     InvalidSourceTypeError,
-    MissingSourcePathError,
+    MissingSnapshotPathError,
+    SnapshotArtefactMissingError,
 )
-from ..io_contracts import CompaniesHouseProfileEntryIO, CompaniesHouseSearchEntryIO
-from ..io_validation import (
-    parse_companies_house_file,
-    parse_companies_house_profile,
-    parse_companies_house_search,
-    validate_as,
-    validate_json_as,
-)
-from ..protocols import FileSystem, HttpClient, HttpSession
-from ..types import CompanyProfile, SearchItem
+from ..io_validation import parse_companies_house_profile, parse_companies_house_search, validate_as
+from ..protocols import FileSystem, HttpClient
+from ..types import CompaniesHouseCleanRow, CompanyProfile, SearchItem
+from .companies_house_bulk import CANONICAL_HEADERS_V1
+from .companies_house_index import bucket_for_token, tokenise_company_name
 
 CH_BASE = "https://api.company-information.service.gov.uk"
+_INDEX_HEADERS: tuple[str, str] = ("token", "company_number")
+
+
+def _empty_profile_cache() -> dict[str, CompanyProfile]:
+    return {}
+
+
+def _empty_search_cache() -> dict[str, SearchItem]:
+    return {}
 
 
 class CompaniesHouseSource(Protocol):
@@ -86,29 +97,79 @@ class ApiCompaniesHouseSource(CompaniesHouseSource):
 
 @dataclass(frozen=True)
 class FileCompaniesHouseSource(CompaniesHouseSource):
-    """File-backed Companies House source."""
+    """File-backed Companies House source using snapshot artefacts."""
 
-    searches: tuple[CompaniesHouseSearchEntryIO, ...]
-    profiles: tuple[CompaniesHouseProfileEntryIO, ...]
-    _search_map: dict[str, list[SearchItem]] = field(init=False, repr=False)
-    _profile_map: dict[str, CompanyProfile] = field(init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "_search_map", _build_search_map(self.searches))
-        object.__setattr__(self, "_profile_map", _build_profile_map(self.profiles))
+    fs: FileSystem
+    token_index: dict[str, list[str]]
+    profile_dir: Path
+    max_candidates: int
+    _profile_cache: dict[str, CompanyProfile] = field(
+        default_factory=_empty_profile_cache, init=False, repr=False
+    )
+    _search_cache: dict[str, SearchItem] = field(
+        default_factory=_empty_search_cache, init=False, repr=False
+    )
 
     @override
     def search(self, query: str) -> list[SearchItem]:
-        key = _normalise_key(query)
-        return self._search_map.get(key, [])
+        tokens = tokenise_company_name(query)
+        if not tokens:
+            return []
+        candidates = _candidate_company_numbers(
+            tokens=tokens,
+            token_index=self.token_index,
+            max_candidates=self.max_candidates,
+        )
+        if not candidates:
+            return []
+        self._load_profiles_for_numbers(candidates)
+        out: list[SearchItem] = []
+        for company_number in candidates:
+            item = self._search_cache.get(company_number)
+            if item is not None:
+                out.append(item)
+        return out
 
     @override
     def profile(self, company_number: str) -> CompanyProfile:
-        key = _normalise_key(company_number)
-        profile = self._profile_map.get(key)
+        key = company_number.strip()
+        if key not in self._profile_cache:
+            self._load_profiles_for_numbers([key])
+        profile = self._profile_cache.get(key)
         if profile is None:
             raise CompaniesHouseFileProfileMissingError(company_number)
         return profile
+
+    def _load_profiles_for_numbers(self, company_numbers: Iterable[str]) -> None:
+        missing = [number for number in company_numbers if number not in self._profile_cache]
+        if not missing:
+            return
+        bucket_map: dict[str, set[str]] = {}
+        for number in missing:
+            bucket = bucket_for_token(number)
+            bucket_map.setdefault(bucket, set()).add(number)
+        for bucket, numbers in bucket_map.items():
+            path = self.profile_dir / f"profiles_{bucket}.csv"
+            if not self.fs.exists(path):
+                raise SnapshotArtefactMissingError(str(path))
+            text = self.fs.read_text(path)
+            reader = csv.DictReader(io.StringIO(text))
+            if reader.fieldnames is None:
+                raise CsvSchemaDecodeError()
+            _validate_profile_headers([header.strip() for header in reader.fieldnames if header])
+            for row in reader:
+                company_number = (row.get("company_number") or "").strip()
+                if not company_number or company_number not in numbers:
+                    continue
+                clean_row = _coerce_clean_row(row)
+                self._store_profile(clean_row)
+
+    def _store_profile(self, row: CompaniesHouseCleanRow) -> None:
+        company_number = row["company_number"].strip()
+        if not company_number:
+            return
+        self._profile_cache[company_number] = _build_company_profile(row)
+        self._search_cache[company_number] = _build_search_item(row)
 
 
 def build_companies_house_source(
@@ -116,7 +177,7 @@ def build_companies_house_source(
     config: PipelineConfig,
     fs: FileSystem,
     http_client: HttpClient | None,
-    http_session: HttpSession | None,
+    token_set: set[str] | None = None,
 ) -> CompaniesHouseSource:
     if config.ch_source_type == "api":
         if http_client is None:
@@ -124,41 +185,141 @@ def build_companies_house_source(
         return ApiCompaniesHouseSource(http_client=http_client, search_limit=config.ch_search_limit)
 
     if config.ch_source_type == "file":
-        payload = _load_file_payload(
-            config.ch_source_path,
+        if not config.ch_clean_path:
+            raise MissingSnapshotPathError("CH_CLEAN_PATH")
+        if not config.ch_token_index_dir:
+            raise MissingSnapshotPathError("CH_TOKEN_INDEX_DIR")
+        clean_path = Path(config.ch_clean_path)
+        if not fs.exists(clean_path):
+            raise SnapshotArtefactMissingError(str(clean_path))
+        index_dir = Path(config.ch_token_index_dir)
+        token_index = _load_token_index_map(
+            token_set=token_set or set(),
+            index_dir=index_dir,
             fs=fs,
-            http_session=http_session,
-            timeout_seconds=config.ch_timeout_seconds,
         )
-        parsed = parse_companies_house_file(payload)
         return FileCompaniesHouseSource(
-            searches=tuple(parsed["searches"]),
-            profiles=tuple(parsed["profiles"]),
+            fs=fs,
+            token_index=token_index,
+            profile_dir=index_dir,
+            max_candidates=config.ch_file_max_candidates,
         )
 
     raise InvalidSourceTypeError()
 
 
-def _load_file_payload(
-    path: str,
+def _candidate_company_numbers(
     *,
+    tokens: list[str],
+    token_index: dict[str, list[str]],
+    max_candidates: int,
+) -> list[str]:
+    counts: dict[str, int] = {}
+    for token in tokens:
+        for company_number in token_index.get(token, []):
+            counts[company_number] = counts.get(company_number, 0) + 1
+    if not counts:
+        return []
+    min_hits = 2 if len(tokens) >= 2 else 1
+    candidates = [(number, hits) for number, hits in counts.items() if hits >= min_hits]
+    if not candidates:
+        return []
+    candidates.sort(key=lambda item: (-item[1], item[0]))
+    if len(candidates) > max_candidates:
+        candidates = candidates[:max_candidates]
+    return [number for number, _ in candidates]
+
+
+def _load_token_index_map(
+    *,
+    token_set: set[str],
+    index_dir: Path,
     fs: FileSystem,
-    http_session: HttpSession | None,
-    timeout_seconds: float,
-) -> dict[str, object]:
-    if not path:
-        raise MissingSourcePathError()
-    if path.startswith("http://") or path.startswith("https://"):
-        if http_session is None:
-            raise DependencyMissingError("HttpSession", reason="To load a file source from a URL.")
-        content = http_session.get_text(path, timeout_seconds=timeout_seconds)
-        return validate_json_as(dict[str, object], content)
-    file_path = Path(path)
-    return fs.read_json(file_path)
+) -> dict[str, list[str]]:
+    token_index: dict[str, list[str]] = {}
+    if not token_set:
+        return token_index
+    buckets = {bucket_for_token(token) for token in token_set}
+    seen: dict[str, set[str]] = {}
+    for bucket in sorted(buckets):
+        path = index_dir / f"index_tokens_{bucket}.csv"
+        if not fs.exists(path):
+            raise SnapshotArtefactMissingError(str(path))
+        text = fs.read_text(path)
+        reader = csv.DictReader(io.StringIO(text))
+        if reader.fieldnames is None:
+            raise CsvSchemaDecodeError()
+        _validate_index_headers([header.strip() for header in reader.fieldnames if header])
+        for row in reader:
+            token = (row.get("token") or "").strip()
+            if token not in token_set:
+                continue
+            company_number = (row.get("company_number") or "").strip()
+            if not company_number:
+                continue
+            seen.setdefault(token, set())
+            if company_number in seen[token]:
+                continue
+            token_index.setdefault(token, []).append(company_number)
+            seen[token].add(company_number)
+    return token_index
 
 
-def _normalise_key(value: str) -> str:
-    return re.sub(r"\s+", " ", value.strip().lower())
+def _validate_index_headers(headers: list[str]) -> None:
+    missing = [name for name in _INDEX_HEADERS if name not in headers]
+    if missing:
+        raise CsvSchemaMissingColumnsError(missing)
+
+
+def _validate_profile_headers(headers: list[str]) -> None:
+    missing = [name for name in CANONICAL_HEADERS_V1 if name not in headers]
+    if missing:
+        raise CsvSchemaMissingColumnsError(missing)
+
+
+def _coerce_clean_row(raw: Mapping[str, str | None]) -> CompaniesHouseCleanRow:
+    return {
+        "company_number": (raw.get("company_number") or "").strip(),
+        "company_name": (raw.get("company_name") or "").strip(),
+        "company_status": (raw.get("company_status") or "").strip(),
+        "company_type": (raw.get("company_type") or "").strip(),
+        "date_of_creation": (raw.get("date_of_creation") or "").strip(),
+        "sic_codes": (raw.get("sic_codes") or "").strip(),
+        "address_locality": (raw.get("address_locality") or "").strip(),
+        "address_region": (raw.get("address_region") or "").strip(),
+        "address_postcode": (raw.get("address_postcode") or "").strip(),
+        "uri": (raw.get("uri") or "").strip(),
+    }
+
+
+def _build_search_item(row: CompaniesHouseCleanRow) -> SearchItem:
+    return {
+        "title": row["company_name"],
+        "company_number": row["company_number"],
+        "company_status": row["company_status"],
+        "address": {
+            "locality": row["address_locality"],
+            "region": row["address_region"],
+            "postal_code": row["address_postcode"],
+        },
+    }
+
+
+def _build_company_profile(row: CompaniesHouseCleanRow) -> CompanyProfile:
+    sic_raw = row["sic_codes"]
+    sic_codes = [code for code in sic_raw.split(";") if code]
+    return {
+        "company_name": row["company_name"],
+        "company_status": row["company_status"],
+        "type": row["company_type"],
+        "date_of_creation": row["date_of_creation"],
+        "sic_codes": sic_codes,
+        "registered_office_address": {
+            "locality": row["address_locality"],
+            "region": row["address_region"],
+            "postal_code": row["address_postcode"],
+        },
+    }
 
 
 def _normalise_for_cache(value: str) -> str:
@@ -169,25 +330,3 @@ def _cache_key(prefix: str, *parts: str) -> str:
     normalised = "_".join(_normalise_for_cache(p) for p in parts if p)
     h = hashlib.sha256(normalised.encode()).hexdigest()[:16]
     return f"{prefix}:{h}"
-
-
-def _build_search_map(
-    searches: Iterable[CompaniesHouseSearchEntryIO],
-) -> dict[str, list[SearchItem]]:
-    mapping: dict[str, list[SearchItem]] = {}
-    for entry in searches:
-        key = _normalise_key(entry["query"])
-        items = validate_as(list[SearchItem], entry["items"])
-        mapping[key] = items
-    return mapping
-
-
-def _build_profile_map(
-    profiles: Iterable[CompaniesHouseProfileEntryIO],
-) -> dict[str, CompanyProfile]:
-    mapping: dict[str, CompanyProfile] = {}
-    for entry in profiles:
-        key = _normalise_key(entry["company_number"])
-        profile = validate_as(CompanyProfile, entry["profile"])
-        mapping[key] = profile
-    return mapping

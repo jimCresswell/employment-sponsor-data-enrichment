@@ -126,35 +126,66 @@ def test_cli_usage_shortlist_rejects_multiple_regions(monkeypatch: pytest.Monkey
     assert "Only one --region" in result.output
 
 
-def test_cli_run_all_skip_download(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: dict[str, object] = {}
+def test_cli_run_all_resolves_snapshot_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured_config = PipelineConfig()
+    captured_register_path = Path("unset")
 
-    def fake_run_pipeline(**kwargs: object) -> SimpleNamespace:
-        calls.update(kwargs)
+    def fake_run_pipeline(
+        *,
+        config: PipelineConfig,
+        register_path: Path,
+        fs: FileSystem,
+        http_client: object | None,
+    ) -> SimpleNamespace:
+        nonlocal captured_config, captured_register_path
+        _ = (fs, http_client)
+        captured_config = config
+        captured_register_path = register_path
         return SimpleNamespace(
-            extract=None,
-            register=SimpleNamespace(unique_orgs=1),
             enrich={"enriched": "enriched.csv"},
             score={"scored": "scored.csv"},
             usage={"shortlist": "short.csv", "explain": "explain.csv"},
         )
 
     def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
-        return PipelineConfig()
-
-    def fail_download(*args: object, **kwargs: object) -> None:
-        pytest.fail("extract_register should not be called")
+        return PipelineConfig(ch_source_type="file")
 
     monkeypatch.setattr(
         cli.PipelineConfig,
         "from_env",
         classmethod(fake_from_env),
     )
-    monkeypatch.setattr(cli, "extract_register", fail_download)
     monkeypatch.setattr(cli, "run_pipeline", fake_run_pipeline)
 
+    def fake_resolve_sponsor_clean_path(
+        *,
+        config: PipelineConfig,
+        fs: FileSystem,
+        snapshot_root: Path | None = None,
+    ) -> Path:
+        _ = (config, fs, snapshot_root)
+        return Path("snapshots/sponsor/2026-02-01/clean.csv")
+
+    def fake_resolve_companies_house_paths(
+        *,
+        config: PipelineConfig,
+        fs: FileSystem,
+        snapshot_root: Path | None = None,
+    ) -> tuple[Path, Path]:
+        _ = (config, fs, snapshot_root)
+        return (
+            Path("snapshots/companies_house/2026-02-01/clean.csv"),
+            Path("snapshots/companies_house/2026-02-01"),
+        )
+
+    monkeypatch.setattr(cli, "_resolve_sponsor_clean_path", fake_resolve_sponsor_clean_path)
+    monkeypatch.setattr(cli, "_resolve_companies_house_paths", fake_resolve_companies_house_paths)
+
     app = _build_app()
-    result = runner.invoke(app, ["run-all", "--skip-download"])
+    result = runner.invoke(app, ["run-all"])
 
     assert result.exit_code == 0
-    assert calls["skip_download"] is True
+    assert captured_register_path == Path("snapshots/sponsor/2026-02-01/clean.csv")
+    assert captured_config.sponsor_clean_path == "snapshots/sponsor/2026-02-01/clean.csv"
+    assert captured_config.ch_clean_path == "snapshots/companies_house/2026-02-01/clean.csv"
+    assert captured_config.ch_token_index_dir == "snapshots/companies_house/2026-02-01"

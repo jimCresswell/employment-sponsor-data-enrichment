@@ -1,30 +1,33 @@
 """CLI for UK Sponsor Pipeline.
 
 Commands:
-- extract: Fetch latest sponsor register from GOV.UK
-- transform-register: Filter to Skilled Worker + A-rated, aggregate by org
+- refresh-sponsor: Download and snapshot the sponsor register
+- refresh-companies-house: Download and snapshot Companies House bulk data
 - transform-enrich: Enrich with Companies House data
 - transform-score: Score for tech-likelihood (scored output)
 - usage-shortlist: Filter scored output into shortlist and explainability
-- run-all: Execute all steps sequentially
+- run-all: Execute cache-only steps sequentially
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import sys
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Annotated, Protocol
 
 import typer
 from rich import print as rprint
 
-from .application.extract import ExtractResult, extract_register
 from .application.pipeline import run_pipeline
+from .application.refresh_companies_house import run_refresh_companies_house
+from .application.refresh_sponsor import run_refresh_sponsor
+from .application.snapshots import resolve_latest_snapshot_path
 from .application.transform_enrich import run_transform_enrich
-from .application.transform_register import TransformRegisterResult, run_transform_register
 from .application.transform_score import run_transform_score
 from .application.usage import run_usage_shortlist
 from .config import PipelineConfig
+from .exceptions import SnapshotArtefactMissingError
 from .protocols import FileSystem, HttpClient, HttpSession
 
 
@@ -88,8 +91,7 @@ class CliContextNotInitialisedError(typer.BadParameter):
         super().__init__("CLI context is not initialised. Use the uk-sponsor entry point.")
 
 
-DEFAULT_RAW_DIR = Path("data/raw")
-DEFAULT_REGISTER_OUT = Path("data/interim/sponsor_register_filtered.csv")
+DEFAULT_SNAPSHOT_ROOT = Path("data/cache/snapshots")
 DEFAULT_PROCESSED_DIR = Path("data/processed")
 DEFAULT_ENRICHED_IN = Path("data/processed/companies_house_enriched.csv")
 DEFAULT_SCORED_IN = Path("data/processed/companies_scored.csv")
@@ -110,13 +112,63 @@ def _get_context(ctx: typer.Context) -> CliContext:
     return ctx.obj
 
 
+def _require_path(path: Path, fs: FileSystem) -> Path:
+    if not fs.exists(path):
+        raise SnapshotArtefactMissingError(str(path))
+    return path
+
+
+def _resolve_sponsor_clean_path(
+    *, config: PipelineConfig, fs: FileSystem, snapshot_root: Path | None = None
+) -> Path:
+    if config.sponsor_clean_path:
+        return _require_path(Path(config.sponsor_clean_path), fs)
+    root = snapshot_root or Path(config.snapshot_root or DEFAULT_SNAPSHOT_ROOT)
+    return resolve_latest_snapshot_path(
+        snapshot_root=root,
+        dataset="sponsor",
+        filename="clean.csv",
+        fs=fs,
+    )
+
+
+def _resolve_companies_house_paths(
+    *, config: PipelineConfig, fs: FileSystem, snapshot_root: Path | None = None
+) -> tuple[Path, Path]:
+    if config.ch_clean_path:
+        clean_path = _require_path(Path(config.ch_clean_path), fs)
+    else:
+        root = snapshot_root or Path(config.snapshot_root or DEFAULT_SNAPSHOT_ROOT)
+        clean_path = resolve_latest_snapshot_path(
+            snapshot_root=root,
+            dataset="companies_house",
+            filename="clean.csv",
+            fs=fs,
+        )
+    index_dir = Path(config.ch_token_index_dir) if config.ch_token_index_dir else clean_path.parent
+    return clean_path, index_dir
+
+
+def _with_snapshot_paths(
+    *,
+    config: PipelineConfig,
+    sponsor_clean_path: Path,
+    ch_clean_path: Path,
+    ch_token_index_dir: Path,
+) -> PipelineConfig:
+    return replace(
+        config,
+        sponsor_clean_path=str(sponsor_clean_path),
+        ch_clean_path=str(ch_clean_path),
+        ch_token_index_dir=str(ch_token_index_dir),
+    )
+
+
 def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
     """Create a Typer app wired with the provided dependencies builder."""
     app = typer.Typer(
         add_completion=False,
-        help=(
-            "UK sponsor register pipeline: extract → transform → enrich → score → usage-shortlist"
-        ),
+        help=("UK sponsor pipeline: refresh → enrich → score → usage-shortlist"),
     )
 
     @app.callback()
@@ -124,83 +176,87 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
         """Initialise CLI context."""
         ctx.obj = CliContext(config=PipelineConfig.from_env(), deps_builder=deps_builder)
 
-    @app.command()
-    def extract(
+    @app.command(name="refresh-sponsor")
+    def refresh_sponsor(
         ctx: typer.Context,
         url: Annotated[
-            str | None,
+            str,
             typer.Option(
                 "--url",
                 "-u",
-                help="Direct CSV URL (bypasses GOV.UK page scraping)",
+                help="Direct CSV URL for the sponsor register",
+            ),
+        ],
+        snapshot_root: Annotated[
+            Path | None,
+            typer.Option(
+                "--snapshot-root",
+                help="Snapshot root directory (defaults to SNAPSHOT_ROOT)",
             ),
         ] = None,
-        data_dir: Annotated[
-            Path,
-            typer.Option(
-                "--data-dir",
-                "-d",
-                help="Directory to save downloaded CSV",
-            ),
-        ] = DEFAULT_RAW_DIR,
     ) -> None:
-        """Extract the latest sponsor register CSV from GOV.UK."""
+        """Refresh sponsor register snapshot (download + clean)."""
         state = _get_context(ctx)
+        config = state.config
+        root = snapshot_root or Path(config.snapshot_root or DEFAULT_SNAPSHOT_ROOT)
         deps = state.build_dependencies(cache_dir=DEFAULT_CACHE_DIR, build_http_client=False)
-        result: ExtractResult = extract_register(
-            url_override=url,
-            data_dir=data_dir,
-            session=deps.http_session,
+        result = run_refresh_sponsor(
+            url=url,
+            snapshot_root=root,
             fs=deps.fs,
+            http_session=deps.http_session,
+            command_line=" ".join(sys.argv),
         )
-        rprint(f"[green]✓ Downloaded:[/green] {result.output_path}")
-        rprint(f"  Hash: {result.sha256_hash[:16]}...")
-        rprint(f"  Valid schema: {result.schema_valid}")
+        rprint(f"[green]✓ Refresh sponsor complete:[/green] {result.snapshot_dir}")
+        rprint(f"  Snapshot date: {result.snapshot_date}")
+        rprint(f"  Clean rows: {result.row_counts['clean']:,}")
 
-    @app.command(name="transform-register")
-    def transform_register(
+    @app.command(name="refresh-companies-house")
+    def refresh_companies_house(
         ctx: typer.Context,
-        raw_dir: Annotated[
-            Path,
+        url: Annotated[
+            str,
             typer.Option(
-                "--raw-dir",
-                help="Directory containing raw CSV files",
+                "--url",
+                "-u",
+                help="Direct ZIP/CSV URL for Companies House bulk data",
             ),
-        ] = DEFAULT_RAW_DIR,
-        out_path: Annotated[
-            Path,
+        ],
+        snapshot_root: Annotated[
+            Path | None,
             typer.Option(
-                "--output",
-                "-o",
-                help="Output path for filtered/aggregated CSV",
+                "--snapshot-root",
+                help="Snapshot root directory (defaults to SNAPSHOT_ROOT)",
             ),
-        ] = DEFAULT_REGISTER_OUT,
+        ] = None,
     ) -> None:
-        """Transform register: filter to Skilled Worker + A-rated and aggregate by organisation."""
+        """Refresh Companies House bulk snapshot (download + clean + index)."""
         state = _get_context(ctx)
+        config = state.config
+        root = snapshot_root or Path(config.snapshot_root or DEFAULT_SNAPSHOT_ROOT)
         deps = state.build_dependencies(cache_dir=DEFAULT_CACHE_DIR, build_http_client=False)
-        result: TransformRegisterResult = run_transform_register(
-            raw_dir=raw_dir,
-            out_path=out_path,
+        result = run_refresh_companies_house(
+            url=url,
+            snapshot_root=root,
             fs=deps.fs,
+            http_session=deps.http_session,
+            command_line=" ".join(sys.argv),
         )
-        rprint(f"[green]✓ Transform register complete:[/green] {result.output_path}")
-        rprint(
-            f"  {result.total_raw_rows:,} raw → {result.filtered_rows:,} filtered → "
-            f"{result.unique_orgs:,} unique orgs"
-        )
+        rprint(f"[green]✓ Refresh Companies House complete:[/green] {result.snapshot_dir}")
+        rprint(f"  Snapshot date: {result.snapshot_date}")
+        rprint(f"  Clean rows: {result.row_counts['clean']:,}")
 
     @app.command(name="transform-enrich")
     def transform_enrich(
         ctx: typer.Context,
         register_path: Annotated[
-            Path,
+            Path | None,
             typer.Option(
                 "--input",
                 "-i",
-                help="Path to register transform output CSV",
+                help="Path to sponsor clean CSV (defaults to latest snapshot)",
             ),
-        ] = DEFAULT_REGISTER_OUT,
+        ] = None,
         out_dir: Annotated[
             Path,
             typer.Option(
@@ -250,8 +306,25 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
             build_http_client=True,
             config=config,
         )
+        register_value = register_path or _resolve_sponsor_clean_path(
+            config=config,
+            fs=deps.fs,
+        )
+        if config.ch_source_type == "file":
+            ch_clean_path, ch_token_index_dir = _resolve_companies_house_paths(
+                config=config,
+                fs=deps.fs,
+            )
+            config = _with_snapshot_paths(
+                config=config,
+                sponsor_clean_path=register_value,
+                ch_clean_path=ch_clean_path,
+                ch_token_index_dir=ch_token_index_dir,
+            )
+        else:
+            config = replace(config, sponsor_clean_path=str(register_value))
         outs = run_transform_enrich(
-            register_path=register_path,
+            register_path=register_value,
             out_dir=out_dir,
             cache_dir=DEFAULT_CACHE_DIR,
             resume=resume,
@@ -260,7 +333,6 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
             batch_size=batch_size,
             config=config,
             http_client=deps.http_client,
-            http_session=deps.http_session,
             fs=deps.fs,
         )
         rprint("[green]✓ Transform enrich complete:[/green]")
@@ -380,6 +452,13 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
     @app.command(name="run-all")
     def run_all(
         ctx: typer.Context,
+        snapshot_root: Annotated[
+            Path | None,
+            typer.Option(
+                "--snapshot-root",
+                help="Snapshot root directory (defaults to SNAPSHOT_ROOT)",
+            ),
+        ] = None,
         region: Annotated[
             list[str] | None,
             typer.Option(
@@ -404,18 +483,10 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
                 help="Override tech score threshold for scoring",
             ),
         ] = None,
-        skip_download: Annotated[
-            bool,
-            typer.Option(
-                "--skip-download",
-                help="Skip download if raw CSV already exists",
-            ),
-        ] = False,
     ) -> None:
-        """Run all pipeline steps sequentially.
+        """Run cache-only pipeline steps sequentially.
 
-        Executes: extract → transform-register → transform-enrich → transform-score →
-        usage-shortlist
+        Executes: transform-enrich → transform-score → usage-shortlist
         Geographic filters apply to the final shortlist.
         """
         state = _get_context(ctx)
@@ -432,22 +503,32 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
             build_http_client=True,
             config=config,
         )
+        root = snapshot_root or Path(config.snapshot_root or DEFAULT_SNAPSHOT_ROOT)
+        register_path = _resolve_sponsor_clean_path(
+            config=config,
+            fs=deps.fs,
+            snapshot_root=root,
+        )
+        if config.ch_source_type == "file":
+            ch_clean_path, ch_token_index_dir = _resolve_companies_house_paths(
+                config=config,
+                fs=deps.fs,
+                snapshot_root=root,
+            )
+            config = _with_snapshot_paths(
+                config=config,
+                sponsor_clean_path=register_path,
+                ch_clean_path=ch_clean_path,
+                ch_token_index_dir=ch_token_index_dir,
+            )
+        else:
+            config = replace(config, sponsor_clean_path=str(register_path))
         result = run_pipeline(
             config=config,
-            skip_download=skip_download,
-            cache_dir=DEFAULT_CACHE_DIR,
+            register_path=register_path,
             fs=deps.fs,
             http_client=deps.http_client,
-            http_session=deps.http_session,
-            session=deps.http_session,
         )
-
-        if skip_download:
-            rprint("[yellow]Skipping download (--skip-download)[/yellow]")
-        elif result.extract is not None:
-            rprint(f"[green]✓ Downloaded:[/green] {result.extract.output_path}")
-
-        rprint(f"[green]✓ {result.register.unique_orgs:,} unique organisations[/green]")
         rprint(f"[green]✓ Enriched: {result.enrich['enriched']}[/green]")
 
         rprint("\n[bold green]═══ Pipeline Complete ═══[/bold green]")
@@ -456,8 +537,8 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
 
     _ = (
         main,
-        extract,
-        transform_register,
+        refresh_sponsor,
+        refresh_companies_house,
         transform_enrich,
         transform_score,
         usage_shortlist,

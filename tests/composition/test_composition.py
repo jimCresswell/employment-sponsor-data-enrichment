@@ -85,7 +85,7 @@ def test_build_cli_dependencies_builds_http_client_for_api(
 def test_build_cli_dependencies_skips_http_client_for_file_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    config = PipelineConfig(ch_source_type="file", ch_source_path="data/reference/ch.json")
+    config = PipelineConfig(ch_source_type="file")
     cache_dir = Path("data/cache/companies_house")
 
     def fail_build_companies_house_client(**_: object) -> HttpClient:

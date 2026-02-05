@@ -39,11 +39,11 @@ class MissingApiKeyError(PipelineError):
         super().__init__("Missing CH_API_KEY. Set it in .env or environment variables.")
 
 
-class MissingSourcePathError(PipelineError):
-    """Raised when CH_SOURCE_PATH is required but missing."""
+class MissingSnapshotPathError(PipelineError):
+    """Raised when a required snapshot path is missing in configuration."""
 
-    def __init__(self) -> None:
-        super().__init__("CH_SOURCE_PATH is required when CH_SOURCE_TYPE is 'file'.")
+    def __init__(self, field_name: str) -> None:
+        super().__init__(f"{field_name} is required when CH_SOURCE_TYPE is 'file'.")
 
 
 class InvalidSourceTypeError(PipelineError):
@@ -57,7 +57,7 @@ class MissingRawCsvError(PipelineError):
     """Raised when the raw sponsor register CSV cannot be found."""
 
     def __init__(self, raw_dir: str) -> None:
-        super().__init__(f"No raw CSV found in {raw_dir}. Run `uk-sponsor extract` first.")
+        super().__init__(f"No raw CSV found in {raw_dir}. Run `uk-sponsor refresh-sponsor` first.")
 
 
 class CsvLinkNotFoundError(PipelineError):
@@ -102,6 +102,23 @@ class SnapshotAlreadyExistsError(PipelineError):
 
     def __init__(self, dataset: str, snapshot_date: str) -> None:
         super().__init__(f"Snapshot already exists for dataset '{dataset}' on {snapshot_date}.")
+
+
+class SnapshotNotFoundError(PipelineError):
+    """Raised when no snapshots exist for a dataset."""
+
+    def __init__(self, dataset: str, snapshot_root: str) -> None:
+        super().__init__(
+            f"No snapshots found for dataset '{dataset}' under {snapshot_root}. "
+            "Run the refresh command to generate one."
+        )
+
+
+class SnapshotArtefactMissingError(PipelineError):
+    """Raised when a required snapshot artefact is missing."""
+
+    def __init__(self, path: str) -> None:
+        super().__init__(f"Required snapshot artefact missing: {path}.")
 
 
 class SnapshotTimestampError(PipelineError):
