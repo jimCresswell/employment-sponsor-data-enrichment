@@ -21,13 +21,14 @@ from uk_sponsor_pipeline.protocols import HttpSession
 class DummySession(HttpSession):
     """HTTP session stub that streams provided bytes."""
 
-    def __init__(self, payload: bytes) -> None:
+    def __init__(self, payload: bytes, page_html: str | None = None) -> None:
         self.payload = payload
+        self.page_html = page_html or ""
 
     @override
     def get_text(self, url: str, *, timeout_seconds: float) -> str:
         _ = (url, timeout_seconds)
-        return self.payload.decode("utf-8")
+        return self.page_html
 
     @override
     def get_bytes(self, url: str, *, timeout_seconds: float) -> bytes:
@@ -105,3 +106,32 @@ def test_refresh_sponsor_fails_on_missing_columns(tmp_path: Path) -> None:
             command_line="uk-sponsor refresh-sponsor --url https://example.com",
             now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
         )
+
+
+def test_refresh_sponsor_discovers_csv_link(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    snapshot_root = tmp_path / "snapshots"
+    payload = (
+        b"Organisation Name,Town/City,County,Type & Rating,Route\n"
+        b"Acme Ltd,London,Greater London,A rating,Skilled Worker\n"
+    )
+    html = """
+    <html>
+        <body>
+            <a href="https://example.com/sponsor-register-2026-02-01.csv">CSV</a>
+        </body>
+    </html>
+    """
+    session = DummySession(payload, page_html=html)
+
+    result = run_refresh_sponsor(
+        url=None,
+        snapshot_root=snapshot_root,
+        fs=fs,
+        http_session=session,
+        command_line="uk-sponsor refresh-sponsor",
+        now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
+        source_page_url="https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers",
+    )
+
+    assert result.snapshot_date == "2026-02-01"

@@ -50,15 +50,22 @@ cp .env.example .env
 
 ```bash
 # Refresh snapshots (run when source data changes)
+# If --url is omitted, the pipeline discovers links from the source pages.
+uv run uk-sponsor refresh-sponsor
+uv run uk-sponsor refresh-companies-house
+
+# Or provide explicit URLs
 uv run uk-sponsor refresh-sponsor --url <csv-url>
-uv run uk-sponsor refresh-companies-house --url <zip-or-csv-url>
+uv run uk-sponsor refresh-companies-house --url <zip-url>
 
 # Cache-only pipeline run
 uv run uk-sponsor run-all
 
 # Or run each step individually:
+uv run uk-sponsor refresh-sponsor
+uv run uk-sponsor refresh-companies-house
 uv run uk-sponsor refresh-sponsor --url <csv-url>
-uv run uk-sponsor refresh-companies-house --url <zip-or-csv-url>
+uv run uk-sponsor refresh-companies-house --url <zip-url>
 uv run uk-sponsor transform-enrich
 uv run uk-sponsor transform-score
 uv run uk-sponsor usage-shortlist
@@ -121,6 +128,7 @@ The legacy JSON file source has been removed.
 - `docs/snapshots.md` (snapshot layout, manifests, and resolution)
 - `docs/data-contracts.md` (Companies House canonical schema and mapping)
 - `docs/companies-house-file-source.md` (file-first token index rules)
+- `docs/validation-protocol.md` (file-first validation steps and e2e fixture run)
 - `docs/troubleshooting.md` (common failures and recovery)
 
 ### Geographic Filtering

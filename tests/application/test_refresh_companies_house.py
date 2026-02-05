@@ -27,13 +27,14 @@ from uk_sponsor_pipeline.protocols import HttpSession
 class DummySession(HttpSession):
     """HTTP session stub that streams provided bytes."""
 
-    def __init__(self, payload: bytes) -> None:
+    def __init__(self, payload: bytes, page_html: str | None = None) -> None:
         self.payload = payload
+        self.page_html = page_html or ""
 
     @override
     def get_text(self, url: str, *, timeout_seconds: float) -> str:
         _ = (url, timeout_seconds)
-        return self.payload.decode("utf-8")
+        return self.page_html
 
     @override
     def get_bytes(self, url: str, *, timeout_seconds: float) -> bytes:
@@ -194,3 +195,35 @@ def test_refresh_companies_house_fails_on_missing_columns(tmp_path: Path) -> Non
             command_line="uk-sponsor refresh-companies-house --url https://example.com",
             now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
         )
+
+
+def test_refresh_companies_house_discovers_zip_link(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    snapshot_root = tmp_path / "snapshots"
+    csv_payload = _build_csv_payload(
+        company_number="01234567",
+        uri="http://data.companieshouse.gov.uk/doc/company/01234567",
+    )
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as zipf:
+        zipf.writestr("BasicCompanyDataAsOneFile-2026-02-01.csv", csv_payload)
+    html = """
+    <html>
+        <body>
+            <a href="BasicCompanyDataAsOneFile-2026-02-01.zip">ZIP</a>
+        </body>
+    </html>
+    """
+    session = DummySession(buffer.getvalue(), page_html=html)
+
+    result = run_refresh_companies_house(
+        url=None,
+        snapshot_root=snapshot_root,
+        fs=fs,
+        http_session=session,
+        command_line="uk-sponsor refresh-companies-house",
+        now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
+        source_page_url="https://download.companieshouse.gov.uk/en_output.html",
+    )
+
+    assert result.snapshot_date == "2026-02-01"

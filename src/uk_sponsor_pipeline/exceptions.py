@@ -82,6 +82,28 @@ class CsvLinkAmbiguousError(PipelineError):
         )
 
 
+class CompaniesHouseZipLinkNotFoundError(PipelineError):
+    """Raised when no ZIP link is found on the Companies House download page."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Could not find a ZIP link on the Companies House download page.\n"
+            "The page structure may have changed. Use --url to specify the direct ZIP URL."
+        )
+
+
+class CompaniesHouseZipLinkAmbiguousError(PipelineError):
+    """Raised when multiple candidate ZIP links match the best pattern."""
+
+    def __init__(self, candidates: list[str]) -> None:
+        sample = ", ".join(candidates[:5])
+        super().__init__(
+            "Multiple candidate ZIP links matched the best pattern on the Companies House "
+            "download page. Use --url to specify the correct ZIP. "
+            f"Candidates: {sample}"
+        )
+
+
 class CsvSchemaDecodeError(PipelineError):
     """Raised when CSV headers cannot be decoded."""
 

@@ -19,6 +19,7 @@ from .snapshots import (
     derive_snapshot_date,
     start_snapshot_write,
 )
+from .source_links import SPONSOR_SOURCE_PAGE_URL, resolve_sponsor_csv_url
 from .transform_register import TransformRegisterResult, run_transform_register
 
 SPONSOR_DATASET = "sponsor"
@@ -45,24 +46,26 @@ def _sha256(path: Path, fs: FileSystem) -> str:
 
 def run_refresh_sponsor(
     *,
-    url: str,
+    url: str | None,
     snapshot_root: str | Path,
     fs: FileSystem | None = None,
     http_session: HttpSession | None = None,
     command_line: str,
     progress: ProgressReporter | None = None,
     now_fn: Callable[[], datetime] | None = None,
+    source_page_url: str | None = None,
 ) -> RefreshSponsorResult:
     """Download, clean, and snapshot the sponsor register.
 
     Args:
-        url: Direct CSV URL for the sponsor register.
+        url: Direct CSV URL for the sponsor register. If omitted, resolves from GOV.UK.
         snapshot_root: Root directory for snapshots.
         fs: Filesystem dependency (required).
         http_session: HTTP session dependency (required).
         command_line: Command line string for manifest.
         progress: Optional progress reporter (CLI-owned).
         now_fn: Optional clock function for tests.
+        source_page_url: Optional GOV.UK page URL for CSV discovery.
 
     Returns:
         RefreshSponsorResult with snapshot paths and counts.
@@ -75,7 +78,13 @@ def run_refresh_sponsor(
     clock = now_fn or (lambda: datetime.now(UTC))
     downloaded_at = clock()
 
-    source_name = Path(urlparse(url).path).name or "sponsor_register.csv"
+    resolved_url = resolve_sponsor_csv_url(
+        http_session=http_session,
+        url=url,
+        source_page_url=source_page_url or SPONSOR_SOURCE_PAGE_URL,
+    )
+
+    source_name = Path(urlparse(resolved_url).path).name or "sponsor_register.csv"
     snapshot_date = derive_snapshot_date(
         source_name=source_name,
         downloaded_at_utc=downloaded_at,
@@ -89,7 +98,7 @@ def run_refresh_sponsor(
     )
 
     logger = get_logger("uk_sponsor_pipeline.refresh_sponsor")
-    logger.info("Downloading sponsor register: %s", url)
+    logger.info("Downloading sponsor register: %s", resolved_url)
 
     raw_path = paths.staging_dir / "raw.csv"
     bytes_downloaded = 0
@@ -99,7 +108,11 @@ def run_refresh_sponsor(
 
     def stream() -> Iterable[bytes]:
         nonlocal bytes_downloaded
-        for chunk in http_session.iter_bytes(url, timeout_seconds=120, chunk_size=1024 * 64):
+        for chunk in http_session.iter_bytes(
+            resolved_url,
+            timeout_seconds=120,
+            chunk_size=1024 * 64,
+        ):
             bytes_downloaded += len(chunk)
             if progress is not None:
                 progress.advance(len(chunk))
@@ -137,7 +150,7 @@ def run_refresh_sponsor(
     manifest = build_snapshot_manifest(
         dataset=SPONSOR_DATASET,
         snapshot_date=snapshot_date,
-        source_url=url,
+        source_url=resolved_url,
         downloaded_at_utc=downloaded_at,
         last_updated_at_utc=last_updated,
         schema_version=SPONSOR_SCHEMA_VERSION,

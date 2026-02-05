@@ -34,6 +34,7 @@ from .snapshots import (
     derive_snapshot_date,
     start_snapshot_write,
 )
+from .source_links import COMPANIES_HOUSE_SOURCE_PAGE_URL, resolve_companies_house_zip_url
 
 CH_DATASET = "companies_house"
 CH_SCHEMA_VERSION = "ch_clean_v1"
@@ -156,14 +157,31 @@ def _extract_zip(zip_path: Path, csv_path: Path) -> None:
 
 def run_refresh_companies_house(
     *,
-    url: str,
+    url: str | None,
     snapshot_root: str | Path,
     fs: FileSystem | None = None,
     http_session: HttpSession | None = None,
     command_line: str,
     progress: ProgressReporter | None = None,
     now_fn: Callable[[], datetime] | None = None,
+    source_page_url: str | None = None,
 ) -> RefreshCompaniesHouseResult:
+    """Download, clean, and snapshot Companies House bulk data.
+
+    Args:
+        url: Direct ZIP URL for Companies House bulk data. If omitted, resolves from the
+            Companies House download page.
+        snapshot_root: Root directory for snapshots.
+        fs: Filesystem dependency (required).
+        http_session: HTTP session dependency (required).
+        command_line: Command line string for manifest.
+        progress: Optional progress reporter (CLI-owned).
+        now_fn: Optional clock function for tests.
+        source_page_url: Optional Companies House download page URL for ZIP discovery.
+
+    Returns:
+        RefreshCompaniesHouseResult with snapshot paths and counts.
+    """
     if fs is None:
         raise DependencyMissingError("FileSystem", reason="Inject it at the entry point.")
     if http_session is None:
@@ -172,7 +190,13 @@ def run_refresh_companies_house(
     clock = now_fn or (lambda: datetime.now(UTC))
     downloaded_at = clock()
 
-    source_name = Path(urlparse(url).path).name or "companies_house.csv"
+    resolved_url = resolve_companies_house_zip_url(
+        http_session=http_session,
+        url=url,
+        source_page_url=source_page_url or COMPANIES_HOUSE_SOURCE_PAGE_URL,
+    )
+
+    source_name = Path(urlparse(resolved_url).path).name or "companies_house.csv"
     snapshot_date = derive_snapshot_date(
         source_name=source_name,
         downloaded_at_utc=downloaded_at,
@@ -186,14 +210,14 @@ def run_refresh_companies_house(
     )
 
     logger = get_logger("uk_sponsor_pipeline.refresh_companies_house")
-    logger.info("Downloading Companies House bulk data: %s", url)
+    logger.info("Downloading Companies House bulk data: %s", resolved_url)
 
-    is_zip = url.lower().endswith(".zip")
+    is_zip = resolved_url.lower().endswith(".zip")
     raw_name = "raw.zip" if is_zip else "raw.csv"
     raw_path = paths.staging_dir / raw_name
 
     bytes_downloaded = _download_stream(
-        url=url,
+        url=resolved_url,
         dest=raw_path,
         http_session=http_session,
         fs=fs,
@@ -272,7 +296,7 @@ def run_refresh_companies_house(
     manifest = build_snapshot_manifest(
         dataset=CH_DATASET,
         snapshot_date=snapshot_date,
-        source_url=url,
+        source_url=resolved_url,
         downloaded_at_utc=downloaded_at,
         last_updated_at_utc=last_updated,
         schema_version=CH_SCHEMA_VERSION,

@@ -181,13 +181,13 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
     def refresh_sponsor(
         ctx: typer.Context,
         url: Annotated[
-            str,
+            str | None,
             typer.Option(
                 "--url",
                 "-u",
-                help="Direct CSV URL for the sponsor register",
+                help="Direct CSV URL for the sponsor register (optional)",
             ),
-        ],
+        ] = None,
         snapshot_root: Annotated[
             Path | None,
             typer.Option(
@@ -217,13 +217,13 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
     def refresh_companies_house(
         ctx: typer.Context,
         url: Annotated[
-            str,
+            str | None,
             typer.Option(
                 "--url",
                 "-u",
-                help="Direct ZIP/CSV URL for Companies House bulk data",
+                help="Direct ZIP URL for Companies House bulk data (optional)",
             ),
-        ],
+        ] = None,
         snapshot_root: Annotated[
             Path | None,
             typer.Option(
