@@ -156,6 +156,29 @@ class CompaniesHouseProfileError(PipelineError):
         super().__init__(f"Companies House profile fetch failed for {company_number}: {message}")
 
 
+class CompaniesHouseUriMismatchError(PipelineError):
+    """Raised when Companies House URI does not match the company number."""
+
+    def __init__(self, company_number: str, uri: str) -> None:
+        super().__init__(
+            f"Companies House URI mismatch for company number '{company_number}': '{uri}'."
+        )
+
+
+class CompaniesHouseZipMissingCsvError(PipelineError):
+    """Raised when no CSV file is found in a Companies House zip archive."""
+
+    def __init__(self) -> None:
+        super().__init__("No CSV file found in Companies House zip archive.")
+
+
+class CompaniesHouseCsvEmptyError(PipelineError):
+    """Raised when the Companies House CSV contains no rows."""
+
+    def __init__(self) -> None:
+        super().__init__("Companies House CSV is empty.")
+
+
 class CompaniesHouseFileProfileMissingError(PipelineError):
     """Raised when a file-backed profile is missing."""
 

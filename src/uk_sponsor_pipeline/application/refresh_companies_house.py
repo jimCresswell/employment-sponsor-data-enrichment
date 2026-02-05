@@ -1,0 +1,245 @@
+"""Refresh Companies House bulk snapshot (cache-first)."""
+
+from __future__ import annotations
+
+import csv
+import hashlib
+import shutil
+import zipfile
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TextIO
+from urllib.parse import urlparse
+
+from ..exceptions import (
+    CompaniesHouseCsvEmptyError,
+    CompaniesHouseZipMissingCsvError,
+    DependencyMissingError,
+)
+from ..observability import get_logger
+from ..protocols import FileSystem, HttpSession
+from .companies_house_bulk import (
+    CANONICAL_HEADERS_V1,
+    clean_companies_house_row,
+    normalise_raw_headers,
+    validate_raw_headers,
+)
+from .companies_house_index import bucket_for_token, tokenise_company_name
+from .snapshots import (
+    SnapshotRowCounts,
+    build_snapshot_manifest,
+    commit_snapshot,
+    derive_snapshot_date,
+    start_snapshot_write,
+)
+
+CH_DATASET = "companies_house"
+CH_SCHEMA_VERSION = "ch_clean_v1"
+
+
+@dataclass(frozen=True)
+class RefreshCompaniesHouseResult:
+    """Result of refresh-companies-house snapshot generation."""
+
+    snapshot_dir: Path
+    snapshot_date: str
+    raw_path: Path
+    clean_path: Path
+    manifest_path: Path
+    index_paths: tuple[Path, ...]
+    bytes_raw: int
+    row_counts: SnapshotRowCounts
+
+
+class _TokenIndexWriter:
+    def __init__(self, base_dir: Path) -> None:
+        self._base_dir = base_dir
+        self._handles: dict[str, TextIO] = {}
+        self._paths: list[Path] = []
+
+    def write(self, company_name: str, company_number: str) -> None:
+        tokens = tokenise_company_name(company_name)
+        for token in tokens:
+            bucket = bucket_for_token(token)
+            handle = self._handle(bucket)
+            handle.write(f"{token},{company_number}\n")
+
+    def _handle(self, bucket: str) -> TextIO:
+        if bucket in self._handles:
+            return self._handles[bucket]
+        path = self._base_dir / f"index_tokens_{bucket}.csv"
+        handle = path.open("w", encoding="utf-8", newline="")
+        handle.write("token,company_number\n")
+        self._handles[bucket] = handle
+        self._paths.append(path)
+        return handle
+
+    def close(self) -> tuple[Path, ...]:
+        for handle in self._handles.values():
+            handle.close()
+        return tuple(self._paths)
+
+
+def _sha256(path: Path, fs: FileSystem) -> str:
+    return hashlib.sha256(fs.read_bytes(path)).hexdigest()
+
+
+def _download_stream(
+    *,
+    url: str,
+    dest: Path,
+    http_session: HttpSession,
+    fs: FileSystem,
+) -> int:
+    bytes_downloaded = 0
+
+    def stream() -> Iterable[bytes]:
+        nonlocal bytes_downloaded
+        for chunk in http_session.iter_bytes(url, timeout_seconds=300, chunk_size=1024 * 64):
+            bytes_downloaded += len(chunk)
+            yield chunk
+
+    fs.write_bytes_stream(dest, stream())
+    return bytes_downloaded
+
+
+def _extract_zip(zip_path: Path, csv_path: Path) -> None:
+    with zipfile.ZipFile(zip_path) as archive:
+        csv_members = [name for name in archive.namelist() if name.lower().endswith(".csv")]
+        if not csv_members:
+            raise CompaniesHouseZipMissingCsvError()
+        member = csv_members[0]
+        with archive.open(member) as source, csv_path.open("wb") as target:
+            shutil.copyfileobj(source, target)
+
+
+def run_refresh_companies_house(
+    *,
+    url: str,
+    snapshot_root: str | Path,
+    fs: FileSystem | None = None,
+    http_session: HttpSession | None = None,
+    command_line: str,
+    now_fn: Callable[[], datetime] | None = None,
+) -> RefreshCompaniesHouseResult:
+    if fs is None:
+        raise DependencyMissingError("FileSystem", reason="Inject it at the entry point.")
+    if http_session is None:
+        raise DependencyMissingError("HttpSession", reason="Inject it at the entry point.")
+
+    clock = now_fn or (lambda: datetime.now(UTC))
+    downloaded_at = clock()
+
+    source_name = Path(urlparse(url).path).name or "companies_house.csv"
+    snapshot_date = derive_snapshot_date(
+        source_name=source_name,
+        downloaded_at_utc=downloaded_at,
+    )
+
+    paths = start_snapshot_write(
+        snapshot_root=Path(snapshot_root),
+        dataset=CH_DATASET,
+        snapshot_date=snapshot_date,
+        fs=fs,
+    )
+
+    logger = get_logger("uk_sponsor_pipeline.refresh_companies_house")
+    logger.info("Downloading Companies House bulk data: %s", url)
+
+    is_zip = url.lower().endswith(".zip")
+    raw_name = "raw.zip" if is_zip else "raw.csv"
+    raw_path = paths.staging_dir / raw_name
+
+    bytes_downloaded = _download_stream(
+        url=url,
+        dest=raw_path,
+        http_session=http_session,
+        fs=fs,
+    )
+
+    raw_csv_path = raw_path
+    if is_zip:
+        raw_csv_path = paths.staging_dir / "raw.csv"
+        _extract_zip(raw_path, raw_csv_path)
+
+    clean_path = paths.staging_dir / "clean.csv"
+
+    raw_rows = 0
+    clean_rows = 0
+
+    logger.info("Cleaning Companies House bulk CSV: %s", raw_csv_path)
+    index_writer = _TokenIndexWriter(paths.staging_dir)
+
+    with raw_csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.reader(handle)
+        header_row = next(reader, None)
+        if header_row is None:
+            raise CompaniesHouseCsvEmptyError()
+        trimmed_headers = normalise_raw_headers(header_row)
+        validate_raw_headers(trimmed_headers)
+
+        dict_reader = csv.DictReader(handle, fieldnames=trimmed_headers)
+        with clean_path.open("w", encoding="utf-8", newline="") as clean_file:
+            writer = csv.DictWriter(clean_file, fieldnames=CANONICAL_HEADERS_V1)
+            writer.writeheader()
+            for row in dict_reader:
+                raw_rows += 1
+                raw_row = {key: (value or "") for key, value in row.items()}
+                clean_row = clean_companies_house_row(raw_row)
+                writer.writerow(clean_row)
+                clean_rows += 1
+                index_writer.write(clean_row["company_name"], clean_row["company_number"])
+
+    index_paths = index_writer.close()
+
+    row_counts: SnapshotRowCounts = {"raw": raw_rows, "clean": clean_rows}
+
+    sha_raw = _sha256(raw_path, fs)
+    sha_clean = _sha256(clean_path, fs)
+    last_updated = clock()
+
+    artefacts: dict[str, str] = {
+        "raw": raw_path.name,
+        "clean": clean_path.name,
+    }
+    for path in index_paths:
+        artefacts[path.name] = path.name
+    if is_zip:
+        artefacts["raw_csv"] = raw_csv_path.name
+
+    manifest = build_snapshot_manifest(
+        dataset=CH_DATASET,
+        snapshot_date=snapshot_date,
+        source_url=url,
+        downloaded_at_utc=downloaded_at,
+        last_updated_at_utc=last_updated,
+        schema_version=CH_SCHEMA_VERSION,
+        sha256_hash_raw=sha_raw,
+        sha256_hash_clean=sha_clean,
+        bytes_raw=bytes_downloaded,
+        row_counts=row_counts,
+        artefacts=artefacts,
+        command_line=command_line,
+        git_sha=None,
+        tool_version=None,
+    )
+
+    manifest_path = paths.staging_dir / "manifest.json"
+    fs.write_json(manifest, manifest_path)
+
+    commit_snapshot(paths=paths, fs=fs)
+
+    final_dir = paths.final_dir
+    final_index_paths = tuple(final_dir / path.name for path in index_paths)
+    return RefreshCompaniesHouseResult(
+        snapshot_dir=final_dir,
+        snapshot_date=snapshot_date,
+        raw_path=final_dir / raw_path.name,
+        clean_path=final_dir / clean_path.name,
+        manifest_path=final_dir / manifest_path.name,
+        index_paths=final_index_paths,
+        bytes_raw=bytes_downloaded,
+        row_counts=row_counts,
+    )

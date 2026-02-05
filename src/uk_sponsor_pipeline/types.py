@@ -56,6 +56,21 @@ class CompanyProfile(TypedDict):
     registered_office_address: RegisteredOfficeAddress
 
 
+class CompaniesHouseCleanRow(TypedDict):
+    """Companies House canonical clean row shape."""
+
+    company_number: str
+    company_name: str
+    company_status: str
+    company_type: str
+    date_of_creation: str
+    sic_codes: str
+    address_locality: str
+    address_region: str
+    address_postcode: str
+    uri: str
+
+
 TransformEnrichCandidateRow = TypedDict(
     "TransformEnrichCandidateRow",
     {
