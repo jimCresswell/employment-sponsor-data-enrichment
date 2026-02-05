@@ -13,6 +13,7 @@ from typing import override
 import pandas as pd
 import pytest
 
+from tests.fakes import FakeProgressReporter
 from uk_sponsor_pipeline.application.companies_house_bulk import RAW_HEADERS_TRIMMED
 from uk_sponsor_pipeline.application.refresh_companies_house import run_refresh_companies_house
 from uk_sponsor_pipeline.exceptions import (
@@ -97,6 +98,7 @@ def test_refresh_companies_house_csv_writes_snapshot_and_index(tmp_path: Path) -
     )
     session = DummySession(payload)
     now = datetime(2026, 2, 4, 12, 30, tzinfo=UTC)
+    progress = FakeProgressReporter()
 
     result = run_refresh_companies_house(
         url="https://example.com/BasicCompanyDataAsOneFile-2026-02-01.csv",
@@ -104,6 +106,7 @@ def test_refresh_companies_house_csv_writes_snapshot_and_index(tmp_path: Path) -
         fs=fs,
         http_session=session,
         command_line="uk-sponsor refresh-companies-house --url https://example.com",
+        progress=progress,
         now_fn=lambda: now,
     )
 
@@ -121,6 +124,9 @@ def test_refresh_companies_house_csv_writes_snapshot_and_index(tmp_path: Path) -
     assert index_path.exists() is True
     contents = index_path.read_text(encoding="utf-8")
     assert "acme,01234567" in contents
+    assert progress.starts == [("download", None), ("clean", None), ("index", 1)]
+    assert progress.advances == [len(payload), 1, 1]
+    assert progress.finished == 3
 
 
 def test_refresh_companies_house_zip_extracts_raw_csv(tmp_path: Path) -> None:

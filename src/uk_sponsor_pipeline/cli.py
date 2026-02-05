@@ -26,6 +26,7 @@ from .application.snapshots import resolve_latest_snapshot_path
 from .application.transform_enrich import run_transform_enrich
 from .application.transform_score import run_transform_score
 from .application.usage import run_usage_shortlist
+from .cli_progress import CliProgressReporter
 from .config import PipelineConfig
 from .exceptions import SnapshotArtefactMissingError
 from .protocols import FileSystem, HttpClient, HttpSession
@@ -206,6 +207,7 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
             fs=deps.fs,
             http_session=deps.http_session,
             command_line=" ".join(sys.argv),
+            progress=CliProgressReporter(),
         )
         rprint(f"[green]✓ Refresh sponsor complete:[/green] {result.snapshot_dir}")
         rprint(f"  Snapshot date: {result.snapshot_date}")
@@ -241,6 +243,7 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
             fs=deps.fs,
             http_session=deps.http_session,
             command_line=" ".join(sys.argv),
+            progress=CliProgressReporter(),
         )
         rprint(f"[green]✓ Refresh Companies House complete:[/green] {result.snapshot_dir}")
         rprint(f"  Snapshot date: {result.snapshot_date}")

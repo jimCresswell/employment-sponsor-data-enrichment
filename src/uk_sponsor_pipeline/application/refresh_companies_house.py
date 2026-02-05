@@ -19,7 +19,7 @@ from ..exceptions import (
     DependencyMissingError,
 )
 from ..observability import get_logger
-from ..protocols import FileSystem, HttpSession
+from ..protocols import FileSystem, HttpSession, ProgressReporter
 from .companies_house_bulk import (
     CANONICAL_HEADERS_V1,
     clean_companies_house_row,
@@ -123,16 +123,24 @@ def _download_stream(
     dest: Path,
     http_session: HttpSession,
     fs: FileSystem,
+    progress: ProgressReporter | None,
 ) -> int:
     bytes_downloaded = 0
+
+    if progress is not None:
+        progress.start("download", None)
 
     def stream() -> Iterable[bytes]:
         nonlocal bytes_downloaded
         for chunk in http_session.iter_bytes(url, timeout_seconds=300, chunk_size=1024 * 64):
             bytes_downloaded += len(chunk)
+            if progress is not None:
+                progress.advance(len(chunk))
             yield chunk
 
     fs.write_bytes_stream(dest, stream())
+    if progress is not None:
+        progress.finish()
     return bytes_downloaded
 
 
@@ -153,6 +161,7 @@ def run_refresh_companies_house(
     fs: FileSystem | None = None,
     http_session: HttpSession | None = None,
     command_line: str,
+    progress: ProgressReporter | None = None,
     now_fn: Callable[[], datetime] | None = None,
 ) -> RefreshCompaniesHouseResult:
     if fs is None:
@@ -188,6 +197,7 @@ def run_refresh_companies_house(
         dest=raw_path,
         http_session=http_session,
         fs=fs,
+        progress=progress,
     )
 
     raw_csv_path = raw_path
@@ -207,6 +217,8 @@ def run_refresh_companies_house(
     profile_paths: tuple[Path, ...] = ()
 
     try:
+        if progress is not None:
+            progress.start("clean", None)
         with raw_csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
             reader = csv.reader(handle)
             header_row = next(reader, None)
@@ -225,11 +237,20 @@ def run_refresh_companies_house(
                     clean_row = clean_companies_house_row(raw_row)
                     writer.writerow(clean_row)
                     clean_rows += 1
+                    if progress is not None:
+                        progress.advance(1)
                     index_writer.write(clean_row["company_name"], clean_row["company_number"])
                     profile_writer.write(clean_row)
     finally:
         index_paths = index_writer.close()
         profile_paths = profile_writer.close()
+        if progress is not None:
+            progress.finish()
+
+    if progress is not None:
+        progress.start("index", clean_rows)
+        progress.advance(clean_rows)
+        progress.finish()
 
     row_counts: SnapshotRowCounts = {"raw": raw_rows, "clean": clean_rows}
 

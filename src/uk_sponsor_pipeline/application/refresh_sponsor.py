@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 from ..exceptions import DependencyMissingError
 from ..observability import get_logger
-from ..protocols import FileSystem, HttpSession
+from ..protocols import FileSystem, HttpSession, ProgressReporter
 from .snapshots import (
     SnapshotRowCounts,
     build_snapshot_manifest,
@@ -50,6 +50,7 @@ def run_refresh_sponsor(
     fs: FileSystem | None = None,
     http_session: HttpSession | None = None,
     command_line: str,
+    progress: ProgressReporter | None = None,
     now_fn: Callable[[], datetime] | None = None,
 ) -> RefreshSponsorResult:
     """Download, clean, and snapshot the sponsor register.
@@ -60,6 +61,7 @@ def run_refresh_sponsor(
         fs: Filesystem dependency (required).
         http_session: HTTP session dependency (required).
         command_line: Command line string for manifest.
+        progress: Optional progress reporter (CLI-owned).
         now_fn: Optional clock function for tests.
 
     Returns:
@@ -92,13 +94,20 @@ def run_refresh_sponsor(
     raw_path = paths.staging_dir / "raw.csv"
     bytes_downloaded = 0
 
+    if progress is not None:
+        progress.start("download", None)
+
     def stream() -> Iterable[bytes]:
         nonlocal bytes_downloaded
         for chunk in http_session.iter_bytes(url, timeout_seconds=120, chunk_size=1024 * 64):
             bytes_downloaded += len(chunk)
+            if progress is not None:
+                progress.advance(len(chunk))
             yield chunk
 
     fs.write_bytes_stream(raw_path, stream())
+    if progress is not None:
+        progress.finish()
 
     logger.info("Cleaning sponsor register: %s", raw_path)
     clean_path = paths.staging_dir / "clean.csv"
@@ -110,6 +119,11 @@ def run_refresh_sponsor(
         reports_dir=paths.staging_dir,
         fs=fs,
     )
+
+    if progress is not None:
+        progress.start("clean", register_result.unique_orgs)
+        progress.advance(register_result.unique_orgs)
+        progress.finish()
 
     row_counts: SnapshotRowCounts = {
         "raw": register_result.total_raw_rows,

@@ -10,6 +10,7 @@ from typing import override
 import pandas as pd
 import pytest
 
+from tests.fakes import FakeProgressReporter
 from uk_sponsor_pipeline.application.refresh_sponsor import run_refresh_sponsor
 from uk_sponsor_pipeline.exceptions import SchemaColumnsMissingError
 from uk_sponsor_pipeline.infrastructure import LocalFileSystem
@@ -55,12 +56,14 @@ def test_refresh_sponsor_writes_snapshot_and_manifest(tmp_path: Path) -> None:
     session = DummySession(payload)
     now = datetime(2026, 2, 4, 12, 30, tzinfo=UTC)
 
+    progress = FakeProgressReporter()
     result = run_refresh_sponsor(
         url="https://example.com/sponsor-register-2026-02-01.csv",
         snapshot_root=snapshot_root,
         fs=fs,
         http_session=session,
         command_line="uk-sponsor refresh-sponsor --url https://example.com",
+        progress=progress,
         now_fn=lambda: now,
     )
 
@@ -79,6 +82,9 @@ def test_refresh_sponsor_writes_snapshot_and_manifest(tmp_path: Path) -> None:
 
     clean = pd.read_csv(snapshot_dir / "clean.csv", dtype=str).fillna("")
     assert clean["Organisation Name"].tolist() == ["Acme Ltd"]
+    assert progress.starts == [("download", None), ("clean", 1)]
+    assert progress.advances == [len(payload), 1]
+    assert progress.finished == 2
 
 
 def test_refresh_sponsor_fails_on_missing_columns(tmp_path: Path) -> None:
