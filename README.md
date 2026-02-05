@@ -6,14 +6,14 @@ A data pipeline that transforms the UK Home Office sponsor register into a short
 
 ```text
 GOV.UK Sponsor Register → refresh-sponsor → sponsor snapshot (clean.csv)
-Companies House Bulk CSV → refresh-companies-house → CH snapshot (clean.csv + index)
+Companies House Bulk CSV → refresh-companies-house → CH snapshot (clean.csv + index + profiles)
 Snapshots → Transform Enrich → Transform Score → Usage Shortlist
 ```
 
 | Step               | Input       | Output                                      | What it does                                        |
 | ------------------ | ----------- | ------------------------------------------- | --------------------------------------------------- |
 | refresh-sponsor    | CSV URL     | `data/cache/snapshots/sponsor/<YYYY-MM-DD>/...` | Downloads, validates, writes raw+clean+manifest     |
-| refresh-companies-house | ZIP or CSV URL | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/...` | Downloads/extracts, cleans, indexes, writes manifest |
+| refresh-companies-house | ZIP or CSV URL | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/...` | Downloads/extracts, cleans, indexes, writes profiles + manifest |
 | transform-enrich   | Clean snapshots | `data/processed/companies_house_*.csv` | Enriches using file-first or API source             |
 | transform-score    | Enriched CSV | `data/processed/companies_scored.csv`      | Scores for tech-likelihood                          |
 | usage-shortlist    | Scored CSV   | `data/processed/companies_shortlist.csv` and `data/processed/companies_explain.csv` | Filters scored output into shortlist + explain      |
@@ -26,7 +26,7 @@ Steps describe artefact boundaries for audit and resume. They are not architectu
 
 - Python 3.14+
 - [uv](https://github.com/astral-sh/uv) (fast Python package manager)
-- Companies House API key ([register free](https://developer.company-information.service.gov.uk/))
+- Companies House API key (required only for `CH_SOURCE_TYPE=api`)
 
 ### Installation
 
@@ -41,9 +41,9 @@ cd uk-sponsor-tech-hiring-pipeline
 uv venv
 uv sync --group dev
 
-# Copy env template and add your API key
+# Copy env template and configure source
 cp .env.example .env
-# Edit .env: set CH_API_KEY=your_key_here
+# Edit .env: set CH_SOURCE_TYPE and, if using the API, set CH_API_KEY
 ```
 
 ### Run the Full Pipeline
@@ -94,7 +94,8 @@ When running with `--no-resume`, Transform Enrich writes to a new timestamped su
 
 ### Companies House Source (API or Snapshot)
 
-Transform Enrich is file-first by default and reads Companies House bulk snapshot artefacts.
+Transform Enrich is file-first when `CH_SOURCE_TYPE=file` (recommended for cache-only runs)
+and reads Companies House bulk snapshot artefacts.
 Snapshot paths are resolved from `SNAPSHOT_ROOT` unless explicit paths are set.
 
 To use the Companies House API instead, set:
@@ -113,6 +114,14 @@ export CH_TOKEN_INDEX_DIR=data/cache/snapshots/companies_house/<YYYY-MM-DD>
 ```
 
 The legacy JSON file source has been removed.
+
+## Documentation
+
+- `docs/refresh-and-run-all-diagrams.md` (refresh + cache-only flow diagrams)
+- `docs/snapshots.md` (snapshot layout, manifests, and resolution)
+- `docs/data-contracts.md` (Companies House canonical schema and mapping)
+- `docs/companies-house-file-source.md` (file-first token index rules)
+- `docs/troubleshooting.md` (common failures and recovery)
 
 ### Geographic Filtering
 
@@ -331,6 +340,7 @@ subdirectory of `data/processed/` (paths below reflect the default `--resume` be
 | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/raw.csv`   | Extracted raw CSV (ZIP sources)     |
 | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/clean.csv` | Canonical clean CSV                 |
 | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/index_tokens_<bucket>.csv` | Token index buckets |
+| `data/cache/snapshots/companies_house/<YYYY-MM-DD>/profiles_<bucket>.csv` | Bucketed profiles |
 | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/manifest.json` | Snapshot manifest               |
 
 ### Pipeline Outputs (Cache-Only Run)
@@ -397,8 +407,8 @@ CH_CLEAN_PATH=
 CH_TOKEN_INDEX_DIR=
 CH_FILE_MAX_CANDIDATES=500   # File-based candidate cap
 CH_API_KEY=your_companies_house_api_key
-CH_SLEEP_SECONDS=0.5          # Delay between API calls
-CH_MAX_RPM=500                # Rate limit (requests per minute)
+CH_SLEEP_SECONDS=0.2          # Delay between API calls
+CH_MAX_RPM=600                # Rate limit (requests per minute)
 CH_TIMEOUT_SECONDS=30         # HTTP timeout in seconds
 CH_MAX_RETRIES=3              # Retry attempts for transient errors
 CH_BACKOFF_FACTOR=0.5         # Exponential backoff factor
@@ -408,7 +418,7 @@ CH_CIRCUIT_BREAKER_THRESHOLD=5  # Failures before opening breaker
 CH_CIRCUIT_BREAKER_TIMEOUT_SECONDS=60  # Seconds before half-open probe
 CH_BATCH_SIZE=250             # Organisations per batch (incremental output)
 CH_MIN_MATCH_SCORE=0.72       # Minimum score to accept a match
-CH_SEARCH_LIMIT=5             # Candidates per search (API)
+CH_SEARCH_LIMIT=10            # Candidates per search (API)
 TECH_SCORE_THRESHOLD=0.55     # Minimum score for shortlist (usage)
 GEO_FILTER_REGIONS=           # Single region filter (one value only)
 GEO_FILTER_POSTCODES=         # Comma-separated postcode prefix filter

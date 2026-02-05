@@ -27,6 +27,15 @@ lookups to remain practical at scale.
   bulk ingest and cleaning.
 - Treat missing required columns in raw CSVs as errors (fail fast) and validate against
   explicit header lists.
+- Derive snapshot dates from source filenames using `r"(20\\d{2}-\\d{2}-\\d{2})"` and
+  fall back to the download date in UTC when no match exists.
+- Write snapshots atomically via a staging directory (`.tmp-<uuid>`) and rename to the
+  final `<YYYY-MM-DD>` directory only after artefacts and the manifest are written.
+- Resolve the latest snapshot by sorting on `snapshot_date` (descending) with manifest
+  mtime as a deterministic tie-breaker.
+- Snapshot manifests must include dataset metadata, hashes, row counts, artefact paths,
+  timestamps, `git_sha` (from `GIT_SHA` or `unknown`), and `tool_version` (package
+  version or `0.0.0+unknown`).
 
 ## Consequences
 

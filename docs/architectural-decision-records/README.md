@@ -21,6 +21,7 @@ This directory contains the ADRs for the UK Sponsor → Tech Hiring Pipeline.
 - `adr0017-usage-shortlist-separation.md`
 - `adr0018-linting-rules-architectural-boundaries-and-fail-fast.md`
 - `adr0019-cache-first-refresh-and-bulk-companies-house-snapshots.md`
+- `adr0020-file-first-companies-house-lookup.md`
 
 ## Superseded
 

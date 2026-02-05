@@ -2,7 +2,7 @@
 
 ## Start Here (Stand-Alone Entry Point)
 
-Status: **Mostly Complete** (2026-02-05). Remaining work is tracked under Explicit Gaps.
+Status: **Complete** (2026-02-05).
 
 ### Scope Summary
 
@@ -33,7 +33,7 @@ Status: **Mostly Complete** (2026-02-05). Remaining work is tracked under Explic
 1. Implement `refresh-companies-house` and token indexing. **Completed (2026-02-05)**.
 1. Remove JSON file source and update Companies House source to bulk snapshot lookup. **Completed (2026-02-05)**.
 1. Update config/env parsing + CLI wiring; make `run-all` cache-only and remove legacy commands. **Completed (2026-02-05)**.
-1. Update docs diagrams and run full quality gates (`uv run check`). **Partially complete (2026-02-05)**. Quality gates pass; diagrams remain.
+1. Update docs diagrams and run full quality gates (`uv run check`). **Completed (2026-02-05)**.
 
 ### Locked Decisions
 
@@ -67,7 +67,7 @@ Status: **Mostly Complete** (2026-02-05). Remaining work is tracked under Explic
 1. Legacy commands removed; docs updated.
 1. Tests are network-isolated and pass full quality gates (`uv run check`).
 
-Status: Definition met except remaining documentation diagrams noted under Explicit Gaps.
+Status: Definition met.
 Overview and decision notes live in `.agent/plans/overview-cache-first-and-file-first.md`.
 
 ## Entry Instructions (Read First)
@@ -128,14 +128,27 @@ These choices are now explicit requirements for the implementation plan.
 
 ## Explicit Gaps (Current Repo vs This Plan)
 
-All implementation gaps from the original plan are closed as of 2026-02-05, except the items
-below.
+All implementation gaps from the original plan are closed as of 2026-02-05.
 
-### Remaining Gaps
+### Review Notes (2026-02-05)
 
-- Add refresh flow diagrams and cache-only usage diagrams in `docs/`.
-- Decide whether to add explicit IO contracts (TypedDict or dataclass) for bulk Companies House
-  raw and clean rows. If we keep header-list validation only, document the rationale.
+- Refresh and cache-only flow diagrams are now documented in
+  `docs/refresh-and-run-all-diagrams.md`.
+- Decision: we are **not** adding explicit IO contracts for bulk Companies House raw/clean rows
+  yet. The CSV ingest is already validated against the trimmed raw header list and canonical
+  output schema, and the row-level transformations are localised in `companies_house_bulk.py`.
+  If we need stronger boundary typing (for example, shared parsing or external ingestion),
+  we will add TypedDict or dataclass IO contracts and validation at that time.
+
+### Follow-up Documentation Tasks (Next Session)
+
+1. Add a short permanent doc section for the Companies House canonical clean schema v1 and
+   raw → canonical mapping (suggest `docs/data-contracts.md` or a README appendix).
+1. Add a permanent doc section for the token index + candidate retrieval rules (explain the
+   hit-count threshold and candidate cap).
+1. Link `docs/refresh-and-run-all-diagrams.md` from the README.
+1. Consider an ADR update if we later change the default lookup strategy (bucketed profiles)
+   or add explicit IO contracts for bulk rows.
 
 ### Resolved Gaps (2026-02-05)
 
@@ -546,5 +559,5 @@ Use this to validate in-memory feasibility before committing to a lookup strateg
 - Schema is validated against explicit header lists. Raw CSV uses the trimmed raw header list.
   Clean CSV uses the canonical internal header list. Do not infer schema from data.
 - Download speed may be sub-second, but progress bars are still required.
-- Memory pressure triggers exploration of bucketed profile files as a future option,
-  not as a parallel mechanism in the initial implementation.
+- Bucketed profile files are the default lookup strategy; minimal in-memory lookup is an
+  optional optimisation only when memory headroom is proven sufficient.
