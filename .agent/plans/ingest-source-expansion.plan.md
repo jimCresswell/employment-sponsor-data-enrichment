@@ -2,7 +2,7 @@
 
 ## Start Here (Stand-Alone Entry Point)
 
-Status: **Approved** (2026-02-04)
+Status: **Mostly Complete** (2026-02-05). Remaining work is tracked under Explicit Gaps.
 
 ### Scope Summary
 
@@ -13,27 +13,27 @@ Status: **Approved** (2026-02-04)
 
 ### Immediate First Tasks (TDD)
 
-1. Add streaming IO support to `HttpSession` and `FileSystem`.
-1. Add a `ProgressReporter` interface (CLI-owned, injected into application code).
-1. Implement `refresh-sponsor` with snapshot layout and manifest.
-1. Implement `refresh-companies-house` (download, extract, clean, index).
+1. Add streaming IO support to `HttpSession` and `FileSystem`. **Completed (2026-02-05)**.
+1. Add a `ProgressReporter` interface (CLI-owned, injected into application code). **Completed (2026-02-05)**.
+1. Implement `refresh-sponsor` with snapshot layout and manifest. **Completed (2026-02-05)**.
+1. Implement `refresh-companies-house` (download, extract, clean, index). **Completed (2026-02-05)**.
 
 ### TDD Implementation TODOs (Ordered)
 
 1. Add tests for `HttpSession.iter_bytes`, `FileSystem.write_bytes_stream`, and injected
-   `ProgressReporter` usage.
+   `ProgressReporter` usage. **Completed (2026-02-05)**.
 1. Implement protocol changes and update infrastructure + fakes for streaming IO (and
-   filesystem rename support for atomic snapshot commits).
-1. Add tests for snapshot date extraction, atomic snapshot writes, and manifest schema.
-1. Implement snapshot helpers and manifest writing.
-1. Add tests for `refresh-sponsor` snapshot outputs and schema validation.
-1. Implement `refresh-sponsor`.
+   filesystem rename support for atomic snapshot commits). **Completed (2026-02-05)**.
+1. Add tests for snapshot date extraction, atomic snapshot writes, and manifest schema. **Completed (2026-02-05)**.
+1. Implement snapshot helpers and manifest writing. **Completed (2026-02-05)**.
+1. Add tests for `refresh-sponsor` snapshot outputs and schema validation. **Completed (2026-02-05)**.
+1. Implement `refresh-sponsor`. **Completed (2026-02-05)**.
 1. Add tests for `refresh-companies-house` (ZIP/CSV ingest, header trimming, URI validation,
-   SIC parsing, clean schema output, token index generation).
-1. Implement `refresh-companies-house` and token indexing.
-1. Remove JSON file source and update Companies House source to bulk snapshot lookup.
-1. Update config/env parsing + CLI wiring; make `run-all` cache-only and remove legacy commands.
-1. Update docs diagrams and run full quality gates (`uv run check`).
+   SIC parsing, clean schema output, token index generation). **Completed (2026-02-05)**.
+1. Implement `refresh-companies-house` and token indexing. **Completed (2026-02-05)**.
+1. Remove JSON file source and update Companies House source to bulk snapshot lookup. **Completed (2026-02-05)**.
+1. Update config/env parsing + CLI wiring; make `run-all` cache-only and remove legacy commands. **Completed (2026-02-05)**.
+1. Update docs diagrams and run full quality gates (`uv run check`). **Partially complete (2026-02-05)**. Quality gates pass; diagrams remain.
 
 ### Locked Decisions
 
@@ -67,8 +67,8 @@ Status: **Approved** (2026-02-04)
 1. Legacy commands removed; docs updated.
 1. Tests are network-isolated and pass full quality gates (`uv run check`).
 
-Status: Immediate implementation plan (planning only). Overview and decision notes live in
-`.agent/plans/overview-cache-first-and-file-first.md`.
+Status: Definition met except remaining documentation diagrams noted under Explicit Gaps.
+Overview and decision notes live in `.agent/plans/overview-cache-first-and-file-first.md`.
 
 ## Entry Instructions (Read First)
 
@@ -98,8 +98,8 @@ optional source. Legacy CLI commands and the JSON file source are removed.
 These choices are now explicit requirements for the implementation plan.
 
 - Schema validation rule: missing columns are **errors** for sponsor and Companies House
-  raw CSVs. This overrides `.agent/research/ch-bulk-data-guidance.md` which treats
-  missing columns as non-errors; update that document to align.
+  raw CSVs. This is now aligned in `.agent/research/ch-bulk-data-guidance.md` (bulk CSV
+  section).
 - Canonical schema version: `ch_clean_v1`. Define as a constant in code (single source of
   truth) and bump only when canonical columns or normalisation rules change.
 - `company_type` slugify: lowercase; replace any non-alphanumeric character with space;
@@ -128,79 +128,33 @@ These choices are now explicit requirements for the implementation plan.
 
 ## Explicit Gaps (Current Repo vs This Plan)
 
-This section lists concrete gaps between the current codebase and the planned work.
-Treat each item as a required change before this plan can be marked complete.
+All implementation gaps from the original plan are closed as of 2026-02-05, except the items
+below.
 
-### CLI and Orchestration
+### Remaining Gaps
 
-- Missing `refresh-sponsor` and `refresh-companies-house` commands.
-- Legacy `extract` and `transform-register` commands still exist and are wired into the CLI.
-- `run-all` still performs download/transform steps (unless `--skip-download` is used);
-  it does not run cache-only from clean snapshots and does not fail fast on missing snapshots.
+- Add refresh flow diagrams and cache-only usage diagrams in `docs/`.
+- Decide whether to add explicit IO contracts (TypedDict or dataclass) for bulk Companies House
+  raw and clean rows. If we keep header-list validation only, document the rationale.
 
-### Snapshot Artefacts and Manifests
+### Resolved Gaps (2026-02-05)
 
-- No snapshot layout under `data/cache/snapshots/<dataset>/<YYYY-MM-DD>/`.
-- No manifest schema or manifest writing for sponsor or Companies House snapshots.
-- No snapshot date derivation from source filename or download date.
-- No fail-fast check for existing snapshot directories.
-
-### Configuration and Environment
-
-- No support for `SNAPSHOT_ROOT`, `SPONSOR_CLEAN_PATH`, `CH_CLEAN_PATH`, `CH_TOKEN_INDEX_DIR`.
-- No `CH_FILE_MAX_CANDIDATES` limit for file-based matching.
-- CLI does not resolve latest snapshots when explicit paths are missing.
-
-### Companies House Source (File-First Bulk CSV)
-
-- File source is currently JSON (`searches` + `profiles`), not bulk CSV snapshots.
-- No bulk download flow (zip or CSV) and no extraction to `raw.csv`.
-- No header trimming or validation against the trimmed raw header list.
-- No canonical clean schema output (`clean.csv`) and no raw → canonical mapping.
-- No URI validation for `http://data.companieshouse.gov.uk/doc/company/{CompanyNumber}`.
-- No parsing of SIC code prefixes from `SICCode.SicText_1..4`.
-
-### Streaming IO and Progress
-
-- `HttpSession` lacks `iter_bytes`; `FileSystem` lacks `write_bytes_stream`.
-- Download path currently buffers full response bytes in memory.
-- No injected `ProgressReporter` interface; progress is handled inside `transform-enrich`
-  using `tqdm` rather than CLI-owned progress reporting.
-
-### Indexing and Matching
-
-- No token index generation (`index_tokens_<bucket>.csv`) from canonical clean rows.
-- No bucketed profile lookup strategy (Option B) or minimal in-memory Option A switch.
-- No candidate retrieval based on token-hit counts or capping to 500.
-
-### Types, Schemas, and Exceptions
-
-- No IO contracts or schema definitions for bulk Companies House raw rows or clean rows.
-- No exceptions for missing snapshots, URI mismatch, or snapshot directory already exists.
-- No schema validation for raw CSV header list or clean CSV canonical header list.
-
-### Documentation and ADRs
-
-- README and ADR 0016 still document JSON file source and legacy CLI commands.
-- No refresh flow diagrams or cache-only usage diagrams exist in `docs/`.
-- `.agent/research/ch-bulk-data-guidance.md` states missing columns are not errors; this must be
-  updated to match the locked decision that missing columns are errors.
-- `.agent/directives/project.md` still lists `extract` and `transform-register` in the pipeline
-  summary; update it to reflect cache-first refresh and snapshot-only `run-all`.
-- Add a new ADR (or supersede ADR 0016) to document cache-first refresh + bulk CSV snapshots
-  and the removal of the JSON file source, then align README and troubleshooting docs.
-
-### ADR Notes (Architectural Choices)
-
-- Cache-first refresh + bulk snapshot source is captured in ADR 0019; update if scope changes.
-- Protocol changes for streaming IO and progress reporting may require updating ADR 0014
-  (IO boundaries) or adding a new ADR if the boundary model changes materially.
-
-### Tests
-
-- No tests for streaming download, chunked writes, or progress reporting injection.
-- No tests for refresh commands, snapshot manifests, header trimming, URI validation,
-  SIC prefix parsing, token index generation, or cache-only `run-all`.
+- CLI and orchestration: refresh commands added, legacy commands removed, `run-all` cache-only
+  with snapshot resolution and fail-fast behaviour.
+- Snapshot artefacts and manifests: atomic writes, manifest schema, snapshot date derivation,
+  and snapshot existence checks implemented.
+- Configuration and environment: snapshot env vars, file-source settings, and latest snapshot
+  resolution implemented.
+- Companies House bulk CSV ingest: header trimming, canonical clean schema, URI validation,
+  SIC prefix parsing, token index generation, and bucketed profiles implemented.
+- Streaming IO and progress reporting: `HttpSession.iter_bytes`, `FileSystem.write_bytes_stream`,
+  and CLI-owned `ProgressReporter` implemented.
+- Exceptions and schema validation: missing snapshot/artefact errors, URI mismatch errors,
+  and raw header validation implemented.
+- Tests: streaming IO, refresh commands, snapshot resolution, index generation, and cache-only
+  `run-all` coverage added.
+- Docs and ADRs: README updated, ADR 0019 in place, ADR 0014 updated for streaming IO and
+  progress reporting, troubleshooting aligned.
 
 ## Separation of Concerns (Non-Negotiable)
 
