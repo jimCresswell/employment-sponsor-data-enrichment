@@ -4,7 +4,7 @@ Date: 2026-02-02
 
 ## Status
 
-Accepted
+Superseded (see ADR 0019: Cache-First Refresh and Bulk Companies House Snapshots)
 
 ## Context
 
@@ -23,3 +23,4 @@ Transform Enrich currently depends on the Companies House API for search and pro
 - Default API behaviour remains unchanged.
 - Offline or deterministic runs can use a file source without changing application logic.
 - File inputs are validated consistently with API responses.
+- The JSON file source is removed in ADR 0019 in favour of bulk CSV snapshots.

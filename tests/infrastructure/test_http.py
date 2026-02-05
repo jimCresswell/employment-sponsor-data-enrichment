@@ -18,6 +18,7 @@ from uk_sponsor_pipeline.infrastructure import (
     CachedHttpClient,
     CircuitBreaker,
     RateLimiter,
+    RequestsSession,
     RetryPolicy,
     is_auth_error,
     is_rate_limit_error,
@@ -415,10 +416,39 @@ class TestCachedHttpClient:
 
         with patch("uk_sponsor_pipeline.infrastructure.io.http.time.sleep") as sleep_mock:
             result = client.get_json("https://example.com", None)
+            sleep_mock.assert_called()
 
         assert result == {"ok": True}
         assert session.get.call_count == 2
-        sleep_mock.assert_called()
+
+
+class TestRequestsSessionIterBytes:
+    """Tests for RequestsSession.iter_bytes."""
+
+    def test_iter_bytes_streams_chunks(self) -> None:
+        mock_session = MagicMock(spec=requests.Session)
+        mock_response = MagicMock()
+        mock_response.iter_content.return_value = [b"a", b"", b"b"]
+        mock_response.__enter__.return_value = mock_response
+        mock_session.get.return_value = mock_response
+
+        session = RequestsSession(session=mock_session)
+        chunks = list(
+            session.iter_bytes(
+                "https://example.com/data",
+                timeout_seconds=5,
+                chunk_size=2,
+            )
+        )
+
+        assert chunks == [b"a", b"b"]
+        mock_session.get.assert_called_once_with(
+            "https://example.com/data",
+            timeout=5,
+            stream=True,
+        )
+        mock_response.raise_for_status.assert_called_once()
+        mock_response.iter_content.assert_called_once_with(chunk_size=2)
 
     def test_rate_limit_error_after_retries_exhausted(self) -> None:
         """Raises RateLimitError after exhausting retries for 429."""

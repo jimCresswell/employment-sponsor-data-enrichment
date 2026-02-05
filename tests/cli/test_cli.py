@@ -1,5 +1,6 @@
 """Tests for CLI wiring and overrides."""
 
+from collections.abc import Iterable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import override
@@ -26,6 +27,17 @@ class DummySession(HttpSession):
 
     @override
     def get_bytes(self, url: str, *, timeout_seconds: float) -> bytes:
+        pytest.fail(f"Unexpected HTTP request to {url}")
+
+    @override
+    def iter_bytes(
+        self,
+        url: str,
+        *,
+        timeout_seconds: float,
+        chunk_size: int,
+    ) -> Iterable[bytes]:
+        _ = (timeout_seconds, chunk_size)
         pytest.fail(f"Unexpected HTTP request to {url}")
 
 

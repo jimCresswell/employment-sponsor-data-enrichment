@@ -97,6 +97,20 @@ class CsvSchemaMissingColumnsError(PipelineError):
         super().__init__(f"CSV schema validation failed. Missing columns: {missing_list}.")
 
 
+class SnapshotAlreadyExistsError(PipelineError):
+    """Raised when a snapshot directory already exists for a dataset/date."""
+
+    def __init__(self, dataset: str, snapshot_date: str) -> None:
+        super().__init__(f"Snapshot already exists for dataset '{dataset}' on {snapshot_date}.")
+
+
+class SnapshotTimestampError(PipelineError):
+    """Raised when snapshot timestamps are invalid or not timezone-aware."""
+
+    def __init__(self, field_name: str) -> None:
+        super().__init__(f"{field_name} must be timezone-aware.")
+
+
 class SchemaColumnsMissingError(PipelineError):
     """Raised when a DataFrame is missing required columns."""
 

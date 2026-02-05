@@ -6,7 +6,7 @@ enabling isolated unit testing with mock implementations.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
@@ -44,6 +44,16 @@ class HttpSession(Protocol):
 
     def get_bytes(self, url: str, *, timeout_seconds: float) -> bytes:
         """Fetch binary content from a URL."""
+        ...
+
+    def iter_bytes(
+        self,
+        url: str,
+        *,
+        timeout_seconds: float,
+        chunk_size: int,
+    ) -> Iterable[bytes]:
+        """Stream binary content from a URL in chunks."""
         ...
 
 
@@ -104,8 +114,16 @@ class FileSystem(Protocol):
         """Write binary file."""
         ...
 
+    def write_bytes_stream(self, path: Path, chunks: Iterable[bytes]) -> None:
+        """Write binary file from a stream of chunks."""
+        ...
+
     def exists(self, path: Path) -> bool:
         """Check if path exists."""
+        ...
+
+    def rename(self, src: Path, dest: Path) -> None:
+        """Rename a file or directory."""
         ...
 
     def mkdir(self, path: Path, parents: bool = True) -> None:
@@ -157,4 +175,21 @@ class RetryPolicy(Protocol):
 
     def compute_backoff(self, attempt: int, retry_after: int | None = None) -> float:
         """Return a delay for the next retry attempt."""
+        ...
+
+
+@runtime_checkable
+class ProgressReporter(Protocol):
+    """CLI-owned progress reporting interface."""
+
+    def start(self, label: str, total: int | None) -> None:
+        """Start a progress session."""
+        ...
+
+    def advance(self, count: int) -> None:
+        """Advance progress by count."""
+        ...
+
+    def finish(self) -> None:
+        """Finish a progress session."""
         ...

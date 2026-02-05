@@ -24,11 +24,14 @@ Produce a reproducible, auditable shortlist of UK sponsor‑licensed companies l
 
 ## Pipeline Summary (High Level)
 
-1. **extract** → fetch latest GOV.UK sponsor register data.
-2. **transform-register** → filter Skilled Worker + A‑rated and aggregate by organisation.
-3. **transform-enrich** → enrich with Companies House data using reliable, rate‑limited access.
+1. **refresh-sponsor** → download and clean the GOV.UK sponsor register snapshot.
+2. **refresh-companies-house** → download, clean, and index the bulk Companies House snapshot.
+3. **transform-enrich** → enrich sponsor data using Companies House (file-first by default).
 4. **transform-score** → score for tech‑likelihood and write the scored artefact.
 5. **usage-shortlist** → apply thresholds and geographic filters, then produce shortlist + explainability.
+
+Pipeline runs (for example `run-all`) consume clean snapshots only and fail fast if required
+artefacts are missing.
 
 ## Non‑Goals
 

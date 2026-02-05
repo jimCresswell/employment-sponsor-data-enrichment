@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import override
@@ -81,8 +81,20 @@ class LocalFileSystem(FileSystem):
         path.write_bytes(content)
 
     @override
+    def write_bytes_stream(self, path: Path, chunks: Iterable[bytes]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("wb") as handle:
+            for chunk in chunks:
+                handle.write(chunk)
+
+    @override
     def exists(self, path: Path) -> bool:
         return path.exists()
+
+    @override
+    def rename(self, src: Path, dest: Path) -> None:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        src.replace(dest)
 
     @override
     def mkdir(self, path: Path, parents: bool = True) -> None:

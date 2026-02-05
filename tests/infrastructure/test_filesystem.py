@@ -21,3 +21,18 @@ class TestLocalFileSystemAppend:
 
         out = pd.read_csv(path, dtype=str).fillna("")
         assert out["col"].tolist() == ["a", "b"]
+
+
+class TestLocalFileSystemWriteBytesStream:
+    """Tests for LocalFileSystem write_bytes_stream."""
+
+    def test_write_bytes_stream_writes_chunks_in_order(self, tmp_path: Path) -> None:
+        fs = LocalFileSystem()
+        path = tmp_path / "out.bin"
+
+        def chunks() -> list[bytes]:
+            return [b"alpha", b"-", b"beta"]
+
+        fs.write_bytes_stream(path, chunks())
+
+        assert path.read_bytes() == b"alpha-beta"

@@ -18,10 +18,11 @@ This directory contains the ADRs for the UK Sponsor → Tech Hiring Pipeline.
 - `adr0013-strict-internal-typing.md`
 - `adr0014-io-boundaries-consolidation.md`
 - `adr0015-observability-logging.md`
-- `adr0016-configurable-companies-house-source.md`
 - `adr0017-usage-shortlist-separation.md`
 - `adr0018-linting-rules-architectural-boundaries-and-fail-fast.md`
+- `adr0019-cache-first-refresh-and-bulk-companies-house-snapshots.md`
 
 ## Superseded
 
 - `superseded/adr0003-csv-artefact-pipeline.md`
+- `adr0016-configurable-companies-house-source.md`

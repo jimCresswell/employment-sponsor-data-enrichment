@@ -151,7 +151,7 @@ Agents must:
 
 ### Bulk CSV
 
-- Missing columns ≠ errors
+- Missing columns are errors (fail fast)
 - Blank values ≠ false
 - Section absence is meaningful
 

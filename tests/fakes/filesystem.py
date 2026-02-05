@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import override
@@ -106,8 +106,34 @@ class InMemoryFileSystem(FileSystem):
         self._mtimes[key] = time.time()
 
     @override
+    def write_bytes_stream(self, path: Path, chunks: Iterable[bytes]) -> None:
+        key = str(path)
+        buffer = bytearray()
+        for chunk in chunks:
+            buffer.extend(chunk)
+        self._files[key] = bytes(buffer)
+        self._mtimes[key] = time.time()
+
+    @override
     def exists(self, path: Path) -> bool:
         return str(path) in self._files
+
+    @override
+    def rename(self, src: Path, dest: Path) -> None:
+        src_key = str(src)
+        dest_key = str(dest)
+        updates: dict[str, object] = {}
+        updated_times: dict[str, float] = {}
+        for key, value in list(self._files.items()):
+            if key == src_key or key.startswith(f"{src_key}/"):
+                suffix = key[len(src_key) :]
+                new_key = f"{dest_key}{suffix}"
+                updates[new_key] = value
+                updated_times[new_key] = self._mtimes.get(key, time.time())
+                del self._files[key]
+                self._mtimes.pop(key, None)
+        self._files.update(updates)
+        self._mtimes.update(updated_times)
 
     @override
     def mkdir(self, path: Path, parents: bool = True) -> None:

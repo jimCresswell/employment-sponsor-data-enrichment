@@ -1,5 +1,6 @@
 """Tests for extract step with filesystem injection."""
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import override
 
@@ -39,6 +40,18 @@ class DummySession(HttpSession):
     def get_bytes(self, url: str, *, timeout_seconds: float) -> bytes:
         self.calls.append(url)
         return self.response.content
+
+    @override
+    def iter_bytes(
+        self,
+        url: str,
+        *,
+        timeout_seconds: float,
+        chunk_size: int,
+    ) -> Iterable[bytes]:
+        self.calls.append(url)
+        _ = (timeout_seconds, chunk_size)
+        yield self.response.content
 
 
 def test_extract_with_in_memory_fs(in_memory_fs: InMemoryFileSystem) -> None:

@@ -18,6 +18,23 @@ Status: **Approved** (2026-02-04)
 1. Implement `refresh-sponsor` with snapshot layout and manifest.
 1. Implement `refresh-companies-house` (download, extract, clean, index).
 
+### TDD Implementation TODOs (Ordered)
+
+1. Add tests for `HttpSession.iter_bytes`, `FileSystem.write_bytes_stream`, and injected
+   `ProgressReporter` usage.
+1. Implement protocol changes and update infrastructure + fakes for streaming IO (and
+   filesystem rename support for atomic snapshot commits).
+1. Add tests for snapshot date extraction, atomic snapshot writes, and manifest schema.
+1. Implement snapshot helpers and manifest writing.
+1. Add tests for `refresh-sponsor` snapshot outputs and schema validation.
+1. Implement `refresh-sponsor`.
+1. Add tests for `refresh-companies-house` (ZIP/CSV ingest, header trimming, URI validation,
+   SIC parsing, clean schema output, token index generation).
+1. Implement `refresh-companies-house` and token indexing.
+1. Remove JSON file source and update Companies House source to bulk snapshot lookup.
+1. Update config/env parsing + CLI wiring; make `run-all` cache-only and remove legacy commands.
+1. Update docs diagrams and run full quality gates (`uv run check`).
+
 ### Locked Decisions
 
 - Canonical clean schema v1 is defined in this plan.
@@ -172,6 +189,12 @@ Treat each item as a required change before this plan can be marked complete.
   summary; update it to reflect cache-first refresh and snapshot-only `run-all`.
 - Add a new ADR (or supersede ADR 0016) to document cache-first refresh + bulk CSV snapshots
   and the removal of the JSON file source, then align README and troubleshooting docs.
+
+### ADR Notes (Architectural Choices)
+
+- Cache-first refresh + bulk snapshot source is captured in ADR 0019; update if scope changes.
+- Protocol changes for streaming IO and progress reporting may require updating ADR 0014
+  (IO boundaries) or adding a new ADR if the boundary model changes materially.
 
 ### Tests
 

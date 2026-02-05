@@ -5,15 +5,16 @@ A data pipeline that transforms the UK Home Office sponsor register into a short
 ## Pipeline Overview
 
 ```text
-GOV.UK Sponsor Register → Transform Register → Transform Enrich → Transform Score → Usage Shortlist
-       (CSV)                    (CSV)               (CSV)              (CSV)            (CSV)
+GOV.UK Sponsor Register → refresh-sponsor → sponsor snapshot (clean.csv)
+Companies House Bulk CSV → refresh-companies-house → CH snapshot (clean.csv + index)
+Snapshots → Transform Enrich → Transform Score → Usage Shortlist
 ```
 
 | Step               | Input       | Output                                      | What it does                                        |
 | ------------------ | ----------- | ------------------------------------------- | --------------------------------------------------- |
-| extract            | GOV.UK page | `data/raw/*.csv`                            | Scrapes page, downloads CSV, validates schema       |
-| transform-register | Raw CSV     | `data/interim/sponsor_register_filtered.csv` | Filters Skilled Worker + A-rated, aggregates by org |
-| transform-enrich   | Register CSV | `data/processed/companies_house_*.csv`     | Enriches via Companies House API                    |
+| refresh-sponsor    | CSV URL     | `data/cache/snapshots/sponsor/<YYYY-MM-DD>/...` | Downloads, validates, writes raw+clean+manifest     |
+| refresh-companies-house | ZIP or CSV URL | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/...` | Downloads/extracts, cleans, indexes, writes manifest |
+| transform-enrich   | Clean snapshots | `data/processed/companies_house_*.csv` | Enriches using file-first or API source             |
 | transform-score    | Enriched CSV | `data/processed/companies_scored.csv`      | Scores for tech-likelihood                          |
 | usage-shortlist    | Scored CSV   | `data/processed/companies_shortlist.csv` and `data/processed/companies_explain.csv` | Filters scored output into shortlist + explain      |
 
@@ -48,22 +49,28 @@ cp .env.example .env
 ### Run the Full Pipeline
 
 ```bash
-# All steps in sequence
+# Refresh snapshots (run when source data changes)
+uv run uk-sponsor refresh-sponsor --url <csv-url>
+uv run uk-sponsor refresh-companies-house --url <zip-or-csv-url>
+
+# Cache-only pipeline run
 uv run uk-sponsor run-all
 
 # Or run each step individually:
-uv run uk-sponsor extract
-uv run uk-sponsor transform-register
+uv run uk-sponsor refresh-sponsor --url <csv-url>
+uv run uk-sponsor refresh-companies-house --url <zip-or-csv-url>
 uv run uk-sponsor transform-enrich
 uv run uk-sponsor transform-score
 uv run uk-sponsor usage-shortlist
 ```
 
 `uv run <command>` executes tools inside the project environment.
+`run-all` consumes clean snapshots only and fails fast if required artefacts are missing.
 
 ### Transform Enrich Batching and Resume
 
 Transform Enrich runs in batches by default using `CH_BATCH_SIZE`. You can control which batches run:
+It consumes clean snapshot artefacts, so refresh snapshots before running.
 
 ```bash
 # Run only the first 2 batches (after resume filtering)
@@ -83,55 +90,27 @@ Transform Enrich fails fast on authentication, rate limit, circuit breaker, or u
 
 When running with `--no-resume`, Transform Enrich writes to a new timestamped subdirectory under the output directory to avoid stale data reuse.
 
-### Companies House Source (API or File)
+### Companies House Source (API or Snapshot)
 
-By default Transform Enrich uses the Companies House API. To use a file source instead, set:
+Transform Enrich is file-first by default and reads Companies House bulk snapshot artefacts.
+Snapshot paths are resolved from `SNAPSHOT_ROOT` unless explicit paths are set.
+
+To use the Companies House API instead, set:
+
+```bash
+export CH_SOURCE_TYPE=api
+export CH_API_KEY=your_companies_house_api_key
+```
+
+To use the file snapshot source explicitly, set:
 
 ```bash
 export CH_SOURCE_TYPE=file
-export CH_SOURCE_PATH=data/reference/companies_house.json
+export CH_CLEAN_PATH=data/cache/snapshots/companies_house/<YYYY-MM-DD>/clean.csv
+export CH_TOKEN_INDEX_DIR=data/cache/snapshots/companies_house/<YYYY-MM-DD>
 ```
 
-The file format is JSON:
-
-```json
-{
-  "searches": [
-    {
-      "query": "Acme Ltd",
-      "items": [
-        {
-          "title": "ACME LTD",
-          "company_number": "12345678",
-          "company_status": "active",
-          "address": {
-            "locality": "London",
-            "region": "Greater London",
-            "postal_code": "EC1A 1BB"
-          }
-        }
-      ]
-    }
-  ],
-  "profiles": [
-    {
-      "company_number": "12345678",
-      "profile": {
-        "company_name": "ACME LTD",
-        "company_status": "active",
-        "type": "ltd",
-        "date_of_creation": "2015-01-01",
-        "sic_codes": ["62020"],
-        "registered_office_address": {
-          "locality": "London",
-          "region": "Greater London",
-          "postal_code": "EC1A 1BB"
-        }
-      }
-    }
-  ]
-}
-```
+The legacy JSON file source has been removed.
 
 ### Geographic Filtering
 
@@ -179,9 +158,9 @@ src/uk_sponsor_pipeline/
 ├── protocols.py        # Interface-style contracts
 ├── application/        # Use-case orchestration
 │   ├── companies_house_source.py
-│   ├── extract.py
+│   ├── refresh_sponsor.py
+│   ├── refresh_companies_house.py
 │   ├── pipeline.py
-│   ├── transform_register.py
 │   ├── transform_enrich.py
 │   ├── transform_score.py
 │   └── usage.py
@@ -236,33 +215,25 @@ class FakeHttpClient:
 ```
 
 Application entry points require a `PipelineConfig` instance and injected dependencies; environment
-variables are read once at the CLI entry point and passed through. For programmatic use:
+variables are read once at the CLI entry point and passed through. Cache-only runs expect clean
+snapshots (resolved from `SNAPSHOT_ROOT` or explicit paths). For programmatic use:
 
 ```python
 from uk_sponsor_pipeline.composition import build_cli_dependencies
 from uk_sponsor_pipeline.config import PipelineConfig
-from uk_sponsor_pipeline.application.transform_enrich import run_transform_enrich
-from uk_sponsor_pipeline.application.transform_score import run_transform_score
+from uk_sponsor_pipeline.application.pipeline import run_pipeline
 
 config = PipelineConfig.from_env()
 deps = build_cli_dependencies(
     config=config,
     cache_dir="data/cache/companies_house",
-    build_http_client=True,
+    build_http_client=(config.ch_source_type == "api"),
 )
-run_transform_enrich(
-    register_path="data/interim/sponsor_register_filtered.csv",
-    out_dir="data/processed",
+result = run_pipeline(
     config=config,
+    fs=deps.fs,
     http_client=deps.http_client,
     http_session=deps.http_session,
-    fs=deps.fs,
-)
-run_transform_score(
-    enriched_path="data/processed/companies_house_enriched.csv",
-    out_dir="data/processed",
-    config=config,
-    fs=deps.fs,
 )
 ```
 
@@ -341,20 +312,37 @@ final shortlist and explainability outputs.
 When running Transform Enrich with `--no-resume`, outputs are written under a timestamped
 subdirectory of `data/processed/` (paths below reflect the default `--resume` behaviour).
 
-| File                                                 | Description                                   |
-| ---------------------------------------------------- | --------------------------------------------- |
-| `reports/extract_manifest.json`                       | Download metadata with SHA256 hash            |
-| `reports/register_stats.json`                         | Filtering statistics                          |
-| `data/raw/*.csv`                                      | Extracted sponsor register CSV                |
-| `data/interim/sponsor_register_filtered.csv`          | Filtered and aggregated sponsor register      |
-| `data/processed/companies_house_enriched.csv`         | Matched companies with CH data                |
-| `data/processed/companies_house_unmatched.csv`        | Orgs that couldn't be matched                 |
-| `data/processed/companies_house_candidates_top3.csv`  | Audit trail: top 3 match candidates per org   |
-| `data/processed/companies_house_checkpoint.csv`       | Resume checkpoint of processed orgs           |
-| `data/processed/companies_house_resume_report.json`   | Resume report for interrupted or partial runs |
-| `data/processed/companies_scored.csv`                 | All companies with scores                     |
-| `data/processed/companies_shortlist.csv`              | Filtered shortlist (usage output)             |
-| `data/processed/companies_explain.csv`                | Score breakdown for shortlist (usage output)  |
+### Snapshot Outputs (Refresh Commands)
+
+**Sponsor snapshot**
+| File                                                         | Description                         |
+| ------------------------------------------------------------ | ----------------------------------- |
+| `data/cache/snapshots/sponsor/<YYYY-MM-DD>/raw.csv`           | Raw sponsor register CSV            |
+| `data/cache/snapshots/sponsor/<YYYY-MM-DD>/clean.csv`         | Clean sponsor register CSV          |
+| `data/cache/snapshots/sponsor/<YYYY-MM-DD>/register_stats.json` | Filtering statistics              |
+| `data/cache/snapshots/sponsor/<YYYY-MM-DD>/manifest.json`     | Snapshot manifest                   |
+
+**Companies House snapshot**
+| File                                                         | Description                         |
+| ------------------------------------------------------------ | ----------------------------------- |
+| `data/cache/snapshots/companies_house/<YYYY-MM-DD>/raw.zip`   | Raw download (when source is ZIP)   |
+| `data/cache/snapshots/companies_house/<YYYY-MM-DD>/raw.csv`   | Extracted raw CSV (ZIP sources)     |
+| `data/cache/snapshots/companies_house/<YYYY-MM-DD>/clean.csv` | Canonical clean CSV                 |
+| `data/cache/snapshots/companies_house/<YYYY-MM-DD>/index_tokens_<bucket>.csv` | Token index buckets |
+| `data/cache/snapshots/companies_house/<YYYY-MM-DD>/manifest.json` | Snapshot manifest               |
+
+### Pipeline Outputs (Cache-Only Run)
+
+| File                                                | Description                                   |
+| --------------------------------------------------- | --------------------------------------------- |
+| `data/processed/companies_house_enriched.csv`        | Matched companies with CH data                |
+| `data/processed/companies_house_unmatched.csv`       | Orgs that couldn't be matched                 |
+| `data/processed/companies_house_candidates_top3.csv` | Audit trail: top 3 match candidates per org   |
+| `data/processed/companies_house_checkpoint.csv`      | Resume checkpoint of processed orgs           |
+| `data/processed/companies_house_resume_report.json`  | Resume report for interrupted or partial runs |
+| `data/processed/companies_scored.csv`                | All companies with scores                     |
+| `data/processed/companies_shortlist.csv`             | Filtered shortlist (usage output)             |
+| `data/processed/companies_explain.csv`               | Score breakdown for shortlist (usage output)  |
 
 ## Contributing
 
@@ -388,7 +376,8 @@ Notes:
 
 ## Troubleshooting
 
-- **Companies House 401/403**: ensure `CH_API_KEY` is a valid API key and not an OAuth token; Transform Enrich uses Basic Auth with the key as username and a blank password. See `docs/troubleshooting.md`.
+- **Missing snapshots**: run `refresh-sponsor` and `refresh-companies-house`, or set `SPONSOR_CLEAN_PATH`, `CH_CLEAN_PATH`, and `CH_TOKEN_INDEX_DIR` explicitly. See `docs/troubleshooting.md`.
+- **Companies House 401/403**: ensure `CH_API_KEY` is a valid API key and not an OAuth token; Transform Enrich uses Basic Auth with the key as username and a blank password (API source only). See `docs/troubleshooting.md`.
 
 ## Future Work
 
@@ -399,6 +388,12 @@ Notes:
 Set in `.env` or environment variables:
 
 ```bash
+CH_SOURCE_TYPE=file          # file (snapshot) or api
+SNAPSHOT_ROOT=data/cache/snapshots
+SPONSOR_CLEAN_PATH=
+CH_CLEAN_PATH=
+CH_TOKEN_INDEX_DIR=
+CH_FILE_MAX_CANDIDATES=500   # File-based candidate cap
 CH_API_KEY=your_companies_house_api_key
 CH_SLEEP_SECONDS=0.5          # Delay between API calls
 CH_MAX_RPM=500                # Rate limit (requests per minute)
@@ -411,7 +406,7 @@ CH_CIRCUIT_BREAKER_THRESHOLD=5  # Failures before opening breaker
 CH_CIRCUIT_BREAKER_TIMEOUT_SECONDS=60  # Seconds before half-open probe
 CH_BATCH_SIZE=250             # Organisations per batch (incremental output)
 CH_MIN_MATCH_SCORE=0.72       # Minimum score to accept a match
-CH_SEARCH_LIMIT=5             # Candidates per search
+CH_SEARCH_LIMIT=5             # Candidates per search (API)
 TECH_SCORE_THRESHOLD=0.55     # Minimum score for shortlist (usage)
 GEO_FILTER_REGIONS=           # Single region filter (one value only)
 GEO_FILTER_POSTCODES=         # Comma-separated postcode prefix filter
@@ -420,7 +415,7 @@ GEO_FILTER_POSTCODES=         # Comma-separated postcode prefix filter
 ## Data Sources
 
 - **Sponsor Register**: [GOV.UK Register of Licensed Sponsors](https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers)
-- **Companies House**: [Public Data API](https://developer.company-information.service.gov.uk/)
+- **Companies House**: [Public Data API](https://developer.company-information.service.gov.uk/) (optional) and Free Data Product bulk CSV snapshots
 
 ## Security
 

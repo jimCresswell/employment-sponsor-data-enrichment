@@ -21,7 +21,7 @@ Usage example:
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -272,3 +272,17 @@ class RequestsSession(HttpSession):
         response = self._session.get(url, timeout=timeout_seconds, stream=True)
         response.raise_for_status()
         return response.content
+
+    @override
+    def iter_bytes(
+        self,
+        url: str,
+        *,
+        timeout_seconds: float,
+        chunk_size: int,
+    ) -> Iterable[bytes]:
+        with self._session.get(url, timeout=timeout_seconds, stream=True) as response:
+            response.raise_for_status()
+            for chunk in response.iter_content(chunk_size=chunk_size):
+                if chunk:
+                    yield chunk
