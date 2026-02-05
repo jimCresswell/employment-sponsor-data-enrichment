@@ -66,6 +66,8 @@ uv run uk-sponsor usage-shortlist
 
 `uv run <command>` executes tools inside the project environment.
 `run-all` consumes clean snapshots only and fails fast if required artefacts are missing.
+Refresh commands emit progress for download and clean; `refresh-companies-house` also emits index progress.
+Download totals can be unknown for some sources, so progress may advance without a fixed total.
 
 ### Transform Enrich Batching and Resume
 

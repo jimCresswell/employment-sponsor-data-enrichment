@@ -18,6 +18,7 @@ Consolidate incoming IO boundaries into two infrastructure files:
 - `infrastructure/io/http.py` for all network reads (Companies House and GOV.UK fetches)
 
 Pipeline steps must use the `FileSystem` and `HttpSession` / `HttpClient` protocols rather than calling `requests` or filesystem APIs directly.
+Streaming IO is part of the boundary: `HttpSession.iter_bytes` and `FileSystem.write_bytes_stream` are used for large downloads to avoid buffering entire files in memory.
 
 Validation helpers live in `uk_sponsor_pipeline.io_validation` and validate into boundary‑neutral IO contracts defined in `io_contracts.py`.
 Application code converts these IO contracts into internal `types.py` contracts immediately after ingestion.
