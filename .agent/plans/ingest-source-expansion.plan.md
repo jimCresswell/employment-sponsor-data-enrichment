@@ -381,6 +381,7 @@ Companies House snapshot directory contains:
 - `raw.csv`.
 - `clean.csv`.
 - `index_tokens_<bucket>.csv` (bucketed token index).
+- `profiles_<bucket>.csv` (bucketed clean profiles for on-demand lookup).
 - `manifest.json`.
 
 Snapshot directory creation fails fast if the target date already exists.

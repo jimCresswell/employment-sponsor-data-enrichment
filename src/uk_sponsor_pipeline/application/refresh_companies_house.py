@@ -49,6 +49,7 @@ class RefreshCompaniesHouseResult:
     clean_path: Path
     manifest_path: Path
     index_paths: tuple[Path, ...]
+    profile_paths: tuple[Path, ...]
     bytes_raw: int
     row_counts: SnapshotRowCounts
 
@@ -75,6 +76,36 @@ class _TokenIndexWriter:
         self._handles[bucket] = handle
         self._paths.append(path)
         return handle
+
+    def close(self) -> tuple[Path, ...]:
+        for handle in self._handles.values():
+            handle.close()
+        return tuple(self._paths)
+
+
+class _ProfileBucketWriter:
+    def __init__(self, base_dir: Path) -> None:
+        self._base_dir = base_dir
+        self._handles: dict[str, TextIO] = {}
+        self._writers: dict[str, csv.DictWriter[str]] = {}
+        self._paths: list[Path] = []
+
+    def write(self, row: dict[str, str]) -> None:
+        bucket = bucket_for_token(row["company_number"])
+        writer = self._writer(bucket)
+        writer.writerow(row)
+
+    def _writer(self, bucket: str) -> csv.DictWriter[str]:
+        if bucket in self._writers:
+            return self._writers[bucket]
+        path = self._base_dir / f"profiles_{bucket}.csv"
+        handle = path.open("w", encoding="utf-8", newline="")
+        writer = csv.DictWriter(handle, fieldnames=CANONICAL_HEADERS_V1)
+        writer.writeheader()
+        self._handles[bucket] = handle
+        self._writers[bucket] = writer
+        self._paths.append(path)
+        return writer
 
     def close(self) -> tuple[Path, ...]:
         for handle in self._handles.values():
@@ -171,28 +202,34 @@ def run_refresh_companies_house(
 
     logger.info("Cleaning Companies House bulk CSV: %s", raw_csv_path)
     index_writer = _TokenIndexWriter(paths.staging_dir)
+    profile_writer = _ProfileBucketWriter(paths.staging_dir)
+    index_paths: tuple[Path, ...] = ()
+    profile_paths: tuple[Path, ...] = ()
 
-    with raw_csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.reader(handle)
-        header_row = next(reader, None)
-        if header_row is None:
-            raise CompaniesHouseCsvEmptyError()
-        trimmed_headers = normalise_raw_headers(header_row)
-        validate_raw_headers(trimmed_headers)
+    try:
+        with raw_csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.reader(handle)
+            header_row = next(reader, None)
+            if header_row is None:
+                raise CompaniesHouseCsvEmptyError()
+            trimmed_headers = normalise_raw_headers(header_row)
+            validate_raw_headers(trimmed_headers)
 
-        dict_reader = csv.DictReader(handle, fieldnames=trimmed_headers)
-        with clean_path.open("w", encoding="utf-8", newline="") as clean_file:
-            writer = csv.DictWriter(clean_file, fieldnames=CANONICAL_HEADERS_V1)
-            writer.writeheader()
-            for row in dict_reader:
-                raw_rows += 1
-                raw_row = {key: (value or "") for key, value in row.items()}
-                clean_row = clean_companies_house_row(raw_row)
-                writer.writerow(clean_row)
-                clean_rows += 1
-                index_writer.write(clean_row["company_name"], clean_row["company_number"])
-
-    index_paths = index_writer.close()
+            dict_reader = csv.DictReader(handle, fieldnames=trimmed_headers)
+            with clean_path.open("w", encoding="utf-8", newline="") as clean_file:
+                writer = csv.DictWriter(clean_file, fieldnames=CANONICAL_HEADERS_V1)
+                writer.writeheader()
+                for row in dict_reader:
+                    raw_rows += 1
+                    raw_row = {key: (value or "") for key, value in row.items()}
+                    clean_row = clean_companies_house_row(raw_row)
+                    writer.writerow(clean_row)
+                    clean_rows += 1
+                    index_writer.write(clean_row["company_name"], clean_row["company_number"])
+                    profile_writer.write(clean_row)
+    finally:
+        index_paths = index_writer.close()
+        profile_paths = profile_writer.close()
 
     row_counts: SnapshotRowCounts = {"raw": raw_rows, "clean": clean_rows}
 
@@ -205,6 +242,8 @@ def run_refresh_companies_house(
         "clean": clean_path.name,
     }
     for path in index_paths:
+        artefacts[path.name] = path.name
+    for path in profile_paths:
         artefacts[path.name] = path.name
     if is_zip:
         artefacts["raw_csv"] = raw_csv_path.name
@@ -240,6 +279,7 @@ def run_refresh_companies_house(
         clean_path=final_dir / clean_path.name,
         manifest_path=final_dir / manifest_path.name,
         index_paths=final_index_paths,
+        profile_paths=tuple(final_dir / path.name for path in profile_paths),
         bytes_raw=bytes_downloaded,
         row_counts=row_counts,
     )
