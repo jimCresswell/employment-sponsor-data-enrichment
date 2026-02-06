@@ -265,10 +265,10 @@ class JsonObjectExpectedError(PipelineError):
 
 
 class GeoFilterRegionError(PipelineError):
-    """Raised when GEO_FILTER_REGIONS contains more than one region."""
+    """Raised when GEO_FILTER_REGION contains more than one value."""
 
     def __init__(self) -> None:
-        super().__init__("GEO_FILTER_REGIONS must contain at most one region.")
+        super().__init__("GEO_FILTER_REGION must contain a single region value.")
 
 
 class AuthenticationError(PipelineError):

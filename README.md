@@ -154,7 +154,7 @@ Usage shortlist applies geographic filters to scored output (run `transform-scor
 # Filter to London companies only
 uv run uk-sponsor usage-shortlist --region London
 
-# Single region only
+# Region filter accepts one value only
 uv run uk-sponsor usage-shortlist --region London
 
 # Postcode prefix filtering
@@ -442,7 +442,7 @@ CH_BATCH_SIZE=250             # Organisations per batch (incremental output)
 CH_MIN_MATCH_SCORE=0.72       # Minimum score to accept a match
 CH_SEARCH_LIMIT=10            # Candidates per search (API)
 TECH_SCORE_THRESHOLD=0.55     # Minimum score for shortlist (usage)
-GEO_FILTER_REGIONS=           # Single region filter (one value only)
+GEO_FILTER_REGION=            # Single region filter (one value only)
 GEO_FILTER_POSTCODES=         # Comma-separated postcode prefix filter
 ```
 

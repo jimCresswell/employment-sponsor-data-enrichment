@@ -1,6 +1,10 @@
 """Tests for PipelineConfig behaviour."""
 
+import pytest
+
+import uk_sponsor_pipeline.config as config_module
 from uk_sponsor_pipeline.config import PipelineConfig
+from uk_sponsor_pipeline.exceptions import GeoFilterRegionError
 
 
 def test_with_overrides_preserves_fields() -> None:
@@ -52,3 +56,58 @@ def test_with_overrides_preserves_fields() -> None:
     assert updated.ch_clean_path == base.ch_clean_path
     assert updated.ch_token_index_dir == base.ch_token_index_dir
     assert updated.ch_file_max_candidates == base.ch_file_max_candidates
+
+
+def test_from_env_reads_geo_filter_region_variable(monkeypatch: pytest.MonkeyPatch) -> None:
+    env = {"GEO_FILTER_REGION": "London"}
+
+    def fake_getenv(key: str, default: str = "") -> str:
+        return env.get(key, default)
+
+    def fake_load_dotenv(dotenv_path: str | None = None) -> bool:
+        _ = dotenv_path
+        return True
+
+    monkeypatch.setattr(config_module.os, "getenv", fake_getenv)
+    monkeypatch.setattr(config_module, "load_dotenv", fake_load_dotenv)
+
+    config = PipelineConfig.from_env()
+
+    assert config.geo_filter_region == "London"
+
+
+def test_from_env_rejects_multi_region_geo_filter_region(monkeypatch: pytest.MonkeyPatch) -> None:
+    env = {"GEO_FILTER_REGION": "London,Leeds"}
+
+    def fake_getenv(key: str, default: str = "") -> str:
+        return env.get(key, default)
+
+    def fake_load_dotenv(dotenv_path: str | None = None) -> bool:
+        _ = dotenv_path
+        return True
+
+    monkeypatch.setattr(config_module.os, "getenv", fake_getenv)
+    monkeypatch.setattr(config_module, "load_dotenv", fake_load_dotenv)
+
+    with pytest.raises(GeoFilterRegionError):
+        PipelineConfig.from_env()
+
+
+def test_from_env_ignores_removed_geo_filter_regions_variable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env = {"GEO_FILTER_REGIONS": "Manchester"}
+
+    def fake_getenv(key: str, default: str = "") -> str:
+        return env.get(key, default)
+
+    def fake_load_dotenv(dotenv_path: str | None = None) -> bool:
+        _ = dotenv_path
+        return True
+
+    monkeypatch.setattr(config_module.os, "getenv", fake_getenv)
+    monkeypatch.setattr(config_module, "load_dotenv", fake_load_dotenv)
+
+    config = PipelineConfig.from_env()
+
+    assert config.geo_filter_region is None

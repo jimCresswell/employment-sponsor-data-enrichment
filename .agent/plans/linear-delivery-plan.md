@@ -4,7 +4,7 @@ Status: Active
 Last updated: 2026-02-06
 Handoff readiness: Ready
 Current batch in progress: none
-Next batch to execute: `R-B3`
+Next batch to execute: `R-B4`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -400,7 +400,7 @@ The following batches are the approved execution slices for Milestone 0.
 
 1. Batch ID: `R-B3`
 1. Objective: Align and lock single-region geographic filtering contract.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `R-B2`
 1. Scope (in): env/config/CLI/docs consistency for single-region behaviour.
 1. Scope (out): broader docs and CI/version hygiene.
@@ -556,7 +556,7 @@ Use this as the canonical live tracker for batch execution state.
 
 1. `R-B1`: Complete
 1. `R-B2`: Complete
-1. `R-B3`: Planned
+1. `R-B3`: Complete
 1. `R-B4`: Planned
 1. `R-B5`: Planned
 1. `R-B6`: Planned
@@ -648,6 +648,16 @@ Summary: Added streamed file-handle methods to `FileSystem`, implemented them in
 Quality gates: uv run check (pass)
 Docs updated: .agent/plans/linear-delivery-plan.md
 Follow-ups: Execute R-B3 (single-region geographic filtering contract alignment).
+```
+
+```text
+Date: 2026-02-06
+Batch ID: R-B3
+Status: Complete
+Summary: Standardised geographic filtering on a single-region contract by replacing GEO_FILTER_REGIONS with GEO_FILTER_REGION, enforcing fail-fast parsing for comma-separated values, and extending CLI/config coverage.
+Quality gates: uv run check (pass)
+Docs updated: README.md, .env.example, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute R-B4 (onboarding and user-doc hardening).
 ```
 
 ## Session Completion Rules (Every Session)

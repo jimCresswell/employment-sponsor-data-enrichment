@@ -83,7 +83,7 @@ class PipelineConfig:
             ch_token_index_dir=os.getenv("CH_TOKEN_INDEX_DIR", "").strip(),
             ch_file_max_candidates=int(os.getenv("CH_FILE_MAX_CANDIDATES", "500")),
             tech_score_threshold=float(os.getenv("TECH_SCORE_THRESHOLD", "0.55")),
-            geo_filter_region=_parse_single_region(os.getenv("GEO_FILTER_REGIONS", "")),
+            geo_filter_region=_parse_single_region(os.getenv("GEO_FILTER_REGION", "")),
             geo_filter_postcodes=_parse_list(os.getenv("GEO_FILTER_POSTCODES", "")),
             location_aliases_path=os.getenv(
                 "LOCATION_ALIASES_PATH", "data/reference/location_aliases.json"
@@ -124,12 +124,10 @@ def _parse_list(s: str) -> tuple[str, ...]:
 
 
 def _parse_single_region(s: str) -> str | None:
-    """Parse a single region value from comma-separated input."""
-    items = _parse_list(s)
-    if not items:
+    """Parse an optional single region value."""
+    item = s.strip()
+    if not item:
         return None
-    if len(items) > 1:
+    if "," in item:
         raise GeoFilterRegionError()
-    for item in items:
-        return item
-    return None
+    return item

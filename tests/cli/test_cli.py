@@ -126,6 +126,27 @@ def test_cli_usage_shortlist_rejects_multiple_regions(monkeypatch: pytest.Monkey
     assert "Only one --region" in result.output
 
 
+def test_cli_run_all_rejects_multiple_regions(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig(ch_source_type="file")
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    app = _build_app()
+    result = runner.invoke(
+        app,
+        ["run-all", "--region", "London", "--region", "Leeds"],
+    )
+
+    assert result.exit_code != 0
+    assert "Only one --region" in result.output
+
+
 def test_cli_run_all_resolves_snapshot_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     captured_config = PipelineConfig()
     captured_register_path = Path("unset")
