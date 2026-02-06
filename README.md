@@ -1,458 +1,349 @@
-# UK Sponsor → Tech Hiring Pipeline
+# UK Sponsor -> Tech Hiring Pipeline
 
-A data pipeline that transforms the UK Home Office sponsor register into a shortlist of tech companies likely to hire senior engineers who need visa sponsorship.
+This project turns public UK sponsor and Companies House data into a reproducible shortlist of
+organisations likely to hire senior engineers who require visa sponsorship.
+
+The goal is practical impact: reduce manual searching, keep every decision auditable, and make
+improvements easy for contributors to ship safely.
+
+## Project Intent
+
+We are building a pipeline that is:
+
+- **Reproducible**: the same inputs and config produce the same artefacts.
+- **Auditable**: every step writes explicit artefacts and manifests.
+- **Actionable**: outputs are ready for outreach and prioritisation.
+- **Contributor-friendly**: architecture and tooling are strict but straightforward.
+
+## Who This Is For
+
+- Engineers who need a reliable shortlist generation workflow.
+- Data practitioners who want to refine matching/scoring quality.
+- Contributors who care about improving hiring access and transparency.
+
+## Runtime Model (Important)
+
+- Runtime commands are **file-only** for Companies House (`CH_SOURCE_TYPE=file`).
+- Network access is owned by refresh commands (`refresh-sponsor`, `refresh-companies-house`).
+- `transform-enrich` and `run-all` fail fast unless `CH_SOURCE_TYPE=file`.
+- Archived runtime API wiring notes live in `docs/archived-api-runtime-mode.md`.
 
 ## Pipeline Overview
 
 ```text
-GOV.UK Sponsor Register → refresh-sponsor → sponsor snapshot (clean.csv)
-Companies House Bulk CSV → refresh-companies-house → CH snapshot (clean.csv + index + profiles)
-Snapshots → Transform Enrich → Transform Score → Usage Shortlist
+GOV.UK Sponsor Register -> refresh-sponsor -> sponsor snapshot (clean.csv)
+Companies House Bulk CSV -> refresh-companies-house -> CH snapshot (clean.csv + index + profiles)
+Snapshots -> transform-enrich -> transform-score -> usage-shortlist
 ```
 
-| Step               | Input       | Output                                      | What it does                                        |
-| ------------------ | ----------- | ------------------------------------------- | --------------------------------------------------- |
-| refresh-sponsor    | CSV URL     | `data/cache/snapshots/sponsor/<YYYY-MM-DD>/...` | Downloads, validates, writes raw+clean+manifest     |
-| refresh-companies-house | ZIP or CSV URL | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/...` | Downloads/extracts, cleans, indexes, writes profiles + manifest |
-| transform-enrich   | Clean snapshots | `data/processed/companies_house_*.csv` | Enriches using file snapshot source (runtime)       |
-| transform-score    | Enriched CSV | `data/processed/companies_scored.csv`      | Scores for tech-likelihood                          |
-| usage-shortlist    | Scored CSV   | `data/processed/companies_shortlist.csv` and `data/processed/companies_explain.csv` | Filters scored output into shortlist + explain      |
+| Step | Input | Output | Purpose |
+| --- | --- | --- | --- |
+| `refresh-sponsor` | Sponsor CSV URL | `data/cache/snapshots/sponsor/<YYYY-MM-DD>/...` | Discover, download, clean, snapshot sponsor data |
+| `refresh-companies-house` | Companies House ZIP/CSV URL | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/...` | Discover, download/extract, clean, index, snapshot CH data |
+| `transform-enrich` | Clean snapshots | `data/processed/companies_house_*.csv` | Match sponsor organisations to CH entities |
+| `transform-score` | Enriched CSV | `data/processed/companies_scored.csv` | Apply tech-likelihood scoring model |
+| `usage-shortlist` | Scored CSV | `data/processed/companies_shortlist.csv`, `data/processed/companies_explain.csv` | Apply thresholds and geo filters for final shortlist |
 
-Steps describe artefact boundaries for audit and resume. They are not architectural boundaries; orchestration and shared standards live in the application pipeline (see `docs/architectural-decision-records/adr0012-artefact-boundaries-and-orchestration.md`).
+## Quick Start (First Successful Run)
 
-## Quick Start
-
-### Prerequisites
+### 1. Prerequisites
 
 - Python 3.14+
-- [uv](https://github.com/astral-sh/uv) (fast Python package manager)
+- [`uv`](https://github.com/astral-sh/uv)
 
-### Installation
+### 2. Environment Setup
 
 ```bash
-# Clone and enter directory
-cd uk-sponsor-tech-hiring-pipeline
+git clone <repository-url>
+cd uk_sponsor_tech_hiring_pipeline_repo
 
-# Install uv (if needed)
+# Install uv if not already available
 ./scripts/install-uv
 
-# Create and sync a uv environment
 uv venv
 uv sync --group dev
-
-# Copy env template and configure source
 cp .env.example .env
-# Edit .env: keep CH_SOURCE_TYPE=file for runtime commands
 ```
 
-### Run the Full Pipeline
+### 3. Configure `.env`
+
+Set at least:
 
 ```bash
-# Refresh snapshots (run when source data changes)
-# If --url is omitted, the pipeline discovers links from the source pages.
+CH_SOURCE_TYPE=file
+SNAPSHOT_ROOT=data/cache/snapshots
+```
+
+You can usually leave other values at defaults for the first run.
+
+### 4. Build Snapshots
+
+```bash
 uv run uk-sponsor refresh-sponsor
 uv run uk-sponsor refresh-companies-house
+```
 
-# Discovery-only (prints resolved source URL, no download/clean)
-uv run uk-sponsor refresh-sponsor --only discovery
-uv run uk-sponsor refresh-companies-house --only discovery
+### 5. Run Cache-Only Pipeline
 
-# Acquire-only (download, plus ZIP extract for Companies House)
-uv run uk-sponsor refresh-sponsor --only acquire
-uv run uk-sponsor refresh-companies-house --only acquire
-
-# Clean-only (finalise latest pending acquire into a snapshot)
-uv run uk-sponsor refresh-sponsor --only clean
-uv run uk-sponsor refresh-companies-house --only clean
-
-# Or provide explicit URLs
-uv run uk-sponsor refresh-sponsor --url <csv-url>
-uv run uk-sponsor refresh-companies-house --url <zip-url>
-
-# Cache-only pipeline run
+```bash
 uv run uk-sponsor run-all
+```
 
-# Or run each step individually:
-uv run uk-sponsor refresh-sponsor
-uv run uk-sponsor refresh-companies-house
-uv run uk-sponsor refresh-sponsor --url <csv-url>
-uv run uk-sponsor refresh-companies-house --url <zip-url>
+### 6. Check Outputs
+
+Expected files in `data/processed/`:
+
+- `companies_house_enriched.csv`
+- `companies_house_unmatched.csv`
+- `companies_house_candidates_top3.csv`
+- `companies_house_checkpoint.csv`
+- `companies_house_resume_report.json`
+- `companies_scored.csv`
+- `companies_shortlist.csv`
+- `companies_explain.csv`
+
+## Command Guide
+
+### Refresh Commands (Grouped Execution)
+
+`refresh-sponsor` and `refresh-companies-house` support:
+
+- `--only discovery`: resolve source URL only
+- `--only acquire`: download raw payload (and ZIP extract for CH)
+- `--only clean`: finalise latest pending acquire snapshot
+- `--only all`: acquire + clean (default)
+
+Examples:
+
+```bash
+uv run uk-sponsor refresh-sponsor --only discovery
+uv run uk-sponsor refresh-sponsor --only acquire
+uv run uk-sponsor refresh-sponsor --only clean
+
+uv run uk-sponsor refresh-companies-house --only discovery
+uv run uk-sponsor refresh-companies-house --only acquire
+uv run uk-sponsor refresh-companies-house --only clean
+```
+
+You can bypass discovery with explicit URLs:
+
+```bash
+uv run uk-sponsor refresh-sponsor --url <sponsor-csv-url>
+uv run uk-sponsor refresh-companies-house --url <companies-house-zip-url>
+```
+
+### Runtime and Processing Commands
+
+```bash
 uv run uk-sponsor transform-enrich
 uv run uk-sponsor transform-score
 uv run uk-sponsor usage-shortlist
+uv run uk-sponsor run-all
 ```
 
-`uv run <command>` executes tools inside the project environment.
-`run-all` consumes clean snapshots only and fails fast if required artefacts are missing.
-Refresh commands emit progress for download and clean; `refresh-companies-house` also emits index progress.
-Download totals can be unknown for some sources, so progress may advance without a fixed total.
+`run-all` supports `--only`:
 
-`--only` values:
+- `all` (default)
+- `transform-enrich`
+- `transform-score`
+- `usage-shortlist`
 
-- `refresh-sponsor --only`: `all`, `discovery`, `acquire`, `clean`
-- `refresh-companies-house --only`: `all`, `discovery`, `acquire`, `clean`
-- `run-all --only`: `all`, `transform-enrich`, `transform-score`, `usage-shortlist`
-
-For `--only clean`, the command consumes the latest pending acquire staging run for that dataset.
-If none exists, run `--only acquire` first.
-
-### Transform Enrich Batching and Resume
-
-Transform Enrich runs in batches by default using `CH_BATCH_SIZE`. You can control which batches run:
-It consumes clean snapshot artefacts, so refresh snapshots before running.
+### Transform Enrich Resume and Batching
 
 ```bash
-# Run only the first 2 batches (after resume filtering)
+# Run first two batches after resume filtering
 uv run uk-sponsor transform-enrich --batch-count 2
 
-# Start at batch 3 and run 2 batches
+# Start at batch three and run two batches
 uv run uk-sponsor transform-enrich --batch-start 3 --batch-count 2
 
 # Override batch size for this run
 uv run uk-sponsor transform-enrich --batch-size 50
 ```
 
-Resume data is written to `data/processed/companies_house_checkpoint.csv` and
-`data/processed/companies_house_resume_report.json` (includes overall batch range and timing).
+Resume artefacts:
 
-Transform Enrich fails fast on authentication, rate limit, circuit breaker, or unexpected HTTP errors. Fix the issue and rerun with `--resume`; the resume report includes a ready‑made command.
+- `data/processed/companies_house_checkpoint.csv`
+- `data/processed/companies_house_resume_report.json`
 
-When running with `--no-resume`, Transform Enrich writes to a new timestamped subdirectory under the output directory to avoid stale data reuse.
+When running with `--no-resume`, outputs are written to a timestamped subdirectory under the
+selected output directory.
 
-### Companies House Runtime Source (File Only)
+### Geographic Filtering (Single Region Contract)
 
-Runtime CLI execution is file-only for `transform-enrich` and `run-all`.
-These commands fail fast unless `CH_SOURCE_TYPE=file`.
-Snapshot paths are resolved from `SNAPSHOT_ROOT` unless explicit paths are set.
-
-To set the file snapshot source explicitly:
+CLI examples:
 
 ```bash
-export CH_SOURCE_TYPE=file
-export CH_CLEAN_PATH=data/cache/snapshots/companies_house/<YYYY-MM-DD>/clean.csv
-export CH_TOKEN_INDEX_DIR=data/cache/snapshots/companies_house/<YYYY-MM-DD>
-```
-
-Archived API runtime wiring notes are recorded in `docs/archived-api-runtime-mode.md`.
-
-## Documentation
-
-- `docs/refresh-and-run-all-diagrams.md` (refresh + cache-only flow diagrams)
-- `docs/snapshots.md` (snapshot layout, manifests, and resolution)
-- `docs/data-contracts.md` (Companies House canonical schema and mapping)
-- `docs/companies-house-file-source.md` (file-first token index rules)
-- `docs/archived-api-runtime-mode.md` (archived CLI runtime API wiring reference)
-- `docs/validation-protocol.md` (file-first validation steps and e2e fixture run)
-- `docs/troubleshooting.md` (common failures and recovery)
-
-### Geographic Filtering
-
-Usage shortlist applies geographic filters to scored output (run `transform-score` first or use
-`run-all`). Filter the final shortlist by region or postcode (single region only):
-
-```bash
-# Filter to London companies only
 uv run uk-sponsor usage-shortlist --region London
-
-# Region filter accepts one value only
-uv run uk-sponsor usage-shortlist --region London
-
-# Postcode prefix filtering
 uv run uk-sponsor usage-shortlist --postcode-prefix EC --postcode-prefix SW
-
-# Adjust score threshold (default: 0.55)
-uv run uk-sponsor usage-shortlist --threshold 0.40
-
-# Full pipeline with filters
 uv run uk-sponsor run-all --region London --threshold 0.50
 ```
 
-Location aliases live in `data/reference/location_aliases.json` and expand region/locality/postcode matching
-(for example, `--region Manchester` matches Salford and M* postcodes). Override the file location with
-`LOCATION_ALIASES_PATH` if needed.
-
-## Architecture
-
-### Architecture Direction
-
-The long‑term direction is an application‑owned pipeline: orchestration and step ownership live in an application layer, domain logic is pure and infrastructure is shared and injected. CSV artefacts remain as audit and resume boundaries. The CLI delegates concrete wiring to the composition root.
-
-Observability is standardised via a shared logger factory with UTC timestamps so pipeline logs remain consistent across steps.
-
-### Project Structure
-
-```text
-src/uk_sponsor_pipeline/
-├── cli.py              # Typer CLI entry point
-├── composition.py      # Composition root for CLI wiring
-├── config.py           # Pipeline configuration
-├── io_contracts.py     # IO boundary contracts for infrastructure
-├── io_validation.py    # Boundary-neutral IO validation helpers
-├── protocols.py        # Interface-style contracts
-├── application/        # Use-case orchestration
-│   ├── companies_house_source.py
-│   ├── refresh_sponsor.py
-│   ├── refresh_companies_house.py
-│   ├── pipeline.py
-│   ├── transform_enrich.py
-│   ├── transform_score.py
-│   └── usage.py
-├── infrastructure/     # Concrete implementations (DI pattern)
-│   ├── io/
-│   │   ├── filesystem.py
-│   │   ├── http.py
-│   └── resilience.py
-├── domain/
-│   ├── companies_house.py
-│   ├── location_profiles.py
-│   ├── organisation_identity.py
-│   ├── scoring.py
-│   └── sponsor_register.py
-├── observability/      # Shared logging helpers
-├── schemas.py          # Column contracts per step
-
-tests/
-├── application/
-├── cli/
-├── config/
-├── devtools/
-├── domain/
-├── infrastructure/
-├── integration/
-├── network/
-├── observability/
-├── protocols/
-└── conftest.py         # Pytest fixtures and fakes
-```
-
-Application modules implement pipeline steps and orchestration; the CLI delegates to them via the composition root (see `composition.py`). Track the historical refactor plan in `.agent/plans/archive/refactor-plan.md`.
-
-### Dependency Injection
-
-Dependency injection keeps I/O and external services swappable for tests:
-
-```python
-# protocols.py - defines the interface
-class HttpClient(Protocol):
-    def get_json(self, url: str, cache_key: str) -> Mapping[str, object]: ...
-
-# infrastructure/http.py - production implementation
-class CachedHttpClient:
-    def get_json(self, url: str, cache_key: str) -> Mapping[str, object]:
-        # Real HTTP + caching logic
-
-# tests/fakes/http.py - test implementation
-class FakeHttpClient:
-    def get_json(self, url: str, cache_key: str) -> Mapping[str, object]:
-        return self.responses.get(cache_key, {})
-```
-
-Application entry points require a `PipelineConfig` instance and injected dependencies; environment
-variables are read once at the CLI entry point and passed through. Cache-only runs expect clean
-snapshots (resolved from `SNAPSHOT_ROOT` or explicit paths). For programmatic use:
-
-```python
-from uk_sponsor_pipeline.composition import build_cli_dependencies
-from uk_sponsor_pipeline.config import PipelineConfig
-from uk_sponsor_pipeline.application.pipeline import run_pipeline
-
-config = PipelineConfig.from_env()
-deps = build_cli_dependencies(
-    config=config,
-    cache_dir="data/cache/companies_house",
-    build_http_client=(config.ch_source_type == "api"),
-)
-result = run_pipeline(
-    config=config,
-    fs=deps.fs,
-    http_client=deps.http_client,
-    http_session=deps.http_session,
-)
-```
-
-Test doubles live in `tests/fakes/`; `tests/conftest.py` provides fixtures that instantiate them.
-
-### Running Tests
-
-Note: The test suite blocks all real network access. Use fakes/mocks for HTTP.
+Environment variables:
 
 ```bash
-# All tests
-uv run test
-
-# Verbose output
-uv run test -v
-
-# Specific test file
-uv run test tests/domain/test_organisation_identity.py
-
-# Specific test class
-uv run test tests/domain/test_scoring.py::TestScoreFromSic
-
-# With coverage (fails if below 85%)
-uv run coverage
-```
-
-### Project Scripts (uv-backed)
-
-```bash
-# Lint
-uv run lint
-
-# Format
-uv run format
-
-# Format check (CI style)
-uv run format-check
-
-# Type check
-uv run typecheck
-
-# US spelling check
-uv run spelling-check
-
-# Full quality gate run (format → typecheck → lint → test → coverage)
-uv run check
-```
-
-`uv run lint` is the single lint entry point. It runs ruff, the inline ignore check, the US spelling scan, and import‑linter.
-The spelling scan checks identifiers, comments/docstrings, and string literals, but ignores string literals used for comparisons or matching (external tokens) and skips inline/fenced code in docs.
-Linting also enforces fail‑fast exception handling (`TRY`, `BLE`), no private member access (`SLF001`), no `print` outside the CLI (`T20`), and timezone‑aware datetimes (`DTZ`).
-
-## Scoring Model (Transform Score)
-
-Companies are scored on multiple features:
-
-| Feature        | Weight Range  | Source                                         |
-| -------------- | ------------- | ---------------------------------------------- |
-| SIC tech codes | 0.0–0.50      | Companies House profile                        |
-| Active status  | 0.0 or 0.10   | Companies House profile                        |
-| Company age    | 0.0–0.15      | Date of creation                               |
-| Company type   | 0.0–0.10      | Ltd, PLC, LLP, etc.                            |
-| Name keywords  | -0.10 to 0.15 | "software", "digital" vs "care", "recruitment" |
-
-**Role-fit buckets:**
-
-- **strong** (≥0.55): High probability tech company
-- **possible** (≥0.35): Worth investigating
-- **unlikely** (<0.35): Probably not tech
-
-Usage shortlist applies thresholds and geographic filters to the scored artefact to produce the
-final shortlist and explainability outputs.
-
-## Output Files
-
-When running Transform Enrich with `--no-resume`, outputs are written under a timestamped
-subdirectory of `data/processed/` (paths below reflect the default `--resume` behaviour).
-
-### Snapshot Outputs (Refresh Commands)
-
-**Sponsor snapshot**
-| File                                                         | Description                         |
-| ------------------------------------------------------------ | ----------------------------------- |
-| `data/cache/snapshots/sponsor/<YYYY-MM-DD>/raw.csv`           | Raw sponsor register CSV            |
-| `data/cache/snapshots/sponsor/<YYYY-MM-DD>/clean.csv`         | Clean sponsor register CSV          |
-| `data/cache/snapshots/sponsor/<YYYY-MM-DD>/register_stats.json` | Filtering statistics              |
-| `data/cache/snapshots/sponsor/<YYYY-MM-DD>/manifest.json`     | Snapshot manifest                   |
-
-**Companies House snapshot**
-| File                                                         | Description                         |
-| ------------------------------------------------------------ | ----------------------------------- |
-| `data/cache/snapshots/companies_house/<YYYY-MM-DD>/raw.zip`   | Raw download (when source is ZIP)   |
-| `data/cache/snapshots/companies_house/<YYYY-MM-DD>/raw.csv`   | Extracted raw CSV (ZIP sources)     |
-| `data/cache/snapshots/companies_house/<YYYY-MM-DD>/clean.csv` | Canonical clean CSV                 |
-| `data/cache/snapshots/companies_house/<YYYY-MM-DD>/index_tokens_<bucket>.csv` | Token index buckets |
-| `data/cache/snapshots/companies_house/<YYYY-MM-DD>/profiles_<bucket>.csv` | Bucketed profiles |
-| `data/cache/snapshots/companies_house/<YYYY-MM-DD>/manifest.json` | Snapshot manifest               |
-
-### Pipeline Outputs (Cache-Only Run)
-
-| File                                                | Description                                   |
-| --------------------------------------------------- | --------------------------------------------- |
-| `data/processed/companies_house_enriched.csv`        | Matched companies with CH data                |
-| `data/processed/companies_house_unmatched.csv`       | Orgs that couldn't be matched                 |
-| `data/processed/companies_house_candidates_top3.csv` | Audit trail: top 3 match candidates per org   |
-| `data/processed/companies_house_checkpoint.csv`      | Resume checkpoint of processed orgs           |
-| `data/processed/companies_house_resume_report.json`  | Resume report for interrupted or partial runs |
-| `data/processed/companies_scored.csv`                | All companies with scores                     |
-| `data/processed/companies_shortlist.csv`             | Filtered shortlist (usage output)             |
-| `data/processed/companies_explain.csv`               | Score breakdown for shortlist (usage output)  |
-
-## Contributing
-
-```bash
-uv sync --group dev
-uv run format
-uv run typecheck
-uv run lint
-uv run test
-uv run coverage
+GEO_FILTER_REGION=London
+GEO_FILTER_POSTCODES=EC,SW
 ```
 
 Notes:
 
-- Tests block all real network access; use fakes in `tests/conftest.py`.
-- Keep behaviour and docs in sync with the CLI and pipeline outputs.
-- No compatibility layers; delete replaced code paths.
+- `--region` accepts one value only.
+- `GEO_FILTER_REGION` accepts one value only.
+- Comma-separated region values fail fast.
 
-### Git Hooks (Quality Gates)
+## Configuration Reference
 
-Install pre-commit hooks to run the full quality gates on commit and push:
+Set via `.env` or environment variables:
+
+```bash
+CH_SOURCE_TYPE=file
+SNAPSHOT_ROOT=data/cache/snapshots
+SPONSOR_CLEAN_PATH=
+CH_CLEAN_PATH=
+CH_TOKEN_INDEX_DIR=
+CH_FILE_MAX_CANDIDATES=500
+
+CH_API_KEY=your_companies_house_api_key  # Archived runtime API reference only
+CH_SLEEP_SECONDS=0.2
+CH_MAX_RPM=600
+CH_TIMEOUT_SECONDS=30
+CH_MAX_RETRIES=3
+CH_BACKOFF_FACTOR=0.5
+CH_BACKOFF_MAX_SECONDS=60
+CH_BACKOFF_JITTER_SECONDS=0.1
+CH_CIRCUIT_BREAKER_THRESHOLD=5
+CH_CIRCUIT_BREAKER_TIMEOUT_SECONDS=60
+CH_BATCH_SIZE=250
+CH_MIN_MATCH_SCORE=0.72
+CH_SEARCH_LIMIT=10
+
+TECH_SCORE_THRESHOLD=0.55
+GEO_FILTER_REGION=
+GEO_FILTER_POSTCODES=
+LOCATION_ALIASES_PATH=data/reference/location_aliases.json
+```
+
+## Programmatic Usage
+
+The CLI is the normal entry point, but library usage is supported.
+
+```python
+from pathlib import Path
+
+from uk_sponsor_pipeline.application.pipeline import run_pipeline
+from uk_sponsor_pipeline.application.snapshots import resolve_latest_snapshot_path
+from uk_sponsor_pipeline.composition import build_cli_dependencies
+from uk_sponsor_pipeline.config import PipelineConfig
+
+config = PipelineConfig.from_env()
+deps = build_cli_dependencies(
+    config=config,
+    cache_dir=Path("data/cache/companies_house"),
+    build_http_client=False,
+)
+
+register_path = resolve_latest_snapshot_path(
+    snapshot_root=Path(config.snapshot_root),
+    dataset="sponsor",
+    filename="clean.csv",
+    fs=deps.fs,
+)
+
+result = run_pipeline(
+    config=config,
+    register_path=register_path,
+    fs=deps.fs,
+    http_client=deps.http_client,
+)
+
+print(result.usage["shortlist"])
+```
+
+## Contributing for Impact
+
+Contributions are expected to improve either:
+
+- **Pipeline quality**: correctness, reproducibility, fail-fast guarantees.
+- **Decision quality**: better matching, scoring, and explainability.
+- **Operational quality**: clearer onboarding, safer runbooks, stronger validation.
+
+### High-Impact Contribution Areas
+
+1. Data quality checks for refresh and transform outputs.
+2. Explainability improvements in shortlist scoring outputs.
+3. Documentation and onboarding improvements for first-time contributors.
+4. Validation tooling and reproducibility checks.
+
+### Contributor Workflow
+
+1. Read `.agent/directives/AGENT.md`, `.agent/directives/rules.md`, `.agent/directives/project.md`, and `.agent/directives/python3.practice.md`.
+2. Choose work from `.agent/plans/linear-delivery-plan.md` (current execution roadmap).
+3. Follow strict TDD: tests first, implementation second, refactor third.
+4. Keep behaviour, tests, and docs aligned in the same change.
+5. Run full gates before commit: `uv run check`.
+6. Use conventional commits.
+
+### Definition of Done for a Change
+
+- Behaviour implemented with strict typing.
+- Tests added or updated and network-isolated.
+- Docs updated where behaviour or workflows changed.
+- `uv run check` passes locally.
+
+## Engineering Constraints
+
+- No compatibility layers or legacy shims.
+- Domain/application code must not import infrastructure directly.
+- Environment variables are read at entry points and passed via `PipelineConfig`.
+- Application I/O is protocol-backed for testability.
+- Tests block real network calls.
+
+## Developer Commands
+
+```bash
+uv run format
+uv run format-check
+uv run typecheck
+uv run lint
+uv run test
+uv run coverage
+uv run check
+```
+
+Install Git hooks for pre-commit and pre-push quality checks:
 
 ```bash
 uv run pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
-Notes:
+## Documentation Map
 
-- `uv run check` runs the mutating formatter (`ruff format`) first.
-- Git hooks run `format-check` (non-mutating) before the other gates.
+- `docs/snapshots.md`: snapshot lifecycle, layout, and manifests
+- `docs/validation-protocol.md`: reproducible validation runbook
+- `docs/troubleshooting.md`: common failure modes and recovery
+- `docs/data-contracts.md`: schema and column contracts
+- `docs/companies-house-file-source.md`: file-source lookup/index rules
+- `docs/refresh-and-run-all-diagrams.md`: refresh and cache-only flow diagrams
+- `docs/archived-api-runtime-mode.md`: archived runtime API wiring notes
 
-## Troubleshooting
+## Troubleshooting and Recovery
 
-- **Missing snapshots**: run `refresh-sponsor` and `refresh-companies-house`, or set `SPONSOR_CLEAN_PATH`, `CH_CLEAN_PATH`, and `CH_TOKEN_INDEX_DIR` explicitly. See `docs/troubleshooting.md`.
-- **Unsupported runtime source mode**: `transform-enrich` and `run-all` require `CH_SOURCE_TYPE=file`. See `docs/troubleshooting.md`.
+If you hit issues, start with `docs/troubleshooting.md`. Common causes are:
 
-## Future Work
-
-- CI/CD workflow to run quality gates automatically.
-
-## Configuration
-
-Set in `.env` or environment variables:
-
-```bash
-CH_SOURCE_TYPE=file          # Runtime commands require file mode
-SNAPSHOT_ROOT=data/cache/snapshots
-SPONSOR_CLEAN_PATH=
-CH_CLEAN_PATH=
-CH_TOKEN_INDEX_DIR=
-CH_FILE_MAX_CANDIDATES=500   # File-based candidate cap
-CH_API_KEY=your_companies_house_api_key  # Archived runtime API mode only
-CH_SLEEP_SECONDS=0.2          # Delay between API calls
-CH_MAX_RPM=600                # Rate limit (requests per minute)
-CH_TIMEOUT_SECONDS=30         # HTTP timeout in seconds
-CH_MAX_RETRIES=3              # Retry attempts for transient errors
-CH_BACKOFF_FACTOR=0.5         # Exponential backoff factor
-CH_BACKOFF_MAX_SECONDS=60     # Max backoff delay
-CH_BACKOFF_JITTER_SECONDS=0.1 # Random jitter added to backoff
-CH_CIRCUIT_BREAKER_THRESHOLD=5  # Failures before opening breaker
-CH_CIRCUIT_BREAKER_TIMEOUT_SECONDS=60  # Seconds before half-open probe
-CH_BATCH_SIZE=250             # Organisations per batch (incremental output)
-CH_MIN_MATCH_SCORE=0.72       # Minimum score to accept a match
-CH_SEARCH_LIMIT=10            # Candidates per search (API)
-TECH_SCORE_THRESHOLD=0.55     # Minimum score for shortlist (usage)
-GEO_FILTER_REGION=            # Single region filter (one value only)
-GEO_FILTER_POSTCODES=         # Comma-separated postcode prefix filter
-```
+- missing snapshots for cache-only runs,
+- non-file runtime mode,
+- invalid geographic filter configuration,
+- missing location aliases path.
 
 ## Data Sources
 
-- **Sponsor Register**: [GOV.UK Register of Licensed Sponsors](https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers)
-- **Companies House**: Free Data Product bulk CSV snapshots (runtime source) and [Public Data API](https://developer.company-information.service.gov.uk/) (archived runtime mode reference only)
+- Sponsor Register: <https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers>
+- Companies House bulk data: <https://download.companieshouse.gov.uk/en_output.html>
+- Companies House API docs (archived runtime reference only): <https://developer.company-information.service.gov.uk/>
 
-## Security
+## Security and Data Handling
 
-- Never commit `.env` (it's in `.gitignore`)
-- Rotate your Companies House API key if shared
-- Cache contains API response data—treat as sensitive
+- Never commit `.env` (already gitignored).
+- Treat cached payloads as potentially sensitive operational data.
+- Rotate API keys immediately if exposed.

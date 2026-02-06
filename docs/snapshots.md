@@ -1,52 +1,87 @@
 # Snapshot Artefacts
 
-Snapshots are cache-first artefacts written by refresh commands and consumed by
-cache-only pipeline runs. They provide auditability, determinism, and resumability.
+Snapshots are the contract between refresh commands and cache-only runtime steps.
+They are designed for reproducibility, auditability, and safe reruns.
+
+## Why Snapshots Matter
+
+Snapshots provide:
+
+- deterministic inputs for `transform-enrich` and `run-all`,
+- explicit artefact boundaries for auditing and incident recovery,
+- fail-fast validation when required files are missing.
 
 ## Snapshot Root and Layout
 
-Snapshots live under `data/cache/snapshots/<dataset>/<YYYY-MM-DD>/`.
+Default root:
 
-Sponsor snapshot:
+```text
+data/cache/snapshots/
+```
+
+Each dataset writes dated snapshots:
+
+```text
+data/cache/snapshots/<dataset>/<YYYY-MM-DD>/
+```
+
+### Sponsor Snapshot Artefacts
 
 - `raw.csv`
 - `clean.csv`
 - `register_stats.json`
 - `manifest.json`
 
-Companies House snapshot:
+### Companies House Snapshot Artefacts
 
 - `raw.zip` (when source is ZIP)
-- `raw.csv` (extracted or direct CSV)
+- `raw.csv` (direct source or extracted from ZIP)
 - `clean.csv`
 - `index_tokens_<bucket>.csv`
 - `profiles_<bucket>.csv`
 - `manifest.json`
 
+## Refresh Lifecycle (Discovery -> Acquire -> Clean)
+
+Refresh commands support grouped execution:
+
+- `discovery`: resolve source URL only
+- `acquire`: download raw artefacts into staging
+- `clean`: finalise latest pending acquire into dated snapshot
+- `all`: acquire + clean (default)
+
+This allows staged, auditable runs and safe recovery after partial failures.
+
+## Atomic Snapshot Commit
+
+Snapshots are written to staging first:
+
+```text
+data/cache/snapshots/<dataset>/.tmp-<uuid>/
+```
+
+The staging directory is renamed to `<YYYY-MM-DD>` only after all artefacts and
+`manifest.json` are written. This prevents partially-written snapshots from being
+used by runtime pipeline steps.
+
 ## Snapshot Date Derivation
 
-- Use the first match of `r"(20\d{2}-\d{2}-\d{2})"` in the source filename.
-- If no match is found, fall back to the download date in UTC.
-
-## Atomic Writes
-
-Snapshots are written to a staging directory first:
-
-- `data/cache/snapshots/<dataset>/.tmp-<uuid>`
-
-The directory is renamed to the final `<YYYY-MM-DD>` path only after all artefacts and
-`manifest.json` are written.
+1. First match of `r"(20\d{2}-\d{2}-\d{2})"` in source filename.
+2. Fallback: download date in UTC.
 
 ## Latest Snapshot Resolution
 
 When explicit paths are not provided, the latest snapshot is resolved by:
 
-1. `snapshot_date` descending (ISO `YYYY-MM-DD`)
-2. Manifest mtime descending as a deterministic tie-breaker
+1. `snapshot_date` descending (`YYYY-MM-DD`)
+2. `manifest.json` mtime descending (tie-breaker)
 
-## Manifest Schema
+`transform-enrich` and `run-all` rely on this behaviour when only `SNAPSHOT_ROOT`
+is provided.
 
-Each snapshot includes `manifest.json` with these fields:
+## Manifest Contract
+
+Each snapshot includes `manifest.json` with:
 
 - `dataset`
 - `snapshot_date`
@@ -57,14 +92,35 @@ Each snapshot includes `manifest.json` with these fields:
 - `sha256_hash_raw`
 - `sha256_hash_clean`
 - `bytes_raw`
-- `row_counts` (raw and clean)
+- `row_counts`
 - `artefacts` (relative paths)
-- `git_sha` (from `GIT_SHA` or `unknown`)
+- `git_sha` (`GIT_SHA` or `unknown`)
 - `tool_version` (package version or `0.0.0+unknown`)
 - `command_line`
 
-## Cache-Only Usage
+## Runtime Consumption Rules
 
-`run-all` and `transform-enrich` (file source) consume clean snapshot artefacts only and
-fail fast if required paths are missing. Raw artefacts are retained for audit but are not
-used during cache-only runs.
+Cache-only runtime steps consume clean snapshot artefacts only:
+
+- Sponsor: `clean.csv`
+- Companies House: `clean.csv` plus token/profile index files
+
+Raw artefacts remain for audit and troubleshooting but are not required by runtime
+processing once clean artefacts are available.
+
+## Manual Verification Checklist
+
+After refresh completes:
+
+1. Confirm dated directories exist under both datasets.
+2. Confirm expected artefacts exist for each dataset.
+3. Open `manifest.json` and verify `schema_version` and `snapshot_date`.
+4. Confirm `clean.csv` headers match `docs/data-contracts.md`.
+5. Run `uv run uk-sponsor run-all` to validate cache-only consumption.
+
+## Recovery Notes
+
+- If `--only clean` fails because no pending snapshot exists, run `--only acquire` first.
+- If runtime steps fail with missing snapshot artefacts, rerun refresh commands or set
+  explicit `SPONSOR_CLEAN_PATH`, `CH_CLEAN_PATH`, and `CH_TOKEN_INDEX_DIR`.
+- See `docs/troubleshooting.md` for failure-mode-specific recovery paths.

@@ -4,7 +4,7 @@ Status: Active
 Last updated: 2026-02-06
 Handoff readiness: Ready
 Current batch in progress: none
-Next batch to execute: `R-B4`
+Next batch to execute: `R-B5`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -418,7 +418,7 @@ The following batches are the approved execution slices for Milestone 0.
 
 1. Batch ID: `R-B4`
 1. Objective: Harden onboarding and user docs for first-run accuracy.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `R-B3`
 1. Scope (in): README + core docs correctness, copy-paste safety, workflow clarity.
 1. Scope (out): CI/version/dependency hygiene.
@@ -557,7 +557,7 @@ Use this as the canonical live tracker for batch execution state.
 1. `R-B1`: Complete
 1. `R-B2`: Complete
 1. `R-B3`: Complete
-1. `R-B4`: Planned
+1. `R-B4`: Complete
 1. `R-B5`: Planned
 1. `R-B6`: Planned
 
@@ -658,6 +658,16 @@ Summary: Standardised geographic filtering on a single-region contract by replac
 Quality gates: uv run check (pass)
 Docs updated: README.md, .env.example, .agent/plans/linear-delivery-plan.md
 Follow-ups: Execute R-B4 (onboarding and user-doc hardening).
+```
+
+```text
+Date: 2026-02-06
+Batch ID: R-B4
+Status: Complete
+Summary: Reworked onboarding and operational documentation to emphasise project intent, first-run success, contributor workflow, and auditable validation and recovery runbooks.
+Quality gates: uv run check (pass)
+Docs updated: README.md, docs/snapshots.md, docs/validation-protocol.md, docs/troubleshooting.md, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute R-B5 (CI full-gate workflow and version/tooling alignment).
 ```
 
 ## Session Completion Rules (Every Session)

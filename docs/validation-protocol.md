@@ -1,182 +1,201 @@
-# Validation Protocol (File-First)
+# Validation Protocol (File-First Runtime)
 
-This protocol validates the pipeline in isolated steps, using file-backed Companies
-House data only. It provides objective acceptance checks for each action and includes
-an end-to-end fixture run labelled as an e2e test.
+This runbook validates the pipeline end to end in the supported runtime mode:
+`CH_SOURCE_TYPE=file`.
 
-## Scope and Assumptions
+It is intended for:
 
-- `CH_SOURCE_TYPE=file` only. API validation is out of scope.
-- Tests remain network-isolated; any network access occurs only during refresh.
-- All checks must be reproducible and auditable.
-- Fail fast on missing artefacts or schema mismatches.
+- maintainers validating a release candidate,
+- contributors verifying behaviour after significant changes,
+- operators needing an auditable, repeatable process.
 
-## Pre-Flight
+## Scope
 
-1. Confirm environment and tooling.
-   Use Python 3.14+ and `uv`. Ensure `unzip` is available.
-1. Set environment variables for file-first runs.
-   Prefer `.env` with `CH_SOURCE_TYPE=file` and snapshot paths as needed.
-1. Ensure adequate disk space for large downloads.
+In scope:
 
-## Step 1: Source Discovery and Refresh (Pipeline-Owned)
+- refresh discovery/acquire/clean behaviour,
+- snapshot artefact and schema checks,
+- cache-only pipeline execution and output checks.
 
-1. Source pages are constant:
-Sponsor register: `https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers`
-Companies House bulk data: `https://download.companieshouse.gov.uk/en_output.html`
-1. The pipeline refresh commands own link discovery, download, and unzip. Do not
-   manually download or unzip sources outside the pipeline.
-1. Refresh commands support grouped execution via `--only`:
+Out of scope:
 
-- `discovery`: resolve the current source URL only
-- `acquire`: download raw payload (and extract ZIP for Companies House)
-- `clean`: finalise latest pending acquire into the dated snapshot
-- `all` (default): run acquire and clean in one command
+- runtime API mode validation (archived reference only),
+- non-reproducible/manual transformations outside pipeline commands.
 
-1. If discovery fails, record the exception and provide `--url` with the direct
-   CSV (sponsor) or ZIP (Companies House) URL.
+## Pre-Flight Checklist
 
-## Step 2: Refresh Sponsor Snapshot
+1. Confirm tooling:
 
-1. Run grouped sponsor refresh validation:
+```bash
+uv --version
+uv run python --version
+```
+
+2. Confirm configuration is file-first:
+
+```bash
+grep '^CH_SOURCE_TYPE=' .env
+```
+
+Expected value: `CH_SOURCE_TYPE=file`.
+
+3. Sync dependencies if needed:
+
+```bash
+uv sync --group dev
+```
+
+4. Confirm enough disk space for refresh payloads.
+
+## Step 1: Source Discovery
+
+Run:
 
 ```bash
 uv run uk-sponsor refresh-sponsor --only discovery
-uv run uk-sponsor refresh-sponsor --only acquire
-uv run uk-sponsor refresh-sponsor --only clean
-# Optional explicit URL for acquire/all:
-uv run uk-sponsor refresh-sponsor --url <SPONSOR_CSV_URL>
+uv run uk-sponsor refresh-companies-house --only discovery
 ```
 
-2. Acceptance checks.
+Acceptance checks:
 
-- Discovery prints one resolved CSV URL.
-- Acquire creates a pending staging directory under `data/cache/snapshots/sponsor/.tmp-<uuid>/`
-  containing `raw.csv` and `pending.json`.
-- Clean consumes the latest pending staging directory and commits
-  `data/cache/snapshots/sponsor/<YYYY-MM-DD>/`.
-- Snapshot directory exists under `data/cache/snapshots/sponsor/<YYYY-MM-DD>/`.
-- Artefacts present: `raw.csv`, `clean.csv`, `register_stats.json`, `manifest.json`.
-- `manifest.json` includes required fields and `schema_version` is `sponsor_clean_v1`.
-- `clean.csv` has required columns from `TRANSFORM_REGISTER_OUTPUT_COLUMNS`.
+- Sponsor command prints one resolved CSV URL.
+- Companies House command prints one resolved ZIP URL.
+- No snapshot files are created in this step.
 
-## Step 3: Refresh Companies House Snapshot
+If discovery fails, capture the error and continue using explicit `--url` values.
 
-1. Run grouped Companies House refresh validation:
+## Step 2: Acquire Raw Payloads
+
+Run:
 
 ```bash
-uv run uk-sponsor refresh-companies-house --only discovery
+uv run uk-sponsor refresh-sponsor --only acquire
 uv run uk-sponsor refresh-companies-house --only acquire
-uv run uk-sponsor refresh-companies-house --only clean
-# Optional explicit URL for acquire/all (ZIP):
-uv run uk-sponsor refresh-companies-house --url <CH_ZIP_URL>
 ```
 
-2. Acceptance checks.
+Acceptance checks:
 
-- Discovery prints one resolved ZIP URL.
-- Acquire creates a pending staging directory under
-  `data/cache/snapshots/companies_house/.tmp-<uuid>/` containing `pending.json`
-  and raw artefacts (`raw.zip` plus extracted `raw.csv` for ZIP sources).
-- Clean consumes the latest pending staging directory and commits
-  `data/cache/snapshots/companies_house/<YYYY-MM-DD>/`.
-- Snapshot directory exists under `data/cache/snapshots/companies_house/<YYYY-MM-DD>/`.
-- Artefacts present: `raw.csv`, `clean.csv`, `manifest.json`, `index_tokens_<bucket>.csv`,
-  and `profiles_<bucket>.csv`.
-- `manifest.json` includes required fields and `schema_version` is `ch_clean_v1`.
-- `clean.csv` headers match `ch_clean_v1` in `docs/data-contracts.md`.
-- Index files include headers `token,company_number`.
+- Sponsor pending staging directory exists under:
+  `data/cache/snapshots/sponsor/.tmp-<uuid>/`
+- Companies House pending staging directory exists under:
+  `data/cache/snapshots/companies_house/.tmp-<uuid>/`
+- Sponsor staging includes `raw.csv` and `pending.json`.
+- Companies House staging includes `pending.json` and raw artefacts
+  (`raw.zip` plus extracted `raw.csv` for ZIP sources).
 
-## Step 4: Transform Enrich (File Source)
+## Step 3: Clean and Commit Snapshots
 
-1. Ensure `CH_SOURCE_TYPE=file` and snapshot paths are set or resolvable from
-   `SNAPSHOT_ROOT`.
-1. Run the transform with file source.
+Run:
+
+```bash
+uv run uk-sponsor refresh-sponsor --only clean
+uv run uk-sponsor refresh-companies-house --only clean
+```
+
+Acceptance checks:
+
+- Dated snapshot directories exist:
+  - `data/cache/snapshots/sponsor/<YYYY-MM-DD>/`
+  - `data/cache/snapshots/companies_house/<YYYY-MM-DD>/`
+- Sponsor artefacts present: `raw.csv`, `clean.csv`, `register_stats.json`, `manifest.json`.
+- Companies House artefacts present: `raw.csv`, `clean.csv`, `manifest.json`,
+  `index_tokens_<bucket>.csv`, `profiles_<bucket>.csv`.
+- Manifest schema versions:
+  - sponsor: `sponsor_clean_v1`
+  - companies_house: `ch_clean_v1`
+
+## Step 4: Cache-Only Runtime Steps
+
+Run:
 
 ```bash
 uv run uk-sponsor transform-enrich
-```
-
-2. Acceptance checks.
-
-- Outputs created in `data/processed/`:
-  `companies_house_enriched.csv`, `companies_house_unmatched.csv`,
-  `companies_house_candidates_top3.csv`, `companies_house_checkpoint.csv`,
-  `companies_house_resume_report.json`.
-- Enriched and unmatched outputs contain all columns from
-  `TRANSFORM_ENRICH_OUTPUT_COLUMNS` and `TRANSFORM_ENRICH_UNMATCHED_COLUMNS`.
-- Resume report has a `status` of `complete` and non-empty timing fields.
-
-## Step 5: Transform Score
-
-1. Run the scoring step.
-
-```bash
 uv run uk-sponsor transform-score
-```
-
-2. Acceptance checks.
-
-- Output `data/processed/companies_scored.csv` exists.
-- Columns include all `TRANSFORM_SCORE_OUTPUT_COLUMNS`.
-
-## Step 6: Usage Shortlist
-
-1. Run the usage step with default thresholds.
-
-```bash
 uv run uk-sponsor usage-shortlist
 ```
 
-2. Acceptance checks.
+Acceptance checks:
 
-- Outputs `data/processed/companies_shortlist.csv` and
-  `data/processed/companies_explain.csv` exist.
-- Explain output columns match `TRANSFORM_SCORE_EXPLAIN_COLUMNS`.
+- `transform-enrich` creates:
+  - `data/processed/companies_house_enriched.csv`
+  - `data/processed/companies_house_unmatched.csv`
+  - `data/processed/companies_house_candidates_top3.csv`
+  - `data/processed/companies_house_checkpoint.csv`
+  - `data/processed/companies_house_resume_report.json`
+- `transform-score` creates:
+  - `data/processed/companies_scored.csv`
+- `usage-shortlist` creates:
+  - `data/processed/companies_shortlist.csv`
+  - `data/processed/companies_explain.csv`
 
-## Step 7: Full Cache-Only Run (Optional Sanity Pass)
+## Step 5: Cache-Only Orchestration Sanity Check
 
-1. Run the cache-only orchestration.
+Run:
 
 ```bash
 uv run uk-sponsor run-all
 ```
 
-2. Acceptance checks.
+Acceptance checks:
 
-- Output paths reported by the CLI exist.
-- No network calls occur during the run.
+- CLI reports final shortlist and explain outputs.
+- Reported output paths exist.
+- No runtime source-mode errors occur.
 
-## e2e Test: Fixture Run
+## Optional: Filter Validation
 
-This run validates correctness on tiny fixtures and must be labelled as e2e.
+Validate single-region and postcode filtering behaviour:
 
-1. Create minimal fixture CSVs for sponsor and Companies House.
-1. Use a local HTTP stub or in-repo fixtures to supply the URLs.
-1. Run `refresh-sponsor` and `refresh-companies-house` against the fixture URLs.
-1. Run `transform-enrich`, `transform-score`, and `usage-shortlist`.
-1. Assert that all outputs exist and contain the expected row counts and column sets.
+```bash
+uv run uk-sponsor usage-shortlist --region London
+uv run uk-sponsor usage-shortlist --postcode-prefix EC --postcode-prefix SW
+```
+
+Expected:
+
+- Region command accepts a single region value.
+- Postcode filtering accepts repeated prefixes.
+
+## Failure Handling Rules
+
+- Do not patch files manually to “fix” outputs.
+- If refresh staging is incomplete, rerun acquire and clean.
+- If runtime fails on missing artefacts, repair snapshots first.
+- Record errors and remediation in run logs for audit continuity.
+
+See `docs/troubleshooting.md` for concrete error-to-recovery mappings.
 
 ## Post-Run Quality Gates
 
-After a validation run that changes code or docs, run the full gate sequence:
+If code or docs changed during validation:
 
 ```bash
 uv run check
 ```
 
-## Run Log Template
+## Auditable Run Log Template
 
-Use a short run log for auditability:
+Use this template for every validation run:
 
 ```text
 Validation Run
 Date:
 Operator:
-Sponsor ZIP URL:
+Environment:
+CH_SOURCE_TYPE:
 Sponsor CSV URL:
-Companies House ZIP/CSV URL:
-Snapshot dates:
-Artefact locations:
-Notes:
+Companies House ZIP URL:
+Sponsor snapshot date:
+Companies House snapshot date:
+Runtime commands executed:
+Output artefact locations:
+Observed issues:
+Recovery actions:
+Result: pass | fail
 ```
+
+## Notes for Contributors
+
+- Keep this protocol aligned with actual CLI behaviour and artefact contracts.
+- If you change command semantics, update this file in the same change.
+- If you discover manual steps not documented here, treat that as documentation debt.
