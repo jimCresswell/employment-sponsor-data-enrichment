@@ -436,7 +436,8 @@ def test_cli_refresh_companies_house_clean_only(monkeypatch: pytest.MonkeyPatch)
 
 def test_cli_run_all_only_usage_shortlist(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
-        return PipelineConfig()
+        _ = dotenv_path
+        return PipelineConfig(ch_source_type="file")
 
     monkeypatch.setattr(
         cli.PipelineConfig,
@@ -484,3 +485,41 @@ def test_cli_run_all_only_usage_shortlist(monkeypatch: pytest.MonkeyPatch) -> No
     assert enrich_called is False
     assert score_called is False
     assert usage_called is True
+
+
+def test_cli_transform_enrich_rejects_api_runtime_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = dotenv_path
+        return PipelineConfig(ch_source_type="api")
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    app = _build_app()
+    result = runner.invoke(app, ["transform-enrich"])
+
+    assert result.exit_code != 0
+    assert "supports CH_SOURCE_TYPE=file only" in result.output
+
+
+def test_cli_run_all_rejects_api_runtime_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = dotenv_path
+        return PipelineConfig(ch_source_type="api")
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    app = _build_app()
+    result = runner.invoke(app, ["run-all"])
+
+    assert result.exit_code != 0
+    assert "supports CH_SOURCE_TYPE=file only" in result.output

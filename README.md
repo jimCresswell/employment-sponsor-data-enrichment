@@ -14,7 +14,7 @@ Snapshots → Transform Enrich → Transform Score → Usage Shortlist
 | ------------------ | ----------- | ------------------------------------------- | --------------------------------------------------- |
 | refresh-sponsor    | CSV URL     | `data/cache/snapshots/sponsor/<YYYY-MM-DD>/...` | Downloads, validates, writes raw+clean+manifest     |
 | refresh-companies-house | ZIP or CSV URL | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/...` | Downloads/extracts, cleans, indexes, writes profiles + manifest |
-| transform-enrich   | Clean snapshots | `data/processed/companies_house_*.csv` | Enriches using file-first or API source             |
+| transform-enrich   | Clean snapshots | `data/processed/companies_house_*.csv` | Enriches using file snapshot source (runtime)       |
 | transform-score    | Enriched CSV | `data/processed/companies_scored.csv`      | Scores for tech-likelihood                          |
 | usage-shortlist    | Scored CSV   | `data/processed/companies_shortlist.csv` and `data/processed/companies_explain.csv` | Filters scored output into shortlist + explain      |
 
@@ -26,7 +26,6 @@ Steps describe artefact boundaries for audit and resume. They are not architectu
 
 - Python 3.14+
 - [uv](https://github.com/astral-sh/uv) (fast Python package manager)
-- Companies House API key (required only for `CH_SOURCE_TYPE=api`)
 
 ### Installation
 
@@ -43,7 +42,7 @@ uv sync --group dev
 
 # Copy env template and configure source
 cp .env.example .env
-# Edit .env: set CH_SOURCE_TYPE and, if using the API, set CH_API_KEY
+# Edit .env: keep CH_SOURCE_TYPE=file for runtime commands
 ```
 
 ### Run the Full Pipeline
@@ -120,20 +119,13 @@ Transform Enrich fails fast on authentication, rate limit, circuit breaker, or u
 
 When running with `--no-resume`, Transform Enrich writes to a new timestamped subdirectory under the output directory to avoid stale data reuse.
 
-### Companies House Source (API or Snapshot)
+### Companies House Runtime Source (File Only)
 
-Transform Enrich is file-first when `CH_SOURCE_TYPE=file` (recommended for cache-only runs)
-and reads Companies House bulk snapshot artefacts.
+Runtime CLI execution is file-only for `transform-enrich` and `run-all`.
+These commands fail fast unless `CH_SOURCE_TYPE=file`.
 Snapshot paths are resolved from `SNAPSHOT_ROOT` unless explicit paths are set.
 
-To use the Companies House API instead, set:
-
-```bash
-export CH_SOURCE_TYPE=api
-export CH_API_KEY=your_companies_house_api_key
-```
-
-To use the file snapshot source explicitly, set:
+To set the file snapshot source explicitly:
 
 ```bash
 export CH_SOURCE_TYPE=file
@@ -141,7 +133,7 @@ export CH_CLEAN_PATH=data/cache/snapshots/companies_house/<YYYY-MM-DD>/clean.csv
 export CH_TOKEN_INDEX_DIR=data/cache/snapshots/companies_house/<YYYY-MM-DD>
 ```
 
-The legacy JSON file source has been removed.
+Archived API runtime wiring notes are recorded in `docs/archived-api-runtime-mode.md`.
 
 ## Documentation
 
@@ -149,6 +141,7 @@ The legacy JSON file source has been removed.
 - `docs/snapshots.md` (snapshot layout, manifests, and resolution)
 - `docs/data-contracts.md` (Companies House canonical schema and mapping)
 - `docs/companies-house-file-source.md` (file-first token index rules)
+- `docs/archived-api-runtime-mode.md` (archived CLI runtime API wiring reference)
 - `docs/validation-protocol.md` (file-first validation steps and e2e fixture run)
 - `docs/troubleshooting.md` (common failures and recovery)
 
@@ -232,7 +225,7 @@ tests/
 └── conftest.py         # Pytest fixtures and fakes
 ```
 
-Application modules implement pipeline steps and orchestration; the CLI delegates to them via the composition root (see `composition.py`). Track the refactor in `/.agent/plans/refactor-plan.md`.
+Application modules implement pipeline steps and orchestration; the CLI delegates to them via the composition root (see `composition.py`). Track the historical refactor plan in `.agent/plans/archive/refactor-plan.md`.
 
 ### Dependency Injection
 
@@ -418,7 +411,7 @@ Notes:
 ## Troubleshooting
 
 - **Missing snapshots**: run `refresh-sponsor` and `refresh-companies-house`, or set `SPONSOR_CLEAN_PATH`, `CH_CLEAN_PATH`, and `CH_TOKEN_INDEX_DIR` explicitly. See `docs/troubleshooting.md`.
-- **Companies House 401/403**: ensure `CH_API_KEY` is a valid API key and not an OAuth token; Transform Enrich uses Basic Auth with the key as username and a blank password (API source only). See `docs/troubleshooting.md`.
+- **Unsupported runtime source mode**: `transform-enrich` and `run-all` require `CH_SOURCE_TYPE=file`. See `docs/troubleshooting.md`.
 
 ## Future Work
 
@@ -429,13 +422,13 @@ Notes:
 Set in `.env` or environment variables:
 
 ```bash
-CH_SOURCE_TYPE=file          # file (snapshot) or api
+CH_SOURCE_TYPE=file          # Runtime commands require file mode
 SNAPSHOT_ROOT=data/cache/snapshots
 SPONSOR_CLEAN_PATH=
 CH_CLEAN_PATH=
 CH_TOKEN_INDEX_DIR=
 CH_FILE_MAX_CANDIDATES=500   # File-based candidate cap
-CH_API_KEY=your_companies_house_api_key
+CH_API_KEY=your_companies_house_api_key  # Archived runtime API mode only
 CH_SLEEP_SECONDS=0.2          # Delay between API calls
 CH_MAX_RPM=600                # Rate limit (requests per minute)
 CH_TIMEOUT_SECONDS=30         # HTTP timeout in seconds
@@ -456,7 +449,7 @@ GEO_FILTER_POSTCODES=         # Comma-separated postcode prefix filter
 ## Data Sources
 
 - **Sponsor Register**: [GOV.UK Register of Licensed Sponsors](https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers)
-- **Companies House**: [Public Data API](https://developer.company-information.service.gov.uk/) (optional) and Free Data Product bulk CSV snapshots
+- **Companies House**: Free Data Product bulk CSV snapshots (runtime source) and [Public Data API](https://developer.company-information.service.gov.uk/) (archived runtime mode reference only)
 
 ## Security
 

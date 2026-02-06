@@ -113,6 +113,13 @@ class UrlWithCleanOnlyError(typer.BadParameter):
         super().__init__("--url is not supported with --only clean.")
 
 
+class RuntimeFileSourceRequiredError(typer.BadParameter):
+    """Raised when runtime commands are invoked with non-file source mode."""
+
+    def __init__(self, command_name: str, source_type: str) -> None:
+        super().__init__(f"{command_name} supports CH_SOURCE_TYPE=file only (got '{source_type}').")
+
+
 DEFAULT_SNAPSHOT_ROOT = Path("data/cache/snapshots")
 DEFAULT_PROCESSED_DIR = Path("data/processed")
 DEFAULT_ENRICHED_IN = Path("data/processed/companies_house_enriched.csv")
@@ -150,6 +157,11 @@ def _get_context(ctx: typer.Context) -> CliContext:
     if not isinstance(ctx.obj, CliContext):
         raise CliContextNotInitialisedError()
     return ctx.obj
+
+
+def _require_file_runtime_source(config: PipelineConfig, *, command_name: str) -> None:
+    if config.ch_source_type != "file":
+        raise RuntimeFileSourceRequiredError(command_name, config.ch_source_type)
 
 
 def _require_path(path: Path, fs: FileSystem) -> Path:
@@ -432,28 +444,26 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
         """
         state = _get_context(ctx)
         config = state.config
+        _require_file_runtime_source(config, command_name="transform-enrich")
         deps = state.build_dependencies(
             cache_dir=DEFAULT_CACHE_DIR,
-            build_http_client=True,
+            build_http_client=False,
             config=config,
         )
         register_value = register_path or _resolve_sponsor_clean_path(
             config=config,
             fs=deps.fs,
         )
-        if config.ch_source_type == "file":
-            ch_clean_path, ch_token_index_dir = _resolve_companies_house_paths(
-                config=config,
-                fs=deps.fs,
-            )
-            config = _with_snapshot_paths(
-                config=config,
-                sponsor_clean_path=register_value,
-                ch_clean_path=ch_clean_path,
-                ch_token_index_dir=ch_token_index_dir,
-            )
-        else:
-            config = replace(config, sponsor_clean_path=str(register_value))
+        ch_clean_path, ch_token_index_dir = _resolve_companies_house_paths(
+            config=config,
+            fs=deps.fs,
+        )
+        config = _with_snapshot_paths(
+            config=config,
+            sponsor_clean_path=register_value,
+            ch_clean_path=ch_clean_path,
+            ch_token_index_dir=ch_token_index_dir,
+        )
         outs = run_transform_enrich(
             register_path=register_value,
             out_dir=out_dir,
@@ -629,6 +639,7 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
         """
         state = _get_context(ctx)
         config = state.config
+        _require_file_runtime_source(config, command_name="run-all")
         if threshold is not None or region or postcode_prefix:
             config = config.with_overrides(
                 tech_score_threshold=threshold,
@@ -638,7 +649,7 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
 
         deps = state.build_dependencies(
             cache_dir=DEFAULT_CACHE_DIR,
-            build_http_client=True,
+            build_http_client=False,
             config=config,
         )
         if only in (RunAllOnly.ALL, RunAllOnly.TRANSFORM_ENRICH):
@@ -648,20 +659,17 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
                 fs=deps.fs,
                 snapshot_root=root,
             )
-            if config.ch_source_type == "file":
-                ch_clean_path, ch_token_index_dir = _resolve_companies_house_paths(
-                    config=config,
-                    fs=deps.fs,
-                    snapshot_root=root,
-                )
-                config = _with_snapshot_paths(
-                    config=config,
-                    sponsor_clean_path=register_path,
-                    ch_clean_path=ch_clean_path,
-                    ch_token_index_dir=ch_token_index_dir,
-                )
-            else:
-                config = replace(config, sponsor_clean_path=str(register_path))
+            ch_clean_path, ch_token_index_dir = _resolve_companies_house_paths(
+                config=config,
+                fs=deps.fs,
+                snapshot_root=root,
+            )
+            config = _with_snapshot_paths(
+                config=config,
+                sponsor_clean_path=register_path,
+                ch_clean_path=ch_clean_path,
+                ch_token_index_dir=ch_token_index_dir,
+            )
             enrich_outs = run_transform_enrich(
                 register_path=register_path,
                 out_dir=DEFAULT_PROCESSED_DIR,

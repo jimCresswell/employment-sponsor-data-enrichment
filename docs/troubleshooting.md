@@ -11,22 +11,22 @@ If `run-all` fails because clean snapshots are missing:
 - Or set `SPONSOR_CLEAN_PATH`, `CH_CLEAN_PATH`, and `CH_TOKEN_INDEX_DIR` to explicit snapshot paths.
 - Ensure `SNAPSHOT_ROOT` points to the snapshot tree if you rely on latest-snapshot resolution.
 
-## Companies House Authentication (401/403)
+## Unsupported Runtime Source Mode
 
-If Transform Enrich fails with `401 Unauthorised` or `Invalid Authorization` (API source only):
+If `transform-enrich` or `run-all` fails with:
 
-- Confirm you created a **Companies House API Key** application (not OAuth).
-- Set `CH_API_KEY` in `.env` or your environment.
-- Transform Enrich uses HTTP Basic Auth with the API key as the username and a blank password.
-- If failures persist, regenerate the key and retry.
+```text
+<command> supports CH_SOURCE_TYPE=file only (got '<value>').
+```
 
-## Rate Limits, Circuit Breaker, and Resume
+- Set `CH_SOURCE_TYPE=file` in `.env`.
+- Run `refresh-sponsor` and `refresh-companies-house` to ensure clean snapshots exist.
+- Re-run the command.
 
-Transform Enrich fails fast on authentication, rate‑limit exhaustion, circuit breaker open, or unexpected HTTP errors (API source only). This is intentional to protect the API and preserve data quality.
+## Archived API Runtime Reference
 
-- Fix the underlying issue (wait for limits to reset, reduce batch size, or correct configuration).
-- Re‑run with `--resume` to continue from the last checkpoint.
-- Check `data/processed/companies_house_resume_report.json` for the exact resume command (or the run subdirectory if `--no-resume` was used).
+Runtime CLI commands are file-only. Archived API runtime notes are captured in
+`docs/archived-api-runtime-mode.md`.
 
 ## Lint Failures (TRY/BLE/DTZ/SLF001/T20)
 
