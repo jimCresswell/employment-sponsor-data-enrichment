@@ -150,6 +150,23 @@ class SnapshotTimestampError(PipelineError):
         super().__init__(f"{field_name} must be timezone-aware.")
 
 
+class PendingAcquireSnapshotNotFoundError(PipelineError):
+    """Raised when no pending acquire snapshot exists for clean-finalise."""
+
+    def __init__(self, dataset: str, snapshot_root: str, command_hint: str) -> None:
+        super().__init__(
+            f"No pending acquire snapshot found for dataset '{dataset}' under {snapshot_root}. "
+            f"Run `{command_hint}` first."
+        )
+
+
+class PendingAcquireSnapshotStateError(PipelineError):
+    """Raised when pending acquire metadata is missing or invalid."""
+
+    def __init__(self, path: str) -> None:
+        super().__init__(f"Pending acquire metadata is invalid: {path}.")
+
+
 class SchemaColumnsMissingError(PipelineError):
     """Raised when a DataFrame is missing required columns."""
 

@@ -26,21 +26,35 @@ Sponsor register: `https://www.gov.uk/government/publications/register-of-licens
 Companies House bulk data: `https://download.companieshouse.gov.uk/en_output.html`
 1. The pipeline refresh commands own link discovery, download, and unzip. Do not
    manually download or unzip sources outside the pipeline.
+1. Refresh commands support grouped execution via `--only`:
+
+- `discovery`: resolve the current source URL only
+- `acquire`: download raw payload (and extract ZIP for Companies House)
+- `clean`: finalise latest pending acquire into the dated snapshot
+- `all` (default): run acquire and clean in one command
+
 1. If discovery fails, record the exception and provide `--url` with the direct
    CSV (sponsor) or ZIP (Companies House) URL.
 
 ## Step 2: Refresh Sponsor Snapshot
 
-1. Run the refresh command. Omit `--url` to use GOV.UK discovery.
+1. Run grouped sponsor refresh validation:
 
 ```bash
-uv run uk-sponsor refresh-sponsor
-# Or provide an explicit URL:
+uv run uk-sponsor refresh-sponsor --only discovery
+uv run uk-sponsor refresh-sponsor --only acquire
+uv run uk-sponsor refresh-sponsor --only clean
+# Optional explicit URL for acquire/all:
 uv run uk-sponsor refresh-sponsor --url <SPONSOR_CSV_URL>
 ```
 
 2. Acceptance checks.
 
+- Discovery prints one resolved CSV URL.
+- Acquire creates a pending staging directory under `data/cache/snapshots/sponsor/.tmp-<uuid>/`
+  containing `raw.csv` and `pending.json`.
+- Clean consumes the latest pending staging directory and commits
+  `data/cache/snapshots/sponsor/<YYYY-MM-DD>/`.
 - Snapshot directory exists under `data/cache/snapshots/sponsor/<YYYY-MM-DD>/`.
 - Artefacts present: `raw.csv`, `clean.csv`, `register_stats.json`, `manifest.json`.
 - `manifest.json` includes required fields and `schema_version` is `sponsor_clean_v1`.
@@ -48,16 +62,24 @@ uv run uk-sponsor refresh-sponsor --url <SPONSOR_CSV_URL>
 
 ## Step 3: Refresh Companies House Snapshot
 
-1. Run the refresh command. Omit `--url` to use the Companies House download page.
+1. Run grouped Companies House refresh validation:
 
 ```bash
-uv run uk-sponsor refresh-companies-house
-# Or provide an explicit URL (ZIP only):
+uv run uk-sponsor refresh-companies-house --only discovery
+uv run uk-sponsor refresh-companies-house --only acquire
+uv run uk-sponsor refresh-companies-house --only clean
+# Optional explicit URL for acquire/all (ZIP):
 uv run uk-sponsor refresh-companies-house --url <CH_ZIP_URL>
 ```
 
 2. Acceptance checks.
 
+- Discovery prints one resolved ZIP URL.
+- Acquire creates a pending staging directory under
+  `data/cache/snapshots/companies_house/.tmp-<uuid>/` containing `pending.json`
+  and raw artefacts (`raw.zip` plus extracted `raw.csv` for ZIP sources).
+- Clean consumes the latest pending staging directory and commits
+  `data/cache/snapshots/companies_house/<YYYY-MM-DD>/`.
 - Snapshot directory exists under `data/cache/snapshots/companies_house/<YYYY-MM-DD>/`.
 - Artefacts present: `raw.csv`, `clean.csv`, `manifest.json`, `index_tokens_<bucket>.csv`,
   and `profiles_<bucket>.csv`.

@@ -54,6 +54,18 @@ cp .env.example .env
 uv run uk-sponsor refresh-sponsor
 uv run uk-sponsor refresh-companies-house
 
+# Discovery-only (prints resolved source URL, no download/clean)
+uv run uk-sponsor refresh-sponsor --only discovery
+uv run uk-sponsor refresh-companies-house --only discovery
+
+# Acquire-only (download, plus ZIP extract for Companies House)
+uv run uk-sponsor refresh-sponsor --only acquire
+uv run uk-sponsor refresh-companies-house --only acquire
+
+# Clean-only (finalise latest pending acquire into a snapshot)
+uv run uk-sponsor refresh-sponsor --only clean
+uv run uk-sponsor refresh-companies-house --only clean
+
 # Or provide explicit URLs
 uv run uk-sponsor refresh-sponsor --url <csv-url>
 uv run uk-sponsor refresh-companies-house --url <zip-url>
@@ -75,6 +87,15 @@ uv run uk-sponsor usage-shortlist
 `run-all` consumes clean snapshots only and fails fast if required artefacts are missing.
 Refresh commands emit progress for download and clean; `refresh-companies-house` also emits index progress.
 Download totals can be unknown for some sources, so progress may advance without a fixed total.
+
+`--only` values:
+
+- `refresh-sponsor --only`: `all`, `discovery`, `acquire`, `clean`
+- `refresh-companies-house --only`: `all`, `discovery`, `acquire`, `clean`
+- `run-all --only`: `all`, `transform-enrich`, `transform-score`, `usage-shortlist`
+
+For `--only clean`, the command consumes the latest pending acquire staging run for that dataset.
+If none exists, run `--only acquire` first.
 
 ### Transform Enrich Batching and Resume
 

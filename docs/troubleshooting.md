@@ -4,7 +4,10 @@
 
 If `run-all` fails because clean snapshots are missing:
 
-- Run `refresh-sponsor --url <csv-url>` and `refresh-companies-house --url <zip-or-csv-url>`.
+- Run `refresh-sponsor` and `refresh-companies-house` (default `--only all`), or
+  run `--only acquire` then `--only clean` for each command.
+- For explicit sources, use `refresh-sponsor --url <csv-url>` and
+  `refresh-companies-house --url <zip-url>`.
 - Or set `SPONSOR_CLEAN_PATH`, `CH_CLEAN_PATH`, and `CH_TOKEN_INDEX_DIR` to explicit snapshot paths.
 - Ensure `SNAPSHOT_ROOT` points to the snapshot tree if you rely on latest-snapshot resolution.
 

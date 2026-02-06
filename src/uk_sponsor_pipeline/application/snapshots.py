@@ -14,14 +14,17 @@ from uuid import uuid4
 import uk_sponsor_pipeline
 
 from ..exceptions import (
+    PendingAcquireSnapshotStateError,
     SnapshotAlreadyExistsError,
     SnapshotArtefactMissingError,
     SnapshotNotFoundError,
     SnapshotTimestampError,
 )
+from ..io_validation import IncomingDataError, validate_as
 from ..protocols import FileSystem
 
 _SNAPSHOT_DATE_PATTERN = re.compile(r"(20\d{2}-\d{2}-\d{2})")
+_PENDING_FILENAME = "pending.json"
 
 
 @dataclass(frozen=True)
@@ -59,6 +62,23 @@ class SnapshotManifest(TypedDict):
     git_sha: str
     tool_version: str
     command_line: str
+
+
+class PendingAcquireState(TypedDict):
+    """Pending acquire metadata for staged refresh."""
+
+    snapshot_date: str
+    source_url: str
+    downloaded_at_utc: str
+    bytes_raw: int
+
+
+@dataclass(frozen=True)
+class PendingAcquireSnapshot:
+    """Resolved pending acquire snapshot for clean-finalise."""
+
+    paths: SnapshotPaths
+    state: PendingAcquireState
 
 
 def derive_snapshot_date(*, source_name: str, downloaded_at_utc: datetime) -> str:
@@ -142,6 +162,66 @@ def build_snapshot_manifest(
     }
 
 
+def write_pending_acquire_state(
+    *,
+    paths: SnapshotPaths,
+    source_url: str,
+    downloaded_at_utc: datetime,
+    bytes_raw: int,
+    fs: FileSystem,
+) -> Path:
+    """Write pending acquire metadata into the staging directory."""
+    payload: PendingAcquireState = {
+        "snapshot_date": paths.snapshot_date,
+        "source_url": source_url,
+        "downloaded_at_utc": downloaded_at_utc.isoformat(),
+        "bytes_raw": int(bytes_raw),
+    }
+    path = paths.staging_dir / _PENDING_FILENAME
+    fs.write_json(payload, path)
+    return path
+
+
+def resolve_latest_pending_snapshot(
+    *,
+    snapshot_root: Path,
+    dataset: str,
+    fs: FileSystem,
+) -> PendingAcquireSnapshot | None:
+    """Return the latest pending acquire snapshot for dataset, if any."""
+    dataset_dir = Path(snapshot_root) / dataset
+    pending_paths = fs.list_files(dataset_dir, pattern=f".tmp-*/{_PENDING_FILENAME}")
+    if not pending_paths:
+        return None
+
+    candidates: list[tuple[str, float, PendingAcquireSnapshot]] = []
+    for pending_path in pending_paths:
+        try:
+            state = _read_pending_state(path=pending_path, fs=fs)
+        except PendingAcquireSnapshotStateError:
+            continue
+        snapshot_date = state["snapshot_date"]
+        staging_dir = pending_path.parent
+        paths = SnapshotPaths(
+            snapshot_root=Path(snapshot_root),
+            dataset=dataset,
+            snapshot_date=snapshot_date,
+            final_dir=dataset_dir / snapshot_date,
+            staging_dir=staging_dir,
+        )
+        candidates.append(
+            (
+                snapshot_date,
+                fs.mtime(pending_path),
+                PendingAcquireSnapshot(paths=paths, state=state),
+            )
+        )
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return candidates[0][2]
+
+
 def resolve_latest_snapshot_dir(
     *,
     snapshot_root: Path,
@@ -193,3 +273,22 @@ def _resolve_tool_version(override: str | None) -> str:
     raw = getattr(uk_sponsor_pipeline, "__version__", "")
     value = str(raw).strip()
     return value or "0.0.0+unknown"
+
+
+def _read_pending_state(*, path: Path, fs: FileSystem) -> PendingAcquireState:
+    payload = fs.read_json(path)
+    try:
+        state = validate_as(PendingAcquireState, payload)
+    except IncomingDataError as exc:
+        raise PendingAcquireSnapshotStateError(str(path)) from exc
+    downloaded_at_raw = state["downloaded_at_utc"]
+    try:
+        downloaded_at = datetime.fromisoformat(downloaded_at_raw)
+    except ValueError as exc:
+        raise PendingAcquireSnapshotStateError(str(path)) from exc
+    if downloaded_at.tzinfo is None:
+        raise PendingAcquireSnapshotStateError(str(path))
+    snapshot_date = state["snapshot_date"]
+    if _SNAPSHOT_DATE_PATTERN.fullmatch(snapshot_date) is None:
+        raise PendingAcquireSnapshotStateError(str(path))
+    return state

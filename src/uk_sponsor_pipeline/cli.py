@@ -13,16 +13,30 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass, replace
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Protocol
 
 import typer
 from rich import print as rprint
 
-from .application.pipeline import run_pipeline
-from .application.refresh_companies_house import run_refresh_companies_house
-from .application.refresh_sponsor import run_refresh_sponsor
+from .application.refresh_companies_house import (
+    run_refresh_companies_house,
+    run_refresh_companies_house_acquire,
+    run_refresh_companies_house_clean,
+)
+from .application.refresh_sponsor import (
+    run_refresh_sponsor,
+    run_refresh_sponsor_acquire,
+    run_refresh_sponsor_clean,
+)
 from .application.snapshots import resolve_latest_snapshot_path
+from .application.source_links import (
+    COMPANIES_HOUSE_SOURCE_PAGE_URL,
+    SPONSOR_SOURCE_PAGE_URL,
+    resolve_companies_house_zip_url,
+    resolve_sponsor_csv_url,
+)
 from .application.transform_enrich import run_transform_enrich
 from .application.transform_score import run_transform_score
 from .application.usage import run_usage_shortlist
@@ -92,11 +106,36 @@ class CliContextNotInitialisedError(typer.BadParameter):
         super().__init__("CLI context is not initialised. Use the uk-sponsor entry point.")
 
 
+class UrlWithCleanOnlyError(typer.BadParameter):
+    """Raised when --url is supplied with --only clean."""
+
+    def __init__(self) -> None:
+        super().__init__("--url is not supported with --only clean.")
+
+
 DEFAULT_SNAPSHOT_ROOT = Path("data/cache/snapshots")
 DEFAULT_PROCESSED_DIR = Path("data/processed")
 DEFAULT_ENRICHED_IN = Path("data/processed/companies_house_enriched.csv")
 DEFAULT_SCORED_IN = Path("data/processed/companies_scored.csv")
 DEFAULT_CACHE_DIR = Path("data/cache/companies_house")
+
+
+class RefreshOnly(StrEnum):
+    """Allowed logical groups for refresh commands."""
+
+    ALL = "all"
+    DISCOVERY = "discovery"
+    ACQUIRE = "acquire"
+    CLEAN = "clean"
+
+
+class RunAllOnly(StrEnum):
+    """Allowed logical groups for run-all."""
+
+    ALL = "all"
+    TRANSFORM_ENRICH = "transform-enrich"
+    TRANSFORM_SCORE = "transform-score"
+    USAGE_SHORTLIST = "usage-shortlist"
 
 
 def _single_region(region: list[str] | None) -> str | None:
@@ -195,12 +234,56 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
                 help="Snapshot root directory (defaults to SNAPSHOT_ROOT)",
             ),
         ] = None,
+        only: Annotated[
+            RefreshOnly,
+            typer.Option(
+                "--only",
+                help="Run only one logical refresh group (default: all).",
+            ),
+        ] = RefreshOnly.ALL,
     ) -> None:
         """Refresh sponsor register snapshot (download + clean)."""
         state = _get_context(ctx)
         config = state.config
         root = snapshot_root or Path(config.snapshot_root or DEFAULT_SNAPSHOT_ROOT)
         deps = state.build_dependencies(cache_dir=DEFAULT_CACHE_DIR, build_http_client=False)
+        if only == RefreshOnly.DISCOVERY:
+            resolved_url = resolve_sponsor_csv_url(
+                http_session=deps.http_session,
+                url=url,
+                source_page_url=SPONSOR_SOURCE_PAGE_URL,
+            )
+            rprint("[green]✓ Sponsor discovery complete:[/green]")
+            rprint(f"  URL: {resolved_url}")
+            return
+        if only == RefreshOnly.ACQUIRE:
+            result = run_refresh_sponsor_acquire(
+                url=url,
+                snapshot_root=root,
+                fs=deps.fs,
+                http_session=deps.http_session,
+                command_line=" ".join(sys.argv),
+                progress=CliProgressReporter(),
+            )
+            rprint("[green]✓ Acquire sponsor complete:[/green]")
+            rprint(f"  Snapshot date: {result.paths.snapshot_date}")
+            rprint(f"  Source URL: {result.source_url}")
+            rprint(f"  Raw path: {result.raw_path}")
+            rprint(f"  Raw bytes: {result.bytes_raw:,}")
+            return
+        if only == RefreshOnly.CLEAN:
+            if url is not None:
+                raise UrlWithCleanOnlyError()
+            result = run_refresh_sponsor_clean(
+                snapshot_root=root,
+                fs=deps.fs,
+                command_line=" ".join(sys.argv),
+                progress=CliProgressReporter(),
+            )
+            rprint(f"[green]✓ Refresh sponsor complete:[/green] {result.snapshot_dir}")
+            rprint(f"  Snapshot date: {result.snapshot_date}")
+            rprint(f"  Clean rows: {result.row_counts['clean']:,}")
+            return
         result = run_refresh_sponsor(
             url=url,
             snapshot_root=root,
@@ -231,12 +314,57 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
                 help="Snapshot root directory (defaults to SNAPSHOT_ROOT)",
             ),
         ] = None,
+        only: Annotated[
+            RefreshOnly,
+            typer.Option(
+                "--only",
+                help="Run only one logical refresh group (default: all).",
+            ),
+        ] = RefreshOnly.ALL,
     ) -> None:
         """Refresh Companies House bulk snapshot (download + clean + index)."""
         state = _get_context(ctx)
         config = state.config
         root = snapshot_root or Path(config.snapshot_root or DEFAULT_SNAPSHOT_ROOT)
         deps = state.build_dependencies(cache_dir=DEFAULT_CACHE_DIR, build_http_client=False)
+        if only == RefreshOnly.DISCOVERY:
+            resolved_url = resolve_companies_house_zip_url(
+                http_session=deps.http_session,
+                url=url,
+                source_page_url=COMPANIES_HOUSE_SOURCE_PAGE_URL,
+            )
+            rprint("[green]✓ Companies House discovery complete:[/green]")
+            rprint(f"  URL: {resolved_url}")
+            return
+        if only == RefreshOnly.ACQUIRE:
+            result = run_refresh_companies_house_acquire(
+                url=url,
+                snapshot_root=root,
+                fs=deps.fs,
+                http_session=deps.http_session,
+                command_line=" ".join(sys.argv),
+                progress=CliProgressReporter(),
+            )
+            rprint("[green]✓ Acquire Companies House complete:[/green]")
+            rprint(f"  Snapshot date: {result.paths.snapshot_date}")
+            rprint(f"  Source URL: {result.source_url}")
+            rprint(f"  Raw path: {result.raw_path}")
+            rprint(f"  Raw CSV path: {result.raw_csv_path}")
+            rprint(f"  Raw bytes: {result.bytes_raw:,}")
+            return
+        if only == RefreshOnly.CLEAN:
+            if url is not None:
+                raise UrlWithCleanOnlyError()
+            result = run_refresh_companies_house_clean(
+                snapshot_root=root,
+                fs=deps.fs,
+                command_line=" ".join(sys.argv),
+                progress=CliProgressReporter(),
+            )
+            rprint(f"[green]✓ Refresh Companies House complete:[/green] {result.snapshot_dir}")
+            rprint(f"  Snapshot date: {result.snapshot_date}")
+            rprint(f"  Clean rows: {result.row_counts['clean']:,}")
+            return
         result = run_refresh_companies_house(
             url=url,
             snapshot_root=root,
@@ -486,6 +614,13 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
                 help="Override tech score threshold for scoring",
             ),
         ] = None,
+        only: Annotated[
+            RunAllOnly,
+            typer.Option(
+                "--only",
+                help="Run only one logical group (default: all).",
+            ),
+        ] = RunAllOnly.ALL,
     ) -> None:
         """Run cache-only pipeline steps sequentially.
 
@@ -506,37 +641,66 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
             build_http_client=True,
             config=config,
         )
-        root = snapshot_root or Path(config.snapshot_root or DEFAULT_SNAPSHOT_ROOT)
-        register_path = _resolve_sponsor_clean_path(
-            config=config,
-            fs=deps.fs,
-            snapshot_root=root,
-        )
-        if config.ch_source_type == "file":
-            ch_clean_path, ch_token_index_dir = _resolve_companies_house_paths(
+        if only in (RunAllOnly.ALL, RunAllOnly.TRANSFORM_ENRICH):
+            root = snapshot_root or Path(config.snapshot_root or DEFAULT_SNAPSHOT_ROOT)
+            register_path = _resolve_sponsor_clean_path(
                 config=config,
                 fs=deps.fs,
                 snapshot_root=root,
             )
-            config = _with_snapshot_paths(
+            if config.ch_source_type == "file":
+                ch_clean_path, ch_token_index_dir = _resolve_companies_house_paths(
+                    config=config,
+                    fs=deps.fs,
+                    snapshot_root=root,
+                )
+                config = _with_snapshot_paths(
+                    config=config,
+                    sponsor_clean_path=register_path,
+                    ch_clean_path=ch_clean_path,
+                    ch_token_index_dir=ch_token_index_dir,
+                )
+            else:
+                config = replace(config, sponsor_clean_path=str(register_path))
+            enrich_outs = run_transform_enrich(
+                register_path=register_path,
+                out_dir=DEFAULT_PROCESSED_DIR,
+                cache_dir=DEFAULT_CACHE_DIR,
                 config=config,
-                sponsor_clean_path=register_path,
-                ch_clean_path=ch_clean_path,
-                ch_token_index_dir=ch_token_index_dir,
+                http_client=deps.http_client,
+                fs=deps.fs,
             )
-        else:
-            config = replace(config, sponsor_clean_path=str(register_path))
-        result = run_pipeline(
+            rprint(f"[green]✓ Enriched: {enrich_outs['enriched']}[/green]")
+            if only == RunAllOnly.TRANSFORM_ENRICH:
+                return
+
+        scored_path = DEFAULT_ENRICHED_IN
+        if only in (RunAllOnly.ALL, RunAllOnly.TRANSFORM_SCORE):
+            score_outs = run_transform_score(
+                enriched_path=DEFAULT_ENRICHED_IN,
+                out_dir=DEFAULT_PROCESSED_DIR,
+                config=config,
+                fs=deps.fs,
+            )
+            scored_path = score_outs["scored"]
+            rprint(f"[green]✓ Scored: {scored_path}[/green]")
+            if only == RunAllOnly.TRANSFORM_SCORE:
+                return
+
+        usage_outs = run_usage_shortlist(
+            scored_path=DEFAULT_SCORED_IN if only == RunAllOnly.USAGE_SHORTLIST else scored_path,
+            out_dir=DEFAULT_PROCESSED_DIR,
             config=config,
-            register_path=register_path,
             fs=deps.fs,
-            http_client=deps.http_client,
         )
-        rprint(f"[green]✓ Enriched: {result.enrich['enriched']}[/green]")
+        if only == RunAllOnly.USAGE_SHORTLIST:
+            rprint(f"[green]✓ Shortlist: {usage_outs['shortlist']}[/green]")
+            rprint(f"[green]✓ Explainability: {usage_outs['explain']}[/green]")
+            return
 
         rprint("\n[bold green]═══ Pipeline Complete ═══[/bold green]")
-        rprint(f"Final shortlist: {result.usage['shortlist']}")
-        rprint(f"Explainability: {result.usage['explain']}")
+        rprint(f"Final shortlist: {usage_outs['shortlist']}")
+        rprint(f"Explainability: {usage_outs['explain']}")
 
     _ = (
         main,

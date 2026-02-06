@@ -15,10 +15,15 @@ import pytest
 
 from tests.fakes import FakeProgressReporter
 from uk_sponsor_pipeline.application.companies_house_bulk import RAW_HEADERS_TRIMMED
-from uk_sponsor_pipeline.application.refresh_companies_house import run_refresh_companies_house
+from uk_sponsor_pipeline.application.refresh_companies_house import (
+    run_refresh_companies_house,
+    run_refresh_companies_house_acquire,
+    run_refresh_companies_house_clean,
+)
 from uk_sponsor_pipeline.exceptions import (
     CompaniesHouseUriMismatchError,
     CsvSchemaMissingColumnsError,
+    PendingAcquireSnapshotNotFoundError,
 )
 from uk_sponsor_pipeline.infrastructure import LocalFileSystem
 from uk_sponsor_pipeline.protocols import HttpSession
@@ -227,3 +232,79 @@ def test_refresh_companies_house_discovers_zip_link(tmp_path: Path) -> None:
     )
 
     assert result.snapshot_date == "2026-02-01"
+
+
+def test_refresh_companies_house_acquire_downloads_and_extracts_zip(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    snapshot_root = tmp_path / "snapshots"
+    csv_payload = _build_csv_payload(
+        company_number="01234567",
+        uri="http://data.companieshouse.gov.uk/doc/company/01234567",
+    )
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as zipf:
+        zipf.writestr("BasicCompanyDataAsOneFile-2026-02-01.csv", csv_payload)
+    session = DummySession(buffer.getvalue())
+
+    result = run_refresh_companies_house_acquire(
+        url="https://example.com/BasicCompanyDataAsOneFile-2026-02-01.zip",
+        snapshot_root=snapshot_root,
+        fs=fs,
+        http_session=session,
+        command_line="uk-sponsor refresh-companies-house --only acquire",
+        now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
+    )
+
+    assert result.paths.snapshot_date == "2026-02-01"
+    assert result.raw_path.exists() is True
+    assert result.raw_csv_path.exists() is True
+    assert result.paths.staging_dir.exists() is True
+    assert (result.paths.staging_dir / "pending.json").exists() is True
+    assert (snapshot_root / "companies_house" / "2026-02-01").exists() is False
+
+
+def test_refresh_companies_house_clean_commits_pending_snapshot(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    snapshot_root = tmp_path / "snapshots"
+    csv_payload = _build_csv_payload(
+        company_number="01234567",
+        uri="http://data.companieshouse.gov.uk/doc/company/01234567",
+    )
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as zipf:
+        zipf.writestr("BasicCompanyDataAsOneFile-2026-02-01.csv", csv_payload)
+    session = DummySession(buffer.getvalue())
+    run_refresh_companies_house_acquire(
+        url="https://example.com/BasicCompanyDataAsOneFile-2026-02-01.zip",
+        snapshot_root=snapshot_root,
+        fs=fs,
+        http_session=session,
+        command_line="uk-sponsor refresh-companies-house --only acquire",
+        now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
+    )
+
+    result = run_refresh_companies_house_clean(
+        snapshot_root=snapshot_root,
+        fs=fs,
+        command_line="uk-sponsor refresh-companies-house --only clean",
+        now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
+    )
+
+    snapshot_dir = snapshot_root / "companies_house" / "2026-02-01"
+    assert result.snapshot_dir == snapshot_dir
+    assert (snapshot_dir / "raw.zip").exists() is True
+    assert (snapshot_dir / "raw.csv").exists() is True
+    assert (snapshot_dir / "clean.csv").exists() is True
+    assert (snapshot_dir / "manifest.json").exists() is True
+
+
+def test_refresh_companies_house_clean_raises_without_pending_snapshot(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    snapshot_root = tmp_path / "snapshots"
+    with pytest.raises(PendingAcquireSnapshotNotFoundError):
+        run_refresh_companies_house_clean(
+            snapshot_root=snapshot_root,
+            fs=fs,
+            command_line="uk-sponsor refresh-companies-house --only clean",
+            now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
+        )

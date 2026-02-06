@@ -17,6 +17,7 @@ from ..exceptions import (
     CompaniesHouseCsvEmptyError,
     CompaniesHouseZipMissingCsvError,
     DependencyMissingError,
+    PendingAcquireSnapshotNotFoundError,
 )
 from ..observability import get_logger
 from ..protocols import FileSystem, HttpSession, ProgressReporter
@@ -28,11 +29,15 @@ from .companies_house_bulk import (
 )
 from .companies_house_index import bucket_for_token, tokenise_company_name
 from .snapshots import (
+    PendingAcquireState,
+    SnapshotPaths,
     SnapshotRowCounts,
     build_snapshot_manifest,
     commit_snapshot,
     derive_snapshot_date,
+    resolve_latest_pending_snapshot,
     start_snapshot_write,
+    write_pending_acquire_state,
 )
 from .source_links import COMPANIES_HOUSE_SOURCE_PAGE_URL, resolve_companies_house_zip_url
 
@@ -53,6 +58,18 @@ class RefreshCompaniesHouseResult:
     profile_paths: tuple[Path, ...]
     bytes_raw: int
     row_counts: SnapshotRowCounts
+
+
+@dataclass(frozen=True)
+class RefreshCompaniesHouseAcquireResult:
+    """Result of refresh-companies-house acquire stage (download/extract)."""
+
+    paths: SnapshotPaths
+    source_url: str
+    downloaded_at_utc: datetime
+    raw_path: Path
+    raw_csv_path: Path
+    bytes_raw: int
 
 
 class _TokenIndexWriter:
@@ -155,6 +172,108 @@ def _extract_zip(zip_path: Path, csv_path: Path) -> None:
             shutil.copyfileobj(source, target)
 
 
+def run_refresh_companies_house_acquire(
+    *,
+    url: str | None,
+    snapshot_root: str | Path,
+    fs: FileSystem | None = None,
+    http_session: HttpSession | None = None,
+    command_line: str,
+    progress: ProgressReporter | None = None,
+    now_fn: Callable[[], datetime] | None = None,
+    source_page_url: str | None = None,
+) -> RefreshCompaniesHouseAcquireResult:
+    """Resolve/discover source and download raw CH payload into staging."""
+    _ = command_line
+    if fs is None:
+        raise DependencyMissingError("FileSystem", reason="Inject it at the entry point.")
+    if http_session is None:
+        raise DependencyMissingError("HttpSession", reason="Inject it at the entry point.")
+
+    clock = now_fn or (lambda: datetime.now(UTC))
+    downloaded_at = clock()
+    resolved_url = resolve_companies_house_zip_url(
+        http_session=http_session,
+        url=url,
+        source_page_url=source_page_url or COMPANIES_HOUSE_SOURCE_PAGE_URL,
+    )
+    source_name = Path(urlparse(resolved_url).path).name or "companies_house.csv"
+    snapshot_date = derive_snapshot_date(
+        source_name=source_name,
+        downloaded_at_utc=downloaded_at,
+    )
+    paths = start_snapshot_write(
+        snapshot_root=Path(snapshot_root),
+        dataset=CH_DATASET,
+        snapshot_date=snapshot_date,
+        fs=fs,
+    )
+    logger = get_logger("uk_sponsor_pipeline.refresh_companies_house")
+    logger.info("Downloading Companies House bulk data: %s", resolved_url)
+
+    is_zip = resolved_url.lower().endswith(".zip")
+    raw_name = "raw.zip" if is_zip else "raw.csv"
+    raw_path = paths.staging_dir / raw_name
+    bytes_downloaded = _download_stream(
+        url=resolved_url,
+        dest=raw_path,
+        http_session=http_session,
+        fs=fs,
+        progress=progress,
+    )
+    raw_csv_path = raw_path
+    if is_zip:
+        raw_csv_path = paths.staging_dir / "raw.csv"
+        _extract_zip(raw_path, raw_csv_path)
+    write_pending_acquire_state(
+        paths=paths,
+        source_url=resolved_url,
+        downloaded_at_utc=downloaded_at,
+        bytes_raw=bytes_downloaded,
+        fs=fs,
+    )
+    return RefreshCompaniesHouseAcquireResult(
+        paths=paths,
+        source_url=resolved_url,
+        downloaded_at_utc=downloaded_at,
+        raw_path=raw_path,
+        raw_csv_path=raw_csv_path,
+        bytes_raw=bytes_downloaded,
+    )
+
+
+def run_refresh_companies_house_clean(
+    *,
+    snapshot_root: str | Path,
+    fs: FileSystem | None = None,
+    command_line: str,
+    progress: ProgressReporter | None = None,
+    now_fn: Callable[[], datetime] | None = None,
+) -> RefreshCompaniesHouseResult:
+    """Clean the latest pending CH acquire snapshot and commit it."""
+    if fs is None:
+        raise DependencyMissingError("FileSystem", reason="Inject it at the entry point.")
+    pending = resolve_latest_pending_snapshot(
+        snapshot_root=Path(snapshot_root),
+        dataset=CH_DATASET,
+        fs=fs,
+    )
+    if pending is None:
+        raise PendingAcquireSnapshotNotFoundError(
+            CH_DATASET,
+            str(snapshot_root),
+            "uk-sponsor refresh-companies-house --only acquire",
+        )
+    return _finalise_companies_house_snapshot(
+        paths=pending.paths,
+        state=pending.state,
+        fs=fs,
+        command_line=command_line,
+        progress=progress,
+        now_fn=now_fn,
+    )
+
+
 def run_refresh_companies_house(
     *,
     url: str | None,
@@ -182,64 +301,58 @@ def run_refresh_companies_house(
     Returns:
         RefreshCompaniesHouseResult with snapshot paths and counts.
     """
+    acquired = run_refresh_companies_house_acquire(
+        url=url,
+        snapshot_root=snapshot_root,
+        fs=fs,
+        http_session=http_session,
+        command_line=command_line,
+        progress=progress,
+        now_fn=now_fn,
+        source_page_url=source_page_url,
+    )
+    state: PendingAcquireState = {
+        "snapshot_date": acquired.paths.snapshot_date,
+        "source_url": acquired.source_url,
+        "downloaded_at_utc": acquired.downloaded_at_utc.isoformat(),
+        "bytes_raw": acquired.bytes_raw,
+    }
+    return _finalise_companies_house_snapshot(
+        paths=acquired.paths,
+        state=state,
+        fs=fs,
+        command_line=command_line,
+        progress=progress,
+        now_fn=now_fn,
+    )
+
+
+def _finalise_companies_house_snapshot(
+    *,
+    paths: SnapshotPaths,
+    state: PendingAcquireState,
+    fs: FileSystem | None,
+    command_line: str,
+    progress: ProgressReporter | None,
+    now_fn: Callable[[], datetime] | None,
+) -> RefreshCompaniesHouseResult:
     if fs is None:
         raise DependencyMissingError("FileSystem", reason="Inject it at the entry point.")
-    if http_session is None:
-        raise DependencyMissingError("HttpSession", reason="Inject it at the entry point.")
-
     clock = now_fn or (lambda: datetime.now(UTC))
-    downloaded_at = clock()
-
-    resolved_url = resolve_companies_house_zip_url(
-        http_session=http_session,
-        url=url,
-        source_page_url=source_page_url or COMPANIES_HOUSE_SOURCE_PAGE_URL,
-    )
-
-    source_name = Path(urlparse(resolved_url).path).name or "companies_house.csv"
-    snapshot_date = derive_snapshot_date(
-        source_name=source_name,
-        downloaded_at_utc=downloaded_at,
-    )
-
-    paths = start_snapshot_write(
-        snapshot_root=Path(snapshot_root),
-        dataset=CH_DATASET,
-        snapshot_date=snapshot_date,
-        fs=fs,
-    )
-
-    logger = get_logger("uk_sponsor_pipeline.refresh_companies_house")
-    logger.info("Downloading Companies House bulk data: %s", resolved_url)
-
-    is_zip = resolved_url.lower().endswith(".zip")
-    raw_name = "raw.zip" if is_zip else "raw.csv"
-    raw_path = paths.staging_dir / raw_name
-
-    bytes_downloaded = _download_stream(
-        url=resolved_url,
-        dest=raw_path,
-        http_session=http_session,
-        fs=fs,
-        progress=progress,
-    )
-
-    raw_csv_path = raw_path
-    if is_zip:
-        raw_csv_path = paths.staging_dir / "raw.csv"
-        _extract_zip(raw_path, raw_csv_path)
-
+    raw_zip_path = paths.staging_dir / "raw.zip"
+    is_zip = fs.exists(raw_zip_path)
+    raw_path = raw_zip_path if is_zip else paths.staging_dir / "raw.csv"
+    raw_csv_path = paths.staging_dir / "raw.csv" if is_zip else raw_path
     clean_path = paths.staging_dir / "clean.csv"
 
     raw_rows = 0
     clean_rows = 0
-
+    logger = get_logger("uk_sponsor_pipeline.refresh_companies_house")
     logger.info("Cleaning Companies House bulk CSV: %s", raw_csv_path)
     index_writer = _TokenIndexWriter(paths.staging_dir)
     profile_writer = _ProfileBucketWriter(paths.staging_dir)
     index_paths: tuple[Path, ...] = ()
     profile_paths: tuple[Path, ...] = ()
-
     try:
         if progress is not None:
             progress.start("clean", None)
@@ -250,7 +363,6 @@ def run_refresh_companies_house(
                 raise CompaniesHouseCsvEmptyError()
             trimmed_headers = normalise_raw_headers(header_row)
             validate_raw_headers(trimmed_headers)
-
             dict_reader = csv.DictReader(handle, fieldnames=trimmed_headers)
             with clean_path.open("w", encoding="utf-8", newline="") as clean_file:
                 writer = csv.DictWriter(clean_file, fieldnames=CANONICAL_HEADERS_V1)
@@ -270,18 +382,15 @@ def run_refresh_companies_house(
         profile_paths = profile_writer.close()
         if progress is not None:
             progress.finish()
-
     if progress is not None:
         progress.start("index", clean_rows)
         progress.advance(clean_rows)
         progress.finish()
-
     row_counts: SnapshotRowCounts = {"raw": raw_rows, "clean": clean_rows}
-
     sha_raw = _sha256(raw_path, fs)
     sha_clean = _sha256(clean_path, fs)
+    downloaded_at = datetime.fromisoformat(state["downloaded_at_utc"])
     last_updated = clock()
-
     artefacts: dict[str, str] = {
         "raw": raw_path.name,
         "clean": clean_path.name,
@@ -292,39 +401,35 @@ def run_refresh_companies_house(
         artefacts[path.name] = path.name
     if is_zip:
         artefacts["raw_csv"] = raw_csv_path.name
-
     manifest = build_snapshot_manifest(
         dataset=CH_DATASET,
-        snapshot_date=snapshot_date,
-        source_url=resolved_url,
+        snapshot_date=state["snapshot_date"],
+        source_url=state["source_url"],
         downloaded_at_utc=downloaded_at,
         last_updated_at_utc=last_updated,
         schema_version=CH_SCHEMA_VERSION,
         sha256_hash_raw=sha_raw,
         sha256_hash_clean=sha_clean,
-        bytes_raw=bytes_downloaded,
+        bytes_raw=state["bytes_raw"],
         row_counts=row_counts,
         artefacts=artefacts,
         command_line=command_line,
         git_sha=None,
         tool_version=None,
     )
-
     manifest_path = paths.staging_dir / "manifest.json"
     fs.write_json(manifest, manifest_path)
-
     commit_snapshot(paths=paths, fs=fs)
-
     final_dir = paths.final_dir
     final_index_paths = tuple(final_dir / path.name for path in index_paths)
     return RefreshCompaniesHouseResult(
         snapshot_dir=final_dir,
-        snapshot_date=snapshot_date,
+        snapshot_date=state["snapshot_date"],
         raw_path=final_dir / raw_path.name,
         clean_path=final_dir / clean_path.name,
         manifest_path=final_dir / manifest_path.name,
         index_paths=final_index_paths,
         profile_paths=tuple(final_dir / path.name for path in profile_paths),
-        bytes_raw=bytes_downloaded,
+        bytes_raw=state["bytes_raw"],
         row_counts=row_counts,
     )

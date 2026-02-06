@@ -11,8 +11,15 @@ import pandas as pd
 import pytest
 
 from tests.fakes import FakeProgressReporter
-from uk_sponsor_pipeline.application.refresh_sponsor import run_refresh_sponsor
-from uk_sponsor_pipeline.exceptions import SchemaColumnsMissingError
+from uk_sponsor_pipeline.application.refresh_sponsor import (
+    run_refresh_sponsor,
+    run_refresh_sponsor_acquire,
+    run_refresh_sponsor_clean,
+)
+from uk_sponsor_pipeline.exceptions import (
+    PendingAcquireSnapshotNotFoundError,
+    SchemaColumnsMissingError,
+)
 from uk_sponsor_pipeline.infrastructure import LocalFileSystem
 from uk_sponsor_pipeline.io_validation import validate_as
 from uk_sponsor_pipeline.protocols import HttpSession
@@ -135,3 +142,71 @@ def test_refresh_sponsor_discovers_csv_link(tmp_path: Path) -> None:
     )
 
     assert result.snapshot_date == "2026-02-01"
+
+
+def test_refresh_sponsor_acquire_writes_pending_raw(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    snapshot_root = tmp_path / "snapshots"
+    payload = (
+        b"Organisation Name,Town/City,County,Type & Rating,Route\n"
+        b"Acme Ltd,London,Greater London,A rating,Skilled Worker\n"
+    )
+    session = DummySession(payload)
+
+    result = run_refresh_sponsor_acquire(
+        url="https://example.com/sponsor-register-2026-02-01.csv",
+        snapshot_root=snapshot_root,
+        fs=fs,
+        http_session=session,
+        command_line="uk-sponsor refresh-sponsor --only acquire",
+        now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
+    )
+
+    assert result.paths.snapshot_date == "2026-02-01"
+    assert result.raw_path.exists() is True
+    assert result.paths.staging_dir.exists() is True
+    assert (result.paths.staging_dir / "pending.json").exists() is True
+    assert (snapshot_root / "sponsor" / "2026-02-01").exists() is False
+
+
+def test_refresh_sponsor_clean_commits_pending_snapshot(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    snapshot_root = tmp_path / "snapshots"
+    payload = (
+        b"Organisation Name,Town/City,County,Type & Rating,Route\n"
+        b"Acme Ltd,London,Greater London,A rating,Skilled Worker\n"
+    )
+    session = DummySession(payload)
+    run_refresh_sponsor_acquire(
+        url="https://example.com/sponsor-register-2026-02-01.csv",
+        snapshot_root=snapshot_root,
+        fs=fs,
+        http_session=session,
+        command_line="uk-sponsor refresh-sponsor --only acquire",
+        now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
+    )
+
+    result = run_refresh_sponsor_clean(
+        snapshot_root=snapshot_root,
+        fs=fs,
+        command_line="uk-sponsor refresh-sponsor --only clean",
+        now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
+    )
+
+    snapshot_dir = snapshot_root / "sponsor" / "2026-02-01"
+    assert result.snapshot_dir == snapshot_dir
+    assert (snapshot_dir / "raw.csv").exists() is True
+    assert (snapshot_dir / "clean.csv").exists() is True
+    assert (snapshot_dir / "manifest.json").exists() is True
+
+
+def test_refresh_sponsor_clean_raises_without_pending_snapshot(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    snapshot_root = tmp_path / "snapshots"
+    with pytest.raises(PendingAcquireSnapshotNotFoundError):
+        run_refresh_sponsor_clean(
+            snapshot_root=snapshot_root,
+            fs=fs,
+            command_line="uk-sponsor refresh-sponsor --only clean",
+            now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
+        )
