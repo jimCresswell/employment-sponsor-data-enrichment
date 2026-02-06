@@ -1,7 +1,9 @@
 # Plan Overview: Cache-First Ingest + File-First Enrichment (Overview + Decisions)
 
+Planning note: active sequencing is now tracked in `.agent/plans/linear-delivery-plan.md`.
+
 Status: Draft (planning only). Implementation work lives in
-`.agent/plans/ingest-source-expansion.plan.md`.
+`.agent/plans/archive/ingest-source-expansion.plan.md`.
 
 ## Entry Instructions (Read First)
 
@@ -18,8 +20,8 @@ Status: Draft (planning only). Implementation work lives in
 
 ## Source Documents (Current)
 
-1. `.agent/plans/ingest-source-expansion.plan.md`
-1. `.agent/plans/sector-profiles.plan.md`
+1. `.agent/plans/archive/ingest-source-expansion.plan.md`
+1. `.agent/plans/archive/sector-profiles.plan.md`
 1. `.agent/plans/deferred-features.md`
 
 ## Context
@@ -137,7 +139,7 @@ Each snapshot manifest contains:
 
 ## Related Plans
 
-1. `.agent/plans/sector-profiles.plan.md` covers scoring profile configuration for `transform-score`
+1. `.agent/plans/archive/sector-profiles.plan.md` covers scoring profile configuration for `transform-score`
    and does not change ingest or snapshot behaviour.
 1. `.agent/plans/deferred-features.md` captures backlog items such as config files, CI workflow,
    and a CLI `--version` flag, and is not part of cache-first ingest work.

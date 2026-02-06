@@ -1,5 +1,8 @@
 # Plan: Sector Profiles for Transform-Score (Configurable)
 
+Planning note: milestone sequencing and acceptance gating are tracked in
+`.agent/plans/linear-delivery-plan.md`.
+
 ## Goal
 
 Make transform-score sector‑agnostic by externalising scoring signals (SIC mappings, keywords,

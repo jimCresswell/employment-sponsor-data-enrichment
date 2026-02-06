@@ -1,5 +1,8 @@
 # Implementation Plan: Validation Protocol Tooling (File-First) (2026-02-05)
 
+Planning note: milestone sequencing and acceptance gating are tracked in
+`.agent/plans/linear-delivery-plan.md`.
+
 ## Status
 
 Draft (planning only).

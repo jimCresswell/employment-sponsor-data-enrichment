@@ -1,5 +1,8 @@
 # Implementation Plan: Cache-First Refresh + Bulk Companies House Ingest (2026-02-03)
 
+Planning note: this plan is complete; active sequencing is tracked in
+`.agent/plans/linear-delivery-plan.md`.
+
 ## Start Here (Stand-Alone Entry Point)
 
 Status: **Complete** (2026-02-05).
@@ -68,7 +71,7 @@ Status: **Complete** (2026-02-05).
 1. Tests are network-isolated and pass full quality gates (`uv run check`).
 
 Status: Definition met.
-Overview and decision notes live in `.agent/plans/overview-cache-first-and-file-first.md`.
+Overview and decision notes live in `.agent/plans/archive/overview-cache-first-and-file-first.md`.
 
 ## Entry Instructions (Read First)
 
@@ -82,7 +85,7 @@ Overview and decision notes live in `.agent/plans/overview-cache-first-and-file-
 1. `.agent/research/ch-data-product-fields.md`
 1. `.agent/research/ch-sic-codes.md`
 1. Read the overview and decision notes:
-1. `.agent/plans/overview-cache-first-and-file-first.md`
+1. `.agent/plans/archive/overview-cache-first-and-file-first.md`
 1. This plan is the implementation entry point; do not implement until it is approved.
 
 ## Summary
