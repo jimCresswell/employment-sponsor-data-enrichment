@@ -55,6 +55,7 @@ When starting any new session, choose work using this deterministic rule:
 
 ## Baseline Evidence (Recent Commits)
 
+1. `59c3a60` docs(plan): sync active roadmap and capture runtime contracts ADR.
 1. `e6a2f7f` docs(onboarding): strengthen project intent and contributor runbooks.
 1. `9ef6e7e` feat(config): lock geographic filtering to single-region contract.
 1. `c0a091e` feat(filesystem): protocolise streamed file handles for CH refresh.
