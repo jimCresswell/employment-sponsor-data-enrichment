@@ -4,7 +4,7 @@ Status: Active
 Last updated: 2026-02-06
 Handoff readiness: Ready
 Current batch in progress: none
-Next batch to execute: `R-B2`
+Next batch to execute: `R-B3`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -381,7 +381,7 @@ The following batches are the approved execution slices for Milestone 0.
 
 1. Batch ID: `R-B2`
 1. Objective: Refactor application filesystem usage to protocol-backed DI boundaries.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `R-B1`
 1. Scope (in): protocol additions, infrastructure/fake support, application refactor.
 1. Scope (out): geographic contract and docs/CI hardening.
@@ -555,7 +555,7 @@ Use this as the canonical live tracker for batch execution state.
 ### Milestone 0
 
 1. `R-B1`: Complete
-1. `R-B2`: Planned
+1. `R-B2`: Complete
 1. `R-B3`: Planned
 1. `R-B4`: Planned
 1. `R-B5`: Planned
@@ -638,6 +638,16 @@ Summary: Enforced file-only runtime mode for `transform-enrich` and `run-all` wi
 Quality gates: uv run check (pass)
 Docs updated: README.md, docs/troubleshooting.md, docs/archived-api-runtime-mode.md, .env.example
 Follow-ups: Execute R-B2 (protocol-backed filesystem refactor for application refresh paths).
+```
+
+```text
+Date: 2026-02-06
+Batch ID: R-B2
+Status: Complete
+Summary: Added streamed file-handle methods to `FileSystem`, implemented them in local and in-memory filesystem implementations, and refactored Companies House refresh application flow to use protocol-backed opens.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute R-B3 (single-region geographic filtering contract alignment).
 ```
 
 ## Session Completion Rules (Every Session)

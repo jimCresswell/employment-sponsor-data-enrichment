@@ -73,8 +73,9 @@ class RefreshCompaniesHouseAcquireResult:
 
 
 class _TokenIndexWriter:
-    def __init__(self, base_dir: Path) -> None:
+    def __init__(self, base_dir: Path, fs: FileSystem) -> None:
         self._base_dir = base_dir
+        self._fs = fs
         self._handles: dict[str, TextIO] = {}
         self._paths: list[Path] = []
 
@@ -89,7 +90,7 @@ class _TokenIndexWriter:
         if bucket in self._handles:
             return self._handles[bucket]
         path = self._base_dir / f"index_tokens_{bucket}.csv"
-        handle = path.open("w", encoding="utf-8", newline="")
+        handle = self._fs.open_text(path, mode="w", encoding="utf-8", newline="")
         handle.write("token,company_number\n")
         self._handles[bucket] = handle
         self._paths.append(path)
@@ -102,8 +103,9 @@ class _TokenIndexWriter:
 
 
 class _ProfileBucketWriter:
-    def __init__(self, base_dir: Path) -> None:
+    def __init__(self, base_dir: Path, fs: FileSystem) -> None:
         self._base_dir = base_dir
+        self._fs = fs
         self._handles: dict[str, TextIO] = {}
         self._writers: dict[str, csv.DictWriter[str]] = {}
         self._paths: list[Path] = []
@@ -117,7 +119,7 @@ class _ProfileBucketWriter:
         if bucket in self._writers:
             return self._writers[bucket]
         path = self._base_dir / f"profiles_{bucket}.csv"
-        handle = path.open("w", encoding="utf-8", newline="")
+        handle = self._fs.open_text(path, mode="w", encoding="utf-8", newline="")
         writer = csv.DictWriter(handle, fieldnames=CANONICAL_HEADERS_V1)
         writer.writeheader()
         self._handles[bucket] = handle
@@ -162,14 +164,15 @@ def _download_stream(
     return bytes_downloaded
 
 
-def _extract_zip(zip_path: Path, csv_path: Path) -> None:
-    with zipfile.ZipFile(zip_path) as archive:
-        csv_members = [name for name in archive.namelist() if name.lower().endswith(".csv")]
-        if not csv_members:
-            raise CompaniesHouseZipMissingCsvError()
-        member = csv_members[0]
-        with archive.open(member) as source, csv_path.open("wb") as target:
-            shutil.copyfileobj(source, target)
+def _extract_zip(zip_path: Path, csv_path: Path, fs: FileSystem) -> None:
+    with fs.open_binary(zip_path, mode="rb") as zip_handle:
+        with zipfile.ZipFile(zip_handle) as archive:
+            csv_members = [name for name in archive.namelist() if name.lower().endswith(".csv")]
+            if not csv_members:
+                raise CompaniesHouseZipMissingCsvError()
+            member = csv_members[0]
+            with archive.open(member) as source, fs.open_binary(csv_path, mode="wb") as target:
+                shutil.copyfileobj(source, target)
 
 
 def run_refresh_companies_house_acquire(
@@ -224,7 +227,7 @@ def run_refresh_companies_house_acquire(
     raw_csv_path = raw_path
     if is_zip:
         raw_csv_path = paths.staging_dir / "raw.csv"
-        _extract_zip(raw_path, raw_csv_path)
+        _extract_zip(raw_path, raw_csv_path, fs)
     write_pending_acquire_state(
         paths=paths,
         source_url=resolved_url,
@@ -349,14 +352,14 @@ def _finalise_companies_house_snapshot(
     clean_rows = 0
     logger = get_logger("uk_sponsor_pipeline.refresh_companies_house")
     logger.info("Cleaning Companies House bulk CSV: %s", raw_csv_path)
-    index_writer = _TokenIndexWriter(paths.staging_dir)
-    profile_writer = _ProfileBucketWriter(paths.staging_dir)
+    index_writer = _TokenIndexWriter(paths.staging_dir, fs)
+    profile_writer = _ProfileBucketWriter(paths.staging_dir, fs)
     index_paths: tuple[Path, ...] = ()
     profile_paths: tuple[Path, ...] = ()
     try:
         if progress is not None:
             progress.start("clean", None)
-        with raw_csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        with fs.open_text(raw_csv_path, mode="r", encoding="utf-8-sig", newline="") as handle:
             reader = csv.reader(handle)
             header_row = next(reader, None)
             if header_row is None:
@@ -364,7 +367,7 @@ def _finalise_companies_house_snapshot(
             trimmed_headers = normalise_raw_headers(header_row)
             validate_raw_headers(trimmed_headers)
             dict_reader = csv.DictReader(handle, fieldnames=trimmed_headers)
-            with clean_path.open("w", encoding="utf-8", newline="") as clean_file:
+            with fs.open_text(clean_path, mode="w", encoding="utf-8", newline="") as clean_file:
                 writer = csv.DictWriter(clean_file, fieldnames=CANONICAL_HEADERS_V1)
                 writer.writeheader()
                 for row in dict_reader:

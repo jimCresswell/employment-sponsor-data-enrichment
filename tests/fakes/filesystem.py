@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
+import io
 import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import override
+from typing import BinaryIO, TextIO, override
 
 import pandas as pd
 
 from tests.support.errors import FakeFileNotFoundError, FakeFileTypeError
 from uk_sponsor_pipeline.io_validation import IncomingDataError, validate_as
-from uk_sponsor_pipeline.protocols import FileSystem
+from uk_sponsor_pipeline.protocols import BinaryOpenMode, FileSystem, TextOpenMode
 
 
 def _empty_files() -> dict[str, object]:
@@ -115,6 +116,48 @@ class InMemoryFileSystem(FileSystem):
         self._mtimes[key] = time.time()
 
     @override
+    def open_text(
+        self,
+        path: Path,
+        *,
+        mode: TextOpenMode,
+        encoding: str,
+        newline: str | None = None,
+    ) -> TextIO:
+        _ = (encoding, newline)
+        if "b" in mode:
+            raise ValueError
+        key = str(path)
+        initial = _resolve_initial_text(self._files, key, mode)
+        initial_position = 0
+        if "a" in mode:
+            initial_position = len(initial)
+        return _InMemoryTextHandle(
+            initial_value=initial,
+            initial_position=initial_position,
+            files=self._files,
+            mtimes=self._mtimes,
+            key=key,
+            write_back=_mode_writes(mode),
+        )
+
+    @override
+    def open_binary(self, path: Path, *, mode: BinaryOpenMode) -> BinaryIO:
+        key = str(path)
+        initial = _resolve_initial_bytes(self._files, key, mode)
+        initial_position = 0
+        if "a" in mode:
+            initial_position = len(initial)
+        return _InMemoryBinaryHandle(
+            initial_value=initial,
+            initial_position=initial_position,
+            files=self._files,
+            mtimes=self._mtimes,
+            key=key,
+            write_back=_mode_writes(mode),
+        )
+
+    @override
     def exists(self, path: Path) -> bool:
         return str(path) in self._files
 
@@ -156,3 +199,93 @@ class InMemoryFileSystem(FileSystem):
     @override
     def mtime(self, path: Path) -> float:
         return self._mtimes.get(str(path), 0.0)
+
+
+@dataclass
+class _InMemoryTextHandle(io.StringIO):
+    """Text handle that writes back to the in-memory filesystem on close."""
+
+    initial_value: str
+    initial_position: int
+    files: dict[str, object]
+    mtimes: dict[str, float]
+    key: str
+    write_back: bool
+
+    def __post_init__(self) -> None:
+        super().__init__(self.initial_value)
+        self.seek(self.initial_position)
+
+    @override
+    def close(self) -> None:
+        if not self.closed and self.write_back:
+            self.files[self.key] = self.getvalue()
+            self.mtimes[self.key] = time.time()
+        super().close()
+
+
+@dataclass
+class _InMemoryBinaryHandle(io.BytesIO):
+    """Binary handle that writes back to the in-memory filesystem on close."""
+
+    initial_value: bytes
+    initial_position: int
+    files: dict[str, object]
+    mtimes: dict[str, float]
+    key: str
+    write_back: bool
+
+    def __post_init__(self) -> None:
+        super().__init__(self.initial_value)
+        self.seek(self.initial_position)
+
+    @override
+    def close(self) -> None:
+        if not self.closed and self.write_back:
+            self.files[self.key] = self.getvalue()
+            self.mtimes[self.key] = time.time()
+        super().close()
+
+
+def _mode_writes(mode: str) -> bool:
+    return any(flag in mode for flag in ("w", "a", "x", "+"))
+
+
+def _resolve_initial_text(files: dict[str, object], key: str, mode: TextOpenMode) -> str:
+    if mode.startswith("r"):
+        if key not in files:
+            raise FakeFileNotFoundError(key)
+        value = files[key]
+        if isinstance(value, str):
+            return value
+        raise FakeFileTypeError("str", key)
+    if "a" in mode:
+        if key not in files:
+            return ""
+        value = files[key]
+        if isinstance(value, str):
+            return value
+        raise FakeFileTypeError("str", key)
+    if "x" in mode and key in files:
+        raise FileExistsError(key)
+    return ""
+
+
+def _resolve_initial_bytes(files: dict[str, object], key: str, mode: BinaryOpenMode) -> bytes:
+    if mode.startswith("r"):
+        if key not in files:
+            raise FakeFileNotFoundError(key)
+        value = files[key]
+        if isinstance(value, bytes):
+            return value
+        raise FakeFileTypeError("bytes", key)
+    if "a" in mode:
+        if key not in files:
+            return b""
+        value = files[key]
+        if isinstance(value, bytes):
+            return value
+        raise FakeFileTypeError("bytes", key)
+    if "x" in mode and key in files:
+        raise FileExistsError(key)
+    return b""

@@ -22,13 +22,13 @@ import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import override
+from typing import BinaryIO, TextIO, override
 
 import pandas as pd
 
 from ...exceptions import JsonObjectExpectedError
 from ...io_validation import IncomingDataError, validate_json_as
-from ...protocols import Cache, FileSystem
+from ...protocols import BinaryOpenMode, Cache, FileSystem, TextOpenMode
 
 
 class LocalFileSystem(FileSystem):
@@ -88,6 +88,25 @@ class LocalFileSystem(FileSystem):
                 handle.write(chunk)
 
     @override
+    def open_text(
+        self,
+        path: Path,
+        *,
+        mode: TextOpenMode,
+        encoding: str,
+        newline: str | None = None,
+    ) -> TextIO:
+        if _mode_writes(mode):
+            path.parent.mkdir(parents=True, exist_ok=True)
+        return path.open(mode=mode, encoding=encoding, newline=newline)
+
+    @override
+    def open_binary(self, path: Path, *, mode: BinaryOpenMode) -> BinaryIO:
+        if _mode_writes(mode):
+            path.parent.mkdir(parents=True, exist_ok=True)
+        return path.open(mode=mode)
+
+    @override
     def exists(self, path: Path) -> bool:
         return path.exists()
 
@@ -142,3 +161,7 @@ class DiskCache(Cache):
     @override
     def has(self, key: str) -> bool:
         return self._path(key).exists()
+
+
+def _mode_writes(mode: str) -> bool:
+    return any(flag in mode for flag in ("w", "a", "x", "+"))

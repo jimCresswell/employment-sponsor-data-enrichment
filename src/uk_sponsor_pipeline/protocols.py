@@ -8,10 +8,31 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, BinaryIO, Literal, Protocol, TextIO, runtime_checkable
 
 if TYPE_CHECKING:
     import pandas as pd
+
+TextOpenMode = Literal[
+    "r",
+    "r+",
+    "w",
+    "w+",
+    "a",
+    "a+",
+    "x",
+    "x+",
+]
+BinaryOpenMode = Literal[
+    "rb",
+    "rb+",
+    "wb",
+    "wb+",
+    "ab",
+    "ab+",
+    "xb",
+    "xb+",
+]
 
 
 @runtime_checkable
@@ -116,6 +137,21 @@ class FileSystem(Protocol):
 
     def write_bytes_stream(self, path: Path, chunks: Iterable[bytes]) -> None:
         """Write binary file from a stream of chunks."""
+        ...
+
+    def open_text(
+        self,
+        path: Path,
+        *,
+        mode: TextOpenMode,
+        encoding: str,
+        newline: str | None = None,
+    ) -> TextIO:
+        """Open a text file handle."""
+        ...
+
+    def open_binary(self, path: Path, *, mode: BinaryOpenMode) -> BinaryIO:
+        """Open a binary file handle."""
         ...
 
     def exists(self, path: Path) -> bool:
