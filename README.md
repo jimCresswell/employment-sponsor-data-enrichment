@@ -322,6 +322,7 @@ uv run pre-commit install --hook-type pre-commit --hook-type pre-push
 - `docs/snapshots.md`: snapshot lifecycle, layout, and manifests
 - `docs/validation-protocol.md`: reproducible validation runbook
 - `docs/troubleshooting.md`: common failure modes and recovery
+- `docs/architectural-decision-records/README.md`: architecture decision index and ADR history
 - `docs/data-contracts.md`: schema and column contracts
 - `docs/companies-house-file-source.md`: file-source lookup/index rules
 - `docs/refresh-and-run-all-diagrams.md`: refresh and cache-only flow diagrams

@@ -26,7 +26,7 @@ Next batch to execute: `R-B5`
 1. Re-read this file fully, then go directly to:
 1. `Execution Batch Protocol (Recorded Standard)`
 1. `Execution Batches (Milestone 0)`
-1. Start the first non-complete batch in order (currently `R-B2`).
+1. Start the first non-complete batch in order (currently `R-B5`).
 1. Set that batch status to `In progress` before writing code.
 1. Execute using TDD and complete the full batch lifecycle.
 1. On batch completion:
@@ -55,15 +55,19 @@ When starting any new session, choose work using this deterministic rule:
 
 ## Baseline Evidence (Recent Commits)
 
-1. `b1c2cd4` docs: consolidate active planning into linear roadmap.
-1. `5f08e4f` feat: add staged refresh acquire and clean groups.
-1. `946d2a7` feat: add refresh link discovery and validation protocol.
+1. `e6a2f7f` docs(onboarding): strengthen project intent and contributor runbooks.
+1. `9ef6e7e` feat(config): lock geographic filtering to single-region contract.
+1. `c0a091e` feat(filesystem): protocolise streamed file handles for CH refresh.
+1. `906ae95` feat(cli): enforce file-only runtime and record milestone execution plan.
 
 ## Canonical References
 
 1. Architecture decisions:
 1. `docs/architectural-decision-records/adr0019-cache-first-refresh-and-bulk-companies-house-snapshots.md`
 1. `docs/architectural-decision-records/adr0021-refresh-step-groups-and-staged-acquire-clean.md`
+1. `docs/architectural-decision-records/adr0022-file-only-runtime-io-boundaries-and-single-region-filtering.md`
+1. Runtime mode archive:
+1. `docs/archived-api-runtime-mode.md`
 1. Validation/troubleshooting:
 1. `docs/validation-protocol.md`
 1. `docs/troubleshooting.md`

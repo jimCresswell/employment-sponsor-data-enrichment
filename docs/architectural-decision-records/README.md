@@ -23,6 +23,7 @@ This directory contains the ADRs for the UK Sponsor → Tech Hiring Pipeline.
 - `adr0019-cache-first-refresh-and-bulk-companies-house-snapshots.md`
 - `adr0020-file-first-companies-house-lookup.md`
 - `adr0021-refresh-step-groups-and-staged-acquire-clean.md`
+- `adr0022-file-only-runtime-io-boundaries-and-single-region-filtering.md`
 
 ## Superseded
 

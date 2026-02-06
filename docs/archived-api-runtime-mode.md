@@ -7,7 +7,7 @@ Status: Archived implementation notes (not active runtime behaviour)
 
 This document preserves the removed CLI runtime API branching so it can be restored
 quickly if needed. Runtime pipeline execution is file-only (`CH_SOURCE_TYPE=file`) in
-the active code path.
+the active code path (see ADR 0022).
 
 ## What Changed
 
