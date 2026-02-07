@@ -159,7 +159,74 @@ Notes:
 - `uv run lint` includes ruff, inline-ignore checks, spelling checks, and import-linter.
 - Tests block real network access; use fakes/mocks in tests.
 
-## 9) Still Blocked
+## 9) Snapshot Validation Script Fails
+
+Command:
+
+```bash
+uv run python scripts/validation_check_snapshots.py --snapshot-root <path>
+```
+
+Common causes:
+
+- Missing required artefacts in latest dated snapshot directory.
+- Missing/invalid manifest fields or wrong `schema_version`.
+- `clean.csv` missing required contract columns.
+- Companies House token/profile partition files missing.
+
+Recovery:
+
+1. Regenerate snapshots with grouped refresh (`--only acquire`, then `--only clean`).
+2. Confirm artefacts in the latest dated snapshot directories.
+3. Rerun the snapshot validation command.
+
+## 10) Output Validation Script Fails
+
+Command:
+
+```bash
+uv run python scripts/validation_check_outputs.py --out-dir <path>
+```
+
+Common causes:
+
+- Missing required processed outputs.
+- Output CSV headers drifted from contract columns.
+- Resume report JSON is malformed or has invalid status values.
+
+Recovery:
+
+1. Rerun runtime steps:
+
+```bash
+uv run uk-sponsor transform-enrich
+uv run uk-sponsor transform-score
+uv run uk-sponsor usage-shortlist
+```
+
+2. Re-run the output validation command.
+
+## 11) Fixture E2E Validation Script Fails
+
+Command:
+
+```bash
+uv run python scripts/validation_e2e_fixture.py
+```
+
+Common causes:
+
+- Local command failure during grouped refresh or runtime flow.
+- Fixture contract mismatch with current pipeline rules.
+- Port binding issues for the local fixture server.
+
+Recovery:
+
+1. Read the failing command and stderr details emitted by the script.
+2. Resolve the underlying contract or command issue.
+3. Rerun the script (optionally with `--work-dir` for inspection).
+
+## 12) Still Blocked
 
 Capture:
 

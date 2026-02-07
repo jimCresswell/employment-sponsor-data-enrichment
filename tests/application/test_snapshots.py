@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import uk_sponsor_pipeline
 from uk_sponsor_pipeline.application.snapshots import (
     SnapshotPaths,
     SnapshotRowCounts,
@@ -150,6 +151,7 @@ def test_build_snapshot_manifest_defaults_git_sha_and_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("GIT_SHA", raising=False)
+    monkeypatch.setattr(uk_sponsor_pipeline, "__version__", " ", raising=False)
     downloaded_at = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
     last_updated = datetime(2026, 2, 4, 12, 30, tzinfo=UTC)
     row_counts: SnapshotRowCounts = {"raw": 1, "clean": 1}
@@ -173,6 +175,35 @@ def test_build_snapshot_manifest_defaults_git_sha_and_version(
 
     assert manifest["git_sha"] == "unknown"
     assert manifest["tool_version"] == "0.0.0+unknown"
+
+
+def test_build_snapshot_manifest_defaults_to_package_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GIT_SHA", raising=False)
+    monkeypatch.setattr(uk_sponsor_pipeline, "__version__", "9.8.7", raising=False)
+    downloaded_at = datetime(2026, 2, 4, 12, 0, tzinfo=UTC)
+    last_updated = datetime(2026, 2, 4, 12, 30, tzinfo=UTC)
+    row_counts: SnapshotRowCounts = {"raw": 1, "clean": 1}
+
+    manifest = build_snapshot_manifest(
+        dataset="sponsor",
+        snapshot_date="2026-02-01",
+        source_url="https://example.com/register.csv",
+        downloaded_at_utc=downloaded_at,
+        last_updated_at_utc=last_updated,
+        schema_version="sponsor_clean_v1",
+        sha256_hash_raw="rawhash",
+        sha256_hash_clean="cleanhash",
+        bytes_raw=1,
+        row_counts=row_counts,
+        artefacts={"raw": "raw.csv", "clean": "clean.csv"},
+        command_line="uk-sponsor refresh-sponsor --url https://example.com/register.csv",
+        git_sha=None,
+        tool_version=None,
+    )
+
+    assert manifest["tool_version"] == "9.8.7"
 
 
 def test_resolve_latest_snapshot_dir_uses_latest_date(tmp_path: Path) -> None:

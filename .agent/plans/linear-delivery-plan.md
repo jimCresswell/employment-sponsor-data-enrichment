@@ -4,7 +4,7 @@ Status: Active
 Last updated: 2026-02-06
 Handoff readiness: Ready
 Current batch in progress: none
-Next batch to execute: `R-B5`
+Next batch to execute: `M2-B1`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -25,8 +25,8 @@ Next batch to execute: `R-B5`
 1. Run `git status --short` and confirm working tree is clean before implementation work.
 1. Re-read this file fully, then go directly to:
 1. `Execution Batch Protocol (Recorded Standard)`
-1. `Execution Batches (Milestone 0)`
-1. Start the first non-complete batch in order (currently `R-B5`).
+1. `Execution Batches (Milestone 2)`
+1. Start the first non-complete batch in order (currently `M2-B1`).
 1. Set that batch status to `In progress` before writing code.
 1. Execute using TDD and complete the full batch lifecycle.
 1. On batch completion:
@@ -440,7 +440,7 @@ The following batches are the approved execution slices for Milestone 0.
 
 1. Batch ID: `R-B5`
 1. Objective: Add CI full-gate workflow and align version/tooling metadata.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `R-B4`
 1. Scope (in): CI workflow, version source consistency, dependency hygiene.
 1. Scope (out): Milestone 1 validation tooling work.
@@ -458,7 +458,7 @@ The following batches are the approved execution slices for Milestone 0.
 
 1. Batch ID: `R-B6`
 1. Objective: Milestone 0 closeout and reconciliation.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `R-B5`
 1. Scope (in): docs/ADR reconciliation, final gate run, milestone status updates.
 1. Scope (out): Milestone 1 implementation.
@@ -479,7 +479,7 @@ The following batches are the approved execution slices for Milestone 1.
 
 1. Batch ID: `M1-B1`
 1. Objective: Implement snapshot validation helper module with full unit coverage.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: none
 1. Scope (in): snapshot artefact checks, manifest required fields, schema/header checks, fail-fast errors.
 1. Scope (out): output validation, CLI scripts, fixture e2e runner.
@@ -494,7 +494,7 @@ The following batches are the approved execution slices for Milestone 1.
 
 1. Batch ID: `M1-B2`
 1. Objective: Implement processed-output validation helper module with full unit coverage.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M1-B1`
 1. Scope (in): enrich/score/usage artefact presence, required column checks, resume report validation.
 1. Scope (out): CLI scripts, fixture e2e runner.
@@ -509,7 +509,7 @@ The following batches are the approved execution slices for Milestone 1.
 
 1. Batch ID: `M1-B3`
 1. Objective: Add CLI validation scripts for snapshots and processed outputs.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M1-B1`, `M1-B2`
 1. Scope (in): argparse wiring, helper integration, exit-code contract (`0` valid, non-zero invalid).
 1. Scope (out): fixture e2e runner.
@@ -525,7 +525,7 @@ The following batches are the approved execution slices for Milestone 1.
 
 1. Batch ID: `M1-B4`
 1. Objective: Implement fixture-driven e2e validation script and supporting fixtures.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M1-B3`
 1. Scope (in): local fixture setup, grouped refresh execution, pipeline execution, artefact and column assertions.
 1. Scope (out): operational baseline run documentation updates beyond Milestone 1 command docs.
@@ -540,7 +540,7 @@ The following batches are the approved execution slices for Milestone 1.
 
 1. Batch ID: `M1-B5`
 1. Objective: Finalise docs and milestone closeout gates.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M1-B4`
 1. Scope (in): docs updates for validation commands and troubleshooting, milestone status update, final quality gates.
 1. Scope (out): Milestone 2 operational run execution.
@@ -563,16 +563,16 @@ Use this as the canonical live tracker for batch execution state.
 1. `R-B2`: Complete
 1. `R-B3`: Complete
 1. `R-B4`: Complete
-1. `R-B5`: Planned
-1. `R-B6`: Planned
+1. `R-B5`: Complete
+1. `R-B6`: Complete
 
 ### Milestone 1
 
-1. `M1-B1`: Planned
-1. `M1-B2`: Planned
-1. `M1-B3`: Planned
-1. `M1-B4`: Planned
-1. `M1-B5`: Planned
+1. `M1-B1`: Complete
+1. `M1-B2`: Complete
+1. `M1-B3`: Complete
+1. `M1-B4`: Complete
+1. `M1-B5`: Complete
 
 ### Milestone 2
 
@@ -675,6 +675,76 @@ Docs updated: README.md, docs/snapshots.md, docs/validation-protocol.md, docs/tr
 Follow-ups: Execute R-B5 (CI full-gate workflow and version/tooling alignment).
 ```
 
+```text
+Date: 2026-02-06
+Batch ID: R-B5
+Status: Complete
+Summary: Added a CI workflow that runs `uv sync --group dev` and `uv run check`, added package-backed `__version__`, aligned Ruff target version to Python 3.14, and removed the redundant spelling-only workflow.
+Quality gates: uv run check (pass)
+Docs updated: README.md
+Follow-ups: Execute R-B6 (Milestone 0 closeout and reconciliation).
+```
+
+```text
+Date: 2026-02-06
+Batch ID: R-B6
+Status: Complete
+Summary: Reconciled plan tracking for Milestone 0 completion, updated batch statuses, and set `M1-B1` as the next execution batch.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M1-B1 (snapshot validation helper implementation and tests).
+```
+
+```text
+Date: 2026-02-06
+Batch ID: M1-B1
+Status: Complete
+Summary: Added snapshot validation helper with typed result contracts and fail-fast checks for snapshot roots, required artefacts, manifest fields/schema versions, and required clean headers.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M1-B2 (processed output validation helper implementation and tests).
+```
+
+```text
+Date: 2026-02-06
+Batch ID: M1-B2
+Status: Complete
+Summary: Added processed-output validation helper with fail-fast checks for required files, contract columns, resume report shape, and allowed status values.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M1-B3 (CLI validation script wiring).
+```
+
+```text
+Date: 2026-02-06
+Batch ID: M1-B3
+Status: Complete
+Summary: Added deterministic snapshot/output validation scripts with clear pass/fail output and exit-code contracts.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M1-B4 (fixture-driven e2e validation script).
+```
+
+```text
+Date: 2026-02-06
+Batch ID: M1-B4
+Status: Complete
+Summary: Added fixture-driven e2e script that builds local payloads, runs grouped refresh and runtime CLI flow, and validates required artefact and column contracts.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M1-B5 (docs and milestone closeout).
+```
+
+```text
+Date: 2026-02-06
+Batch ID: M1-B5
+Status: Complete
+Summary: Updated validation protocol and troubleshooting runbooks with validation script commands, failure modes, and recovery guidance; reconciled milestone status tracking.
+Quality gates: uv run check (pass)
+Docs updated: README.md, docs/validation-protocol.md, docs/troubleshooting.md, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M2-B1 (operational baseline validation protocol run).
+```
+
 ## Session Completion Rules (Every Session)
 
 1. Keep this file updated with progress state.
@@ -685,8 +755,8 @@ Follow-ups: Execute R-B5 (CI full-gate workflow and version/tooling alignment).
 
 ## Status Tracking
 
-1. Milestone 0: In progress.
-1. Milestone 1: Not started.
+1. Milestone 0: Complete.
+1. Milestone 1: Complete.
 1. Milestone 2: Not started.
 1. Milestone 3: Not started.
 1. Milestone 4: Not started.

@@ -55,7 +55,7 @@ packages = ["src/uk_sponsor_pipeline"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ANN"]

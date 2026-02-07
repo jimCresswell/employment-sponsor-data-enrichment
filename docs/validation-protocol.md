@@ -142,6 +142,32 @@ Acceptance checks:
 - Reported output paths exist.
 - No runtime source-mode errors occur.
 
+## Step 6: Run Validation Scripts
+
+Validate snapshot and processed artefact contracts with dedicated scripts:
+
+```bash
+uv run python scripts/validation_check_snapshots.py --snapshot-root data/cache/snapshots
+uv run python scripts/validation_check_outputs.py --out-dir data/processed
+```
+
+Expected behaviour:
+
+- Exit code `0` with `PASS ...` output when validation succeeds.
+- Non-zero exit with `FAIL ...` output when any required artefact, field, or column check fails.
+
+Run fixture-driven e2e CLI validation (outside pytest):
+
+```bash
+uv run python scripts/validation_e2e_fixture.py
+```
+
+Expected behaviour:
+
+- Script builds local fixtures, serves them on a local HTTP server, executes grouped refresh and
+  runtime steps, validates required output contracts, and exits `0` on success.
+- On failure, script exits non-zero with the failing command or contract violation in stderr.
+
 ## Optional: Filter Validation
 
 Validate single-region and postcode filtering behaviour:
@@ -162,6 +188,7 @@ Expected:
 - If refresh staging is incomplete, rerun acquire and clean.
 - If runtime fails on missing artefacts, repair snapshots first.
 - Record errors and remediation in run logs for audit continuity.
+- If a validation script fails, fix the underlying artefact/contract issue and rerun the script.
 
 See `docs/troubleshooting.md` for concrete error-to-recovery mappings.
 

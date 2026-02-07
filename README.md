@@ -317,6 +317,29 @@ Install Git hooks for pre-commit and pre-push quality checks:
 uv run pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
+## CI and Version Metadata
+
+- GitHub Actions runs the full gate sequence on every push and pull request via
+  `.github/workflows/ci.yml`.
+- CI installs dependencies with `uv sync --group dev` and executes `uv run check`.
+- Snapshot manifests record `tool_version` from `uk_sponsor_pipeline.__version__`.
+- If package metadata is unavailable, `tool_version` falls back to `0.0.0+unknown`.
+
+## Validation Tooling
+
+Run contract checks against snapshot and processed artefacts:
+
+```bash
+uv run python scripts/validation_check_snapshots.py --snapshot-root data/cache/snapshots
+uv run python scripts/validation_check_outputs.py --out-dir data/processed
+```
+
+Run fixture-driven e2e CLI validation (outside pytest):
+
+```bash
+uv run python scripts/validation_e2e_fixture.py
+```
+
 ## Documentation Map
 
 - `docs/snapshots.md`: snapshot lifecycle, layout, and manifests
