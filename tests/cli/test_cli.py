@@ -1,5 +1,6 @@
 """Tests for CLI wiring and overrides."""
 
+import re
 from collections.abc import Iterable
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,6 +17,11 @@ from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.protocols import FileSystem, HttpSession
 
 runner = CliRunner()
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_ESCAPE_RE.sub("", text)
 
 
 class DummySession(HttpSession):
@@ -123,7 +129,10 @@ def test_cli_usage_shortlist_rejects_multiple_regions(monkeypatch: pytest.Monkey
     )
 
     assert result.exit_code != 0
-    assert "Only one --region" in result.output
+    plain_output = _strip_ansi(result.output)
+    assert "Only one" in plain_output
+    assert "region" in plain_output
+    assert "value is supported." in plain_output
 
 
 def test_cli_run_all_rejects_multiple_regions(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -144,7 +153,10 @@ def test_cli_run_all_rejects_multiple_regions(monkeypatch: pytest.MonkeyPatch) -
     )
 
     assert result.exit_code != 0
-    assert "Only one --region" in result.output
+    plain_output = _strip_ansi(result.output)
+    assert "Only one" in plain_output
+    assert "region" in plain_output
+    assert "value is supported." in plain_output
 
 
 def test_cli_run_all_resolves_snapshot_paths(monkeypatch: pytest.MonkeyPatch) -> None:
