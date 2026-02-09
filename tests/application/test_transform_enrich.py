@@ -348,9 +348,9 @@ class TestTransformEnrichResume:
             fs=in_memory_fs,
         )
 
-        unmatched_df = in_memory_fs.read_csv(out_dir / "companies_house_unmatched.csv")
-        checkpoint_df = in_memory_fs.read_csv(out_dir / "companies_house_checkpoint.csv")
-        candidates_df = in_memory_fs.read_csv(out_dir / "companies_house_candidates_top3.csv")
+        unmatched_df = in_memory_fs.read_csv(out_dir / "sponsor_unmatched.csv")
+        checkpoint_df = in_memory_fs.read_csv(out_dir / "sponsor_enrich_checkpoint.csv")
+        candidates_df = in_memory_fs.read_csv(out_dir / "sponsor_match_candidates_top3.csv")
 
         assert len(unmatched_df) == 2
         assert len(checkpoint_df) == 2
@@ -612,7 +612,7 @@ def test_transform_enrich_search_errors_write_resume_report(
 
     report = validate_as(
         TransformEnrichResumeReport,
-        in_memory_fs.read_json(out_dir / "companies_house_resume_report.json"),
+        in_memory_fs.read_json(out_dir / "sponsor_enrich_resume_report.json"),
     )
     assert report["status"] == "error"
     assert "invalid key" in report["error_message"]
@@ -775,8 +775,8 @@ def test_transform_enrich_profile_fetch_errors_fail_fast(
             fs=in_memory_fs,
         )
 
-    assert in_memory_fs.exists(out_dir / "companies_house_resume_report.json")
-    assert not in_memory_fs.exists(out_dir / "companies_house_unmatched.csv")
+    assert in_memory_fs.exists(out_dir / "sponsor_enrich_resume_report.json")
+    assert not in_memory_fs.exists(out_dir / "sponsor_unmatched.csv")
 
 
 def test_resume_false_writes_to_new_output_dir(

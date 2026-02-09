@@ -24,11 +24,11 @@ from uk_sponsor_pipeline.schemas import (
 )
 
 _REQUIRED_OUTPUTS = (
-    "companies_house_enriched.csv",
-    "companies_house_unmatched.csv",
-    "companies_house_candidates_top3.csv",
-    "companies_house_checkpoint.csv",
-    "companies_house_resume_report.json",
+    "sponsor_enriched.csv",
+    "sponsor_unmatched.csv",
+    "sponsor_match_candidates_top3.csv",
+    "sponsor_enrich_checkpoint.csv",
+    "sponsor_enrich_resume_report.json",
     "companies_scored.csv",
     "companies_shortlist.csv",
     "companies_explain.csv",
@@ -153,14 +153,14 @@ def _assert_required_outputs(processed_dir: Path) -> None:
         if not path.exists():
             raise RuntimeError(f"Required output is missing: {path}")
 
-    enriched_headers = _read_headers(processed_dir / "companies_house_enriched.csv")
+    enriched_headers = _read_headers(processed_dir / "sponsor_enriched.csv")
     scored_headers = _read_headers(processed_dir / "companies_scored.csv")
     shortlist_headers = _read_headers(processed_dir / "companies_shortlist.csv")
     explain_headers = _read_headers(processed_dir / "companies_explain.csv")
     _assert_columns(
         present=enriched_headers,
         required=list(TRANSFORM_ENRICH_OUTPUT_COLUMNS),
-        label="companies_house_enriched.csv",
+        label="sponsor_enriched.csv",
     )
     _assert_columns(
         present=scored_headers,
@@ -178,7 +178,7 @@ def _assert_required_outputs(processed_dir: Path) -> None:
         label="companies_explain.csv",
     )
 
-    resume_report_path = processed_dir / "companies_house_resume_report.json"
+    resume_report_path = processed_dir / "sponsor_enrich_resume_report.json"
     resume_payload = json.loads(resume_report_path.read_text(encoding="utf-8"))
     if not isinstance(resume_payload, dict):
         raise RuntimeError("Resume report must be a JSON object.")
@@ -277,7 +277,7 @@ def _run_fixture_flow(*, work_dir: Path) -> None:
                 "uk-sponsor",
                 "transform-score",
                 "--input",
-                str(processed_dir / "companies_house_enriched.csv"),
+                str(processed_dir / "sponsor_enriched.csv"),
                 "--output-dir",
                 str(processed_dir),
             ],

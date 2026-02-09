@@ -224,7 +224,7 @@ def _validate_manifest(
 def _required_artefact_keys(dataset: str) -> tuple[str, ...]:
     if dataset == "sponsor":
         return ("raw", "clean", "register_stats", "manifest")
-    return ("raw", "clean", "manifest")
+    return ("raw", "clean")
 
 
 def _validate_csv_columns(

@@ -1,10 +1,10 @@
 # Linear Delivery Plan (Standalone Session Entry Point)
 
 Status: Active  
-Last updated: 2026-02-06
+Last updated: 2026-02-09
 Handoff readiness: Ready
-Current batch in progress: none
-Next batch to execute: `M2-B1`
+Current batch in progress: `none`
+Next batch to execute: `M3-B1`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -25,8 +25,8 @@ Next batch to execute: `M2-B1`
 1. Run `git status --short` and confirm working tree is clean before implementation work.
 1. Re-read this file fully, then go directly to:
 1. `Execution Batch Protocol (Recorded Standard)`
-1. `Execution Batches (Milestone 2)`
-1. Start the first non-complete batch in order (currently `M2-B1`).
+1. `Future Batch Index (Milestones 2-5)`
+1. Start the first non-complete batch in order (currently `M3-B1`).
 1. Set that batch status to `In progress` before writing code.
 1. Execute using TDD and complete the full batch lifecycle.
 1. On batch completion:
@@ -72,6 +72,8 @@ When starting any new session, choose work using this deterministic rule:
 1. Validation/troubleshooting:
 1. `docs/validation-protocol.md`
 1. `docs/troubleshooting.md`
+1. Performance roadmap:
+1. `docs/performance-improvement-plan.md`
 1. Legacy planning reference:
 1. `.agent/plans/archive/overview-cache-first-and-file-first.md`
 1. `.agent/plans/archive/ingest-source-expansion.plan.md`
@@ -154,6 +156,18 @@ Source: `.agent/plans/archive/validation-protocol-implementation.plan.md`
 
 Source: `docs/validation-protocol.md`
 
+### Decision Lock (2026-02-08)
+
+1. Adopt Option 1 in `M2-B1`: refactor file-source profile loading to avoid repeated
+   full scans of `profiles_<bucket>.csv` during enrich runs.
+1. Defer Option 2 (refresh-time profile offset index) unless a trigger condition is met.
+1. Trigger Option 2 only if Option 1 still fails either condition:
+1. Step 4 runtime commands (`transform-enrich` → `transform-score` →
+   `usage-shortlist`) cannot complete unattended within 6 hours on the current baseline
+   live snapshot scale.
+1. The team needs repeated enrich reruns on unchanged snapshots in normal operation.
+1. Keep CLI surface unchanged while unblocking `M2-B1`.
+
 ### Requirements
 
 1. Execute one full protocol run in file-first mode using grouped refresh flow.
@@ -173,8 +187,9 @@ Source: `.agent/plans/archive/sector-profiles.plan.md`
 
 ### Requirements
 
-1. Externalise scoring signals (SIC mappings, keywords, weights, thresholds).
-1. Preserve current tech profile behaviour as default.
+1. Externalise scoring signals into configurable, job-type-first profiles (including
+   sector/location/size signals where relevant).
+1. Preserve current tech profile behaviour as a starter profile, not a fixed product scope.
 1. Add CLI/env selection for profile path/name.
 1. Validate profile schema with explicit fail-fast errors.
 
@@ -259,6 +274,14 @@ Follow in order. Do not reorder milestones.
 
 ### Milestone 2 TODO (Validation Protocol Operational Baseline)
 
+1. Remove the current Step 4 runtime blocker before rerunning the full protocol:
+1. Implement Option 1: refactor file-source profile loading so `transform-enrich` does not repeatedly full-scan large `profiles_<bucket>.csv` files per organisation/query.
+1. Add/adjust tests to lock the new loading behaviour and fail-fast invariants.
+1. Verify bounded runtime progress on a representative slice before full-run retry.
+1. Record the optimisation decision and user intent in permanent docs:
+1. `docs/architectural-decision-records/adr0023-file-mode-enrichment-throughput-strategy.md`
+1. `docs/user-stories/us-m2-file-first-throughput.md`
+1. `docs/requirements/m2-file-first-throughput.md`
 1. Run one full file-first validation protocol using grouped refresh flow exactly as documented.
 1. Capture an auditable run log using the template in `docs/validation-protocol.md`.
 1. Record concrete snapshot dates, input URLs used, and output artefact locations from the run.
@@ -270,11 +293,11 @@ Follow in order. Do not reorder milestones.
 
 ### Milestone 3 TODO (Sector Profile Externalisation)
 
-1. Add characterisation tests that lock current scoring behaviour as the default tech profile baseline.
-1. Define a strict profile schema for SIC prefixes, keyword signals, weights, and thresholds.
+1. Add characterisation tests that lock current scoring behaviour as the starter tech-profile baseline.
+1. Define a strict profile schema for job-type-first signals (including sector/location/size where required), weights, and thresholds.
 1. Add profile parsing and fail-fast validation tests for missing fields, unknown keys, wrong types, and invalid ranges.
 1. Implement profile model and loader module under `src/uk_sponsor_pipeline/domain/` or `src/uk_sponsor_pipeline/application/` with clear boundary ownership.
-1. Externalise current hard-coded scoring signals from `src/uk_sponsor_pipeline/domain/scoring.py` into a default profile file while preserving default output.
+1. Externalise current hard-coded scoring signals from `src/uk_sponsor_pipeline/domain/scoring.py` into a default starter profile file while preserving default output.
 1. Add CLI options for profile selection on `transform-score` (`--sector-profile` and `--sector`) and wire env fallbacks.
 1. Extend `PipelineConfig` and config loading to carry profile path/name without re-reading env outside entry points.
 1. Add deterministic tests proving a custom profile changes scoring output in expected ways.
@@ -576,9 +599,9 @@ Use this as the canonical live tracker for batch execution state.
 
 ### Milestone 2
 
-1. `M2-B1`: Planned
-1. `M2-B2`: Planned
-1. `M2-B3`: Planned
+1. `M2-B1`: Complete
+1. `M2-B2`: Complete
+1. `M2-B3`: Complete
 
 ### Milestone 3
 
@@ -605,7 +628,8 @@ Use this as the canonical live tracker for batch execution state.
 
 Use the recorded protocol to define and execute these batches when Milestone 1 is complete.
 
-1. `M2-B1`: Run full file-first validation protocol and capture run log.
+1. `M2-B1`: Implement Option 1 throughput refactor, then run full file-first validation protocol and capture run log.
+1. `M2-B1` escalation rule: implement Option 2 only if the Decision Lock trigger conditions are met.
 1. `M2-B2`: Align protocol/troubleshooting docs from real run findings.
 1. `M2-B3`: Milestone 2 closeout (`uv run check`, status updates).
 1. `M3-B1`: Characterisation tests for current scoring behaviour baseline.
@@ -745,6 +769,112 @@ Docs updated: README.md, docs/validation-protocol.md, docs/troubleshooting.md, .
 Follow-ups: Execute M2-B1 (operational baseline validation protocol run).
 ```
 
+```text
+Date: 2026-02-08
+Batch ID: M2-B1
+Status: Blocked
+Summary: Completed protocol pre-flight, discovery, acquire, and clean on live sponsor + Companies House snapshots. Sponsor URL resolved to `https://assets.publishing.service.gov.uk/media/6985be6985bc7d6ba0fbc725/2026-02-06_-_Worker_and_Temporary_Worker.csv` and committed to `data/cache/snapshots/sponsor/2026-02-06`; Companies House URL resolved to `https://download.companieshouse.gov.uk/BasicCompanyDataAsOneFile-2026-02-01.zip` and committed to `data/cache/snapshots/companies_house/2026-02-01`. During live execution, fixed two data-contract drifts in Companies House bulk cleaning: URI host/path format now accepts current `business.data.gov.uk/.../company/<number>` values and incorporation date parsing now accepts `DD/MM/YYYY` values. Full runtime baseline remains blocked because `transform-enrich` against the 2026-02-01 snapshot projected impractical completion time (> 400 hours from observed throughput).
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Unblock M2-B1 by fixing `FileCompaniesHouseSource._load_profiles_for_numbers` profile-loading strategy (avoid repeated full-file scans), then rerun Step 4+ protocol commands and capture the auditable run log.
+```
+
+```text
+Date: 2026-02-08
+Batch ID: M2-B1
+Status: In progress
+Summary: Implemented Option 1 throughput refactor in file-mode Companies House source by preloading bucket targets and avoiding repeated full profile-bucket scans per query. Added source-level tests to lock reduced-scan behaviour. Bounded live probe command `CH_SOURCE_TYPE=file uv run uk-sponsor transform-enrich --batch-count 1 --no-resume --output-dir /tmp/m2_enrich_probe` completed 250 organisations in about 25 seconds, indicating the previous throughput blocker is materially reduced.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md, docs/architectural-decision-records/adr0023-file-mode-enrichment-throughput-strategy.md, docs/user-stories/us-m2-file-first-throughput.md, docs/requirements/m2-file-first-throughput.md, README.md, .agent/directives/project.md, docs/architectural-decision-records/adr0010-transform-score-tech-likelihood-scoring.md, docs/architectural-decision-records/README.md
+Follow-ups: Run full Step 4-6 Milestone 2 protocol sequence, capture auditable run log, and decide whether additional throughput work is required before marking M2-B1 complete.
+```
+
+```text
+Date: 2026-02-08
+Batch ID: M2-B1
+Status: Complete
+Summary: Completed full Step 4-6 validation protocol run on live snapshots in file mode. Full `transform-enrich` run completed in 44m52s (`2026-02-08T16:38:09+00:00` to `2026-02-08T17:23:28+00:00`) with `100,849` matched and `18,260` unmatched organisations. `transform-score`, `usage-shortlist`, `run-all` sanity check, and validation scripts all passed.
+Quality gates: Step validation commands pass (`validation_check_snapshots`, `validation_check_outputs`, `validation_e2e_fixture`)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M2-B2 (docs alignment from real run findings).
+```
+
+```text
+Date: 2026-02-08
+Batch ID: M2-B2
+Status: Complete
+Summary: Reconciled docs with real run findings by clarifying explicit `CH_SOURCE_TYPE=file` shell export fallback in protocol and troubleshooting guides. Also resolved a live contract drift where Companies House manifests omit `artefacts.manifest` by adding a characterisation test and aligning snapshot validation required artefact keys.
+Quality gates: Targeted TDD validation test pass
+Docs updated: docs/validation-protocol.md, docs/troubleshooting.md, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M2-B3 (Milestone 2 closeout).
+```
+
+```text
+Date: 2026-02-08
+Batch ID: M2-B3
+Status: Complete
+Summary: Closed Milestone 2 with status reconciliation, run-log capture, and full quality-gate validation after code/doc updates.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M3-B1 (scoring profile characterisation baseline).
+```
+
+```text
+Validation Run
+Date: 2026-02-08
+Operator: Codex
+Environment: Local macOS; uv 0.9.28; Python 3.14.2
+CH_SOURCE_TYPE: file (shell export fallback used because .env lacked explicit value)
+Sponsor CSV URL: https://assets.publishing.service.gov.uk/media/6985be6985bc7d6ba0fbc725/2026-02-06_-_Worker_and_Temporary_Worker.csv
+Companies House ZIP URL: https://download.companieshouse.gov.uk/BasicCompanyDataAsOneFile-2026-02-01.zip
+Sponsor snapshot date: 2026-02-06
+Companies House snapshot date: 2026-02-01
+Runtime commands executed:
+  CH_SOURCE_TYPE=file uv run uk-sponsor transform-enrich
+  CH_SOURCE_TYPE=file uv run uk-sponsor transform-score
+  CH_SOURCE_TYPE=file uv run uk-sponsor usage-shortlist
+  CH_SOURCE_TYPE=file uv run uk-sponsor run-all
+Output artefact locations:
+  data/processed/companies_house_enriched.csv (100,850 lines incl header)
+  data/processed/companies_house_unmatched.csv (18,261 lines incl header)
+  data/processed/companies_house_candidates_top3.csv (254,716 lines incl header)
+  data/processed/companies_house_checkpoint.csv (119,110 lines incl header)
+  data/processed/companies_scored.csv (100,850 lines incl header)
+  data/processed/companies_shortlist.csv (11,062 lines incl header)
+  data/processed/companies_explain.csv (11,062 lines incl header)
+Observed issues:
+  Snapshot validation initially failed: Companies House live manifest did not include `artefacts.manifest`.
+Recovery actions:
+  Added characterisation test and aligned `validation_snapshots` required artefact keys to live Companies House manifest contract.
+  Updated docs to include explicit shell export fallback for `CH_SOURCE_TYPE`.
+Result: pass
+```
+
+## Operational Discoveries (2026-02-08)
+
+1. Pipeline automation: CLI orchestration is non-interactive (`run-all`), but strict reproducibility requires controlling output state because `transform-enrich` defaults to resume mode.
+1. Matching contract: sponsor organisations without a qualifying Companies House match are excluded from `data/processed/companies_house_enriched.csv` and retained in `data/processed/companies_house_unmatched.csv` for analysis.
+1. Live-data compatibility drift observed and fixed: Companies House URI host/path variants and `DD/MM/YYYY` incorporation dates now parse in cleaning.
+1. Primary runtime blocker is algorithmic, not just data volume: `FileCompaniesHouseSource._load_profiles_for_numbers` repeatedly scans full `profiles_<bucket>.csv` artefacts, which does not scale to the current bulk snapshot size.
+1. Decision locked: prioritise Option 1 (single-pass bucket profile loading) for this use case; defer Option 2 unless trigger thresholds are reached.
+1. Product direction clarified: tech/London/large are early proof-of-concept defaults; target capability is user-selectable filtering and ranking by job type first, then sector/location/size.
+1. Throughput probe result after Option 1: 250 enrich organisations completed in ~25 seconds in file mode (`--batch-count 1`), confirming large improvement versus prior projected runtime.
+1. Initial conservative projection from the bounded probe was ~3.31 hours for full enrich; full live run evidence superseded this with an actual 44m52 completion.
+1. Fixture-driven end-to-end flow remains unattended and deterministic in practice: `scripts/validation_e2e_fixture.py` passed on 2026-02-08.
+1. Full live Step 4 runtime completed unattended: `transform-enrich` finished 119,109 organisations in 44m52s with 100,849 matched and 18,260 unmatched.
+1. `run-all` sanity check confirms deterministic resume behaviour after full completion: 0 unprocessed organisations and no source-mode errors.
+1. Live protocol surfaced a manifest-validation contract drift (Companies House `artefacts.manifest` absent); fixed in `validation_snapshots` with matching test coverage.
+1. Milestone 2 is complete; next active batch is `M3-B1`.
+
+## Operational Discoveries (2026-02-09)
+
+1. Enrichment intent confirmed in live behaviour: sponsor organisations with qualifying Companies House matches are written to `data/processed/companies_house_enriched.csv`; non-matches are excluded from enriched output and retained in `data/processed/companies_house_unmatched.csv` for analysis.
+1. Added deterministic enrichment audit tooling (`scripts/validation_audit_enrichment.py`) with structural fail-fast checks and threshold-based warning metrics; strict mode returns non-zero on threshold breaches.
+1. Added comprehensive fixture matrix for enrichment audit scenarios in `tests/support/enrichment_audit_fixtures.py` and coverage in `tests/devtools/test_enrichment_audit.py` plus script tests.
+1. Live audit on current processed outputs passed with baseline metrics: enriched rows `100,849`, unmatched rows `18,260`, low-similarity matches `247`, non-active matched companies `2,307`, shared-company-number rows `1,566`, near-threshold unmatched rows `1,299`.
+1. Processed artefact footprint currently measured at approximately `108M` under `data/processed`; default project stance remains to avoid committing processed outputs.
+1. Added `docs/performance-improvement-plan.md` capturing incremental and high-impact optimisation tracks, deterministic guardrails, and acceptance metrics for future throughput work.
+
 ## Session Completion Rules (Every Session)
 
 1. Keep this file updated with progress state.
@@ -757,7 +887,7 @@ Follow-ups: Execute M2-B1 (operational baseline validation protocol run).
 
 1. Milestone 0: Complete.
 1. Milestone 1: Complete.
-1. Milestone 2: Not started.
+1. Milestone 2: Complete.
 1. Milestone 3: Not started.
 1. Milestone 4: Not started.
 1. Milestone 5: Not started.

@@ -41,10 +41,10 @@ def validate_outputs(out_dir: str | Path) -> OutputValidationResult:
         raise OutputValidationError(message)
 
     required_csv_outputs = (
-        ("companies_house_enriched.csv", TRANSFORM_ENRICH_OUTPUT_COLUMNS),
-        ("companies_house_unmatched.csv", TRANSFORM_ENRICH_UNMATCHED_COLUMNS),
-        ("companies_house_candidates_top3.csv", TRANSFORM_ENRICH_CANDIDATES_COLUMNS),
-        ("companies_house_checkpoint.csv", ("Organisation Name",)),
+        ("sponsor_enriched.csv", TRANSFORM_ENRICH_OUTPUT_COLUMNS),
+        ("sponsor_unmatched.csv", TRANSFORM_ENRICH_UNMATCHED_COLUMNS),
+        ("sponsor_match_candidates_top3.csv", TRANSFORM_ENRICH_CANDIDATES_COLUMNS),
+        ("sponsor_enrich_checkpoint.csv", ("Organisation Name",)),
         ("companies_scored.csv", TRANSFORM_SCORE_OUTPUT_COLUMNS),
         ("companies_shortlist.csv", TRANSFORM_SCORE_OUTPUT_COLUMNS),
         ("companies_explain.csv", TRANSFORM_SCORE_EXPLAIN_COLUMNS),
@@ -59,7 +59,7 @@ def validate_outputs(out_dir: str | Path) -> OutputValidationResult:
         _validate_csv_columns(path=path, required_columns=required_columns)
         validated_paths.append(path)
 
-    report_path = root / "companies_house_resume_report.json"
+    report_path = root / "sponsor_enrich_resume_report.json"
     if not report_path.exists():
         message = f"Missing required output file: {report_path}"
         raise OutputValidationError(message)

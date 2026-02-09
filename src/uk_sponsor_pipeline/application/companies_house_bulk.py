@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping
 from datetime import date
+from urllib.parse import urlparse
 
 from ..exceptions import CompaniesHouseUriMismatchError, CsvSchemaMissingColumnsError
 
@@ -125,19 +126,24 @@ def _parse_date(value: str) -> str:
     text = value.strip()
     if not text:
         return ""
-    parsed = date.fromisoformat(text)
-    return parsed.isoformat()
+    try:
+        return date.fromisoformat(text).isoformat()
+    except ValueError:
+        return date.strptime(text, "%d/%m/%Y").isoformat()
 
 
-def _expected_uri(company_number: str) -> str:
-    return f"http://data.companieshouse.gov.uk/doc/company/{company_number}"
+def _uri_matches_company_number(uri: str, company_number: str) -> bool:
+    parsed = urlparse(uri)
+    if not parsed.scheme or not parsed.netloc:
+        return False
+    path = parsed.path.rstrip("/")
+    return path.endswith(f"/company/{company_number}")
 
 
 def clean_companies_house_row(raw: Mapping[str, str]) -> dict[str, str]:
     company_number = raw.get("CompanyNumber", "").strip()
     uri = raw.get("URI", "").strip()
-    expected_uri = _expected_uri(company_number)
-    if uri != expected_uri:
+    if not _uri_matches_company_number(uri, company_number):
         raise CompaniesHouseUriMismatchError(company_number, uri)
 
     sic_values = [raw.get(field, "") for field in _SIC_FIELDS]

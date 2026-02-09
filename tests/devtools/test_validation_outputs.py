@@ -62,26 +62,26 @@ def _resume_report(status: str = "complete") -> dict[str, object]:
 
 def _write_valid_outputs(out_dir: Path) -> None:
     _write_csv(
-        out_dir / "companies_house_enriched.csv",
+        out_dir / "sponsor_enriched.csv",
         TRANSFORM_ENRICH_OUTPUT_COLUMNS,
         _row(TRANSFORM_ENRICH_OUTPUT_COLUMNS),
     )
     _write_csv(
-        out_dir / "companies_house_unmatched.csv",
+        out_dir / "sponsor_unmatched.csv",
         TRANSFORM_ENRICH_UNMATCHED_COLUMNS,
         _row(TRANSFORM_ENRICH_UNMATCHED_COLUMNS),
     )
     _write_csv(
-        out_dir / "companies_house_candidates_top3.csv",
+        out_dir / "sponsor_match_candidates_top3.csv",
         TRANSFORM_ENRICH_CANDIDATES_COLUMNS,
         _row(TRANSFORM_ENRICH_CANDIDATES_COLUMNS),
     )
     _write_csv(
-        out_dir / "companies_house_checkpoint.csv",
+        out_dir / "sponsor_enrich_checkpoint.csv",
         ("Organisation Name",),
         ["Acme Ltd"],
     )
-    (out_dir / "companies_house_resume_report.json").write_text(
+    (out_dir / "sponsor_enrich_resume_report.json").write_text(
         json.dumps(_resume_report()),
         encoding="utf-8",
     )
@@ -134,7 +134,7 @@ def test_validate_outputs_raises_for_missing_required_columns(tmp_path: Path) ->
 def test_validate_outputs_raises_for_malformed_resume_report(tmp_path: Path) -> None:
     out_dir = tmp_path / "processed"
     _write_valid_outputs(out_dir)
-    (out_dir / "companies_house_resume_report.json").write_text("[]", encoding="utf-8")
+    (out_dir / "sponsor_enrich_resume_report.json").write_text("[]", encoding="utf-8")
 
     with pytest.raises(OutputValidationError, match="Resume report must be an object"):
         validate_outputs(out_dir)
@@ -143,7 +143,7 @@ def test_validate_outputs_raises_for_malformed_resume_report(tmp_path: Path) -> 
 def test_validate_outputs_raises_for_invalid_resume_status(tmp_path: Path) -> None:
     out_dir = tmp_path / "processed"
     _write_valid_outputs(out_dir)
-    (out_dir / "companies_house_resume_report.json").write_text(
+    (out_dir / "sponsor_enrich_resume_report.json").write_text(
         json.dumps(_resume_report(status="partial")),
         encoding="utf-8",
     )

@@ -41,8 +41,14 @@ Symptom:
 Recovery:
 
 1. Set `CH_SOURCE_TYPE=file` in `.env`.
-2. Ensure required snapshots exist.
-3. Rerun command.
+2. Or export it for the current shell:
+
+```bash
+export CH_SOURCE_TYPE=file
+```
+
+3. Ensure required snapshots exist.
+4. Rerun command.
 
 Archived runtime API notes are in `docs/archived-api-runtime-mode.md`.
 
@@ -236,3 +242,30 @@ Capture:
 4. any artefact paths involved.
 
 Then open an issue or update the current plan with blocker details and proposed unblock action.
+
+## 13) Enrichment Audit Reports Warnings or Fails in Strict Mode
+
+Command:
+
+```bash
+uv run python scripts/validation_audit_enrichment.py --out-dir <path>
+```
+
+Strict mode:
+
+```bash
+uv run python scripts/validation_audit_enrichment.py --out-dir <path> --strict
+```
+
+Common causes:
+
+- too many low-similarity matches,
+- too many non-active matched companies,
+- too many sponsors sharing one Companies House company number,
+- too many unmatched rows with near-threshold candidate scores.
+
+Recovery:
+
+1. Review reported metrics against expected baseline.
+2. Sample suspicious rows from `sponsor_enriched.csv` and `sponsor_unmatched.csv`.
+3. Tune thresholds for this run or investigate matching logic before accepting outputs.

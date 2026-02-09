@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import csv
 import hashlib
-import io
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
@@ -55,6 +54,14 @@ def _empty_profile_cache() -> dict[str, CompanyProfile]:
 
 def _empty_search_cache() -> dict[str, SearchItem]:
     return {}
+
+
+def _empty_profile_targets_by_bucket() -> dict[str, set[str]]:
+    return {}
+
+
+def _empty_loaded_profile_buckets() -> set[str]:
+    return set()
 
 
 class CompaniesHouseSource(Protocol):
@@ -103,11 +110,17 @@ class FileCompaniesHouseSource(CompaniesHouseSource):
     token_index: dict[str, list[str]]
     profile_dir: Path
     max_candidates: int
+    profile_targets_by_bucket: dict[str, set[str]] = field(
+        default_factory=_empty_profile_targets_by_bucket
+    )
     _profile_cache: dict[str, CompanyProfile] = field(
         default_factory=_empty_profile_cache, init=False, repr=False
     )
     _search_cache: dict[str, SearchItem] = field(
         default_factory=_empty_search_cache, init=False, repr=False
+    )
+    _loaded_profile_buckets: set[str] = field(
+        default_factory=_empty_loaded_profile_buckets, init=False, repr=False
     )
 
     @override
@@ -149,20 +162,35 @@ class FileCompaniesHouseSource(CompaniesHouseSource):
             bucket = bucket_for_token(number)
             bucket_map.setdefault(bucket, set()).add(number)
         for bucket, numbers in bucket_map.items():
-            path = self.profile_dir / f"profiles_{bucket}.csv"
-            if not self.fs.exists(path):
-                raise SnapshotArtefactMissingError(str(path))
-            text = self.fs.read_text(path)
-            reader = csv.DictReader(io.StringIO(text))
+            if bucket not in self._loaded_profile_buckets:
+                targets = set(self.profile_targets_by_bucket.get(bucket, set()))
+                targets.update(numbers)
+                self._scan_profile_bucket(bucket=bucket, target_numbers=targets)
+                self._loaded_profile_buckets.add(bucket)
+                continue
+            unresolved = {number for number in numbers if number not in self._profile_cache}
+            if unresolved:
+                self._scan_profile_bucket(bucket=bucket, target_numbers=unresolved)
+
+    def _scan_profile_bucket(self, *, bucket: str, target_numbers: set[str]) -> None:
+        path = self.profile_dir / f"profiles_{bucket}.csv"
+        if not self.fs.exists(path):
+            raise SnapshotArtefactMissingError(str(path))
+        remaining = set(target_numbers)
+        with self.fs.open_text(path, mode="r", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
             if reader.fieldnames is None:
                 raise CsvSchemaDecodeError()
             _validate_profile_headers([header.strip() for header in reader.fieldnames if header])
             for row in reader:
                 company_number = (row.get("company_number") or "").strip()
-                if not company_number or company_number not in numbers:
+                if not company_number or company_number not in remaining:
                     continue
                 clean_row = _coerce_clean_row(row)
                 self._store_profile(clean_row)
+                remaining.discard(company_number)
+                if not remaining:
+                    return
 
     def _store_profile(self, row: CompaniesHouseCleanRow) -> None:
         company_number = row["company_number"].strip()
@@ -198,11 +226,13 @@ def build_companies_house_source(
             index_dir=index_dir,
             fs=fs,
         )
+        profile_targets_by_bucket = _build_profile_targets_by_bucket(token_index)
         return FileCompaniesHouseSource(
             fs=fs,
             token_index=token_index,
             profile_dir=index_dir,
             max_candidates=config.ch_file_max_candidates,
+            profile_targets_by_bucket=profile_targets_by_bucket,
         )
 
     raise InvalidSourceTypeError()
@@ -245,24 +275,35 @@ def _load_token_index_map(
         path = index_dir / f"index_tokens_{bucket}.csv"
         if not fs.exists(path):
             raise SnapshotArtefactMissingError(str(path))
-        text = fs.read_text(path)
-        reader = csv.DictReader(io.StringIO(text))
-        if reader.fieldnames is None:
-            raise CsvSchemaDecodeError()
-        _validate_index_headers([header.strip() for header in reader.fieldnames if header])
-        for row in reader:
-            token = (row.get("token") or "").strip()
-            if token not in token_set:
-                continue
-            company_number = (row.get("company_number") or "").strip()
-            if not company_number:
-                continue
-            seen.setdefault(token, set())
-            if company_number in seen[token]:
-                continue
-            token_index.setdefault(token, []).append(company_number)
-            seen[token].add(company_number)
+        with fs.open_text(path, mode="r", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            if reader.fieldnames is None:
+                raise CsvSchemaDecodeError()
+            _validate_index_headers([header.strip() for header in reader.fieldnames if header])
+            for row in reader:
+                token = (row.get("token") or "").strip()
+                if token not in token_set:
+                    continue
+                company_number = (row.get("company_number") or "").strip()
+                if not company_number:
+                    continue
+                seen.setdefault(token, set())
+                if company_number in seen[token]:
+                    continue
+                token_index.setdefault(token, []).append(company_number)
+                seen[token].add(company_number)
     return token_index
+
+
+def _build_profile_targets_by_bucket(
+    token_index: Mapping[str, list[str]],
+) -> dict[str, set[str]]:
+    by_bucket: dict[str, set[str]] = {}
+    for company_numbers in token_index.values():
+        for company_number in company_numbers:
+            bucket = bucket_for_token(company_number)
+            by_bucket.setdefault(bucket, set()).add(company_number)
+    return by_bucket
 
 
 def _validate_index_headers(headers: list[str]) -> None:

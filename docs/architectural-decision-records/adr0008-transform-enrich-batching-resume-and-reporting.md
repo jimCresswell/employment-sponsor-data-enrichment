@@ -13,8 +13,8 @@ Transform Enrich can take hours for large datasets and should be safe to interru
 ## Decision
 
 Transform Enrich processes input in batches with explicit controls (`batch_start`, `batch_count`, `batch_size`). Progress is recorded to:
-- `companies_house_checkpoint.csv` (processed orgs)
-- `companies_house_resume_report.json` (run metadata and timing)
+- `sponsor_enrich_checkpoint.csv` (processed orgs)
+- `sponsor_enrich_resume_report.json` (run metadata and timing)
 
 The resume report includes timing, overall batch range, processed counts, and a prebuilt resume command.
 

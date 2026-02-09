@@ -255,11 +255,11 @@ def run_transform_enrich(
         logger.info("Resume disabled; writing to new output directory: %s", out_dir)
     fs.mkdir(out_dir, parents=True)
 
-    out_enriched = out_dir / "companies_house_enriched.csv"
-    out_unmatched = out_dir / "companies_house_unmatched.csv"
-    out_candidates = out_dir / "companies_house_candidates_top3.csv"
-    out_checkpoint = out_dir / "companies_house_checkpoint.csv"
-    out_resume_report = out_dir / "companies_house_resume_report.json"
+    out_enriched = out_dir / "sponsor_enriched.csv"
+    out_unmatched = out_dir / "sponsor_unmatched.csv"
+    out_candidates = out_dir / "sponsor_match_candidates_top3.csv"
+    out_checkpoint = out_dir / "sponsor_enrich_checkpoint.csv"
+    out_resume_report = out_dir / "sponsor_enrich_resume_report.json"
 
     # Load input
     run_started_at_utc = datetime.now(UTC)

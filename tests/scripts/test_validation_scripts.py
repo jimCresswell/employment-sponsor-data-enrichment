@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tests.support.enrichment_audit_fixtures import write_enrichment_audit_fixture
 from uk_sponsor_pipeline.application.companies_house_bulk import CANONICAL_HEADERS_V1
 from uk_sponsor_pipeline.schemas import (
     TRANSFORM_ENRICH_CANDIDATES_COLUMNS,
@@ -117,21 +118,21 @@ def _write_valid_snapshot_root(root: Path) -> None:
 
 def _write_valid_output_dir(root: Path) -> None:
     _write_csv(
-        root / "companies_house_enriched.csv",
+        root / "sponsor_enriched.csv",
         TRANSFORM_ENRICH_OUTPUT_COLUMNS,
         _row(TRANSFORM_ENRICH_OUTPUT_COLUMNS),
     )
     _write_csv(
-        root / "companies_house_unmatched.csv",
+        root / "sponsor_unmatched.csv",
         TRANSFORM_ENRICH_UNMATCHED_COLUMNS,
         _row(TRANSFORM_ENRICH_UNMATCHED_COLUMNS),
     )
     _write_csv(
-        root / "companies_house_candidates_top3.csv",
+        root / "sponsor_match_candidates_top3.csv",
         TRANSFORM_ENRICH_CANDIDATES_COLUMNS,
         _row(TRANSFORM_ENRICH_CANDIDATES_COLUMNS),
     )
-    _write_csv(root / "companies_house_checkpoint.csv", ("Organisation Name",), ["Acme Ltd"])
+    _write_csv(root / "sponsor_enrich_checkpoint.csv", ("Organisation Name",), ["Acme Ltd"])
     _write_csv(
         root / "companies_scored.csv",
         TRANSFORM_SCORE_OUTPUT_COLUMNS,
@@ -171,7 +172,7 @@ def _write_valid_output_dir(root: Path) -> None:
         "remaining": 0,
         "resume_command": "uv run uk-sponsor transform-enrich --resume",
     }
-    (root / "companies_house_resume_report.json").write_text(json.dumps(report), encoding="utf-8")
+    (root / "sponsor_enrich_resume_report.json").write_text(json.dumps(report), encoding="utf-8")
 
 
 def test_validation_check_snapshots_script_passes_for_valid_snapshots(tmp_path: Path) -> None:
@@ -222,3 +223,35 @@ def test_validation_check_outputs_script_fails_for_missing_dir(tmp_path: Path) -
 
     assert result.returncode != 0
     assert "FAIL output validation" in result.stderr
+
+
+def test_validation_audit_enrichment_script_passes_for_valid_fixture(tmp_path: Path) -> None:
+    out_dir = tmp_path / "processed"
+    write_enrichment_audit_fixture(out_dir=out_dir, fixture_name="valid_baseline")
+
+    result = _run_script(
+        Path("scripts/validation_audit_enrichment.py"),
+        ["--out-dir", str(out_dir)],
+    )
+
+    assert result.returncode == 0
+    assert "PASS enrichment audit" in result.stdout
+
+
+def test_validation_audit_enrichment_script_strict_fails_for_breaches(tmp_path: Path) -> None:
+    out_dir = tmp_path / "processed"
+    write_enrichment_audit_fixture(out_dir=out_dir, fixture_name="low_similarity_spike")
+
+    result = _run_script(
+        Path("scripts/validation_audit_enrichment.py"),
+        [
+            "--out-dir",
+            str(out_dir),
+            "--strict",
+            "--max-low-similarity-matches",
+            "2",
+        ],
+    )
+
+    assert result.returncode != 0
+    assert "FAIL enrichment audit" in result.stderr

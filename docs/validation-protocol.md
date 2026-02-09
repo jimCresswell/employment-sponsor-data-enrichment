@@ -39,6 +39,12 @@ grep '^CH_SOURCE_TYPE=' .env
 
 Expected value: `CH_SOURCE_TYPE=file`.
 
+If `.env` does not define `CH_SOURCE_TYPE`, set it in your shell before running protocol commands:
+
+```bash
+export CH_SOURCE_TYPE=file
+```
+
 3. Sync dependencies if needed:
 
 ```bash
@@ -117,11 +123,11 @@ uv run uk-sponsor usage-shortlist
 Acceptance checks:
 
 - `transform-enrich` creates:
-  - `data/processed/companies_house_enriched.csv`
-  - `data/processed/companies_house_unmatched.csv`
-  - `data/processed/companies_house_candidates_top3.csv`
-  - `data/processed/companies_house_checkpoint.csv`
-  - `data/processed/companies_house_resume_report.json`
+  - `data/processed/sponsor_enriched.csv`
+  - `data/processed/sponsor_unmatched.csv`
+  - `data/processed/sponsor_match_candidates_top3.csv`
+  - `data/processed/sponsor_enrich_checkpoint.csv`
+  - `data/processed/sponsor_enrich_resume_report.json`
 - `transform-score` creates:
   - `data/processed/companies_scored.csv`
 - `usage-shortlist` creates:
@@ -149,12 +155,15 @@ Validate snapshot and processed artefact contracts with dedicated scripts:
 ```bash
 uv run python scripts/validation_check_snapshots.py --snapshot-root data/cache/snapshots
 uv run python scripts/validation_check_outputs.py --out-dir data/processed
+uv run python scripts/validation_audit_enrichment.py --out-dir data/processed
 ```
 
 Expected behaviour:
 
 - Exit code `0` with `PASS ...` output when validation succeeds.
 - Non-zero exit with `FAIL ...` output when any required artefact, field, or column check fails.
+- Enrichment audit prints key matching quality metrics and exits `0` by default.
+- Use `--strict` on enrichment audit to fail non-zero when warning thresholds are exceeded.
 
 Run fixture-driven e2e CLI validation (outside pytest):
 

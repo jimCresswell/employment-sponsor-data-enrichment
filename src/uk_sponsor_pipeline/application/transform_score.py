@@ -63,7 +63,7 @@ def _parse_match_score(values: pd.Series) -> pd.Series:
 
 
 def run_transform_score(
-    enriched_path: str | Path = "data/processed/companies_house_enriched.csv",
+    enriched_path: str | Path = "data/processed/sponsor_enriched.csv",
     out_dir: str | Path = "data/processed",
     config: PipelineConfig | None = None,
     fs: FileSystem | None = None,

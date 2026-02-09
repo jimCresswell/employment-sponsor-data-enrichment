@@ -122,7 +122,7 @@ class RuntimeFileSourceRequiredError(typer.BadParameter):
 
 DEFAULT_SNAPSHOT_ROOT = Path("data/cache/snapshots")
 DEFAULT_PROCESSED_DIR = Path("data/processed")
-DEFAULT_ENRICHED_IN = Path("data/processed/companies_house_enriched.csv")
+DEFAULT_ENRICHED_IN = Path("data/processed/sponsor_enriched.csv")
 DEFAULT_SCORED_IN = Path("data/processed/companies_scored.csv")
 DEFAULT_CACHE_DIR = Path("data/cache/companies_house")
 
@@ -440,7 +440,7 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
         """Transform enrich: enrich register output using Companies House data.
 
         Batching: use --batch-start/--batch-count/--batch-size.
-        Resume: --resume and check data/processed/companies_house_resume_report.json.
+        Resume: --resume and check data/processed/sponsor_enrich_resume_report.json.
         """
         state = _get_context(ctx)
         config = state.config

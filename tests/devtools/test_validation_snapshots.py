@@ -13,6 +13,7 @@ from uk_sponsor_pipeline.devtools.validation_snapshots import (
     SnapshotValidationError,
     validate_snapshots,
 )
+from uk_sponsor_pipeline.io_validation import validate_as
 from uk_sponsor_pipeline.schemas import TRANSFORM_REGISTER_OUTPUT_COLUMNS
 
 
@@ -138,6 +139,25 @@ def test_validate_snapshots_accepts_valid_snapshots(tmp_path: Path) -> None:
     assert len(result.datasets) == 2
     assert result.datasets[0].dataset == "sponsor"
     assert result.datasets[1].dataset == "companies_house"
+
+
+def test_validate_snapshots_accepts_companies_house_manifest_without_manifest_key(
+    tmp_path: Path,
+) -> None:
+    snapshot_root = tmp_path / "snapshots"
+    _write_valid_snapshot_root(snapshot_root)
+    manifest_path = snapshot_root / "companies_house" / "2026-02-06" / "manifest.json"
+    manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = validate_as(dict[str, object], manifest_data)
+    artefacts_data = validate_as(dict[str, object], manifest["artefacts"])
+    artefacts = {key: value for key, value in artefacts_data.items() if key != "manifest"}
+    manifest["artefacts"] = artefacts
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    result = validate_snapshots(snapshot_root)
+
+    assert result.snapshot_root == snapshot_root
+    assert len(result.datasets) == 2
 
 
 def test_validate_snapshots_raises_for_missing_snapshot_root(tmp_path: Path) -> None:

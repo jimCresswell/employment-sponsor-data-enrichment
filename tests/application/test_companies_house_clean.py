@@ -83,3 +83,26 @@ def test_clean_companies_house_row_raises_on_uri_mismatch() -> None:
 
     with pytest.raises(CompaniesHouseUriMismatchError):
         clean_companies_house_row(raw)
+
+
+def test_clean_companies_house_row_accepts_business_data_uri() -> None:
+    raw = {header: "" for header in RAW_HEADERS_TRIMMED}
+    raw["CompanyNumber"] = "01234567"
+    raw["CompanyName"] = "Acme Ltd"
+    raw["URI"] = "http://business.data.gov.uk/id/company/01234567"
+
+    clean = clean_companies_house_row(raw)
+
+    assert clean["uri"] == "http://business.data.gov.uk/id/company/01234567"
+
+
+def test_clean_companies_house_row_parses_slash_date_format() -> None:
+    raw = {header: "" for header in RAW_HEADERS_TRIMMED}
+    raw["CompanyNumber"] = "01234567"
+    raw["CompanyName"] = "Acme Ltd"
+    raw["IncorporationDate"] = "11/09/2012"
+    raw["URI"] = "http://business.data.gov.uk/id/company/01234567"
+
+    clean = clean_companies_house_row(raw)
+
+    assert clean["date_of_creation"] == "2012-09-11"

@@ -1,10 +1,13 @@
-# UK Sponsor -> Tech Hiring Pipeline
+# UK Sponsor -> Hiring Signals Pipeline
 
 This project turns public UK sponsor and Companies House data into a reproducible shortlist of
-organisations likely to hire senior engineers who require visa sponsorship.
+organisations likely to hire for target job types that require visa sponsorship.
 
 The goal is practical impact: reduce manual searching, keep every decision auditable, and make
 improvements easy for contributors to ship safely.
+
+Current scoring defaults are tech-role focused as an early proof of concept. The intended
+direction is broader: user-selectable job-type, sector, location, and size filters.
 
 ## Project Intent
 
@@ -41,7 +44,7 @@ Snapshots -> transform-enrich -> transform-score -> usage-shortlist
 | `refresh-sponsor` | Sponsor CSV URL | `data/cache/snapshots/sponsor/<YYYY-MM-DD>/...` | Discover, download, clean, snapshot sponsor data |
 | `refresh-companies-house` | Companies House ZIP/CSV URL | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/...` | Discover, download/extract, clean, index, snapshot CH data |
 | `transform-enrich` | Clean snapshots | `data/processed/companies_house_*.csv` | Match sponsor organisations to CH entities |
-| `transform-score` | Enriched CSV | `data/processed/companies_scored.csv` | Apply tech-likelihood scoring model |
+| `transform-score` | Enriched CSV | `data/processed/companies_scored.csv` | Apply default role-likelihood scoring profile (currently tech-focused) |
 | `usage-shortlist` | Scored CSV | `data/processed/companies_shortlist.csv`, `data/processed/companies_explain.csv` | Apply thresholds and geo filters for final shortlist |
 
 ## Quick Start (First Successful Run)
@@ -93,11 +96,11 @@ uv run uk-sponsor run-all
 
 Expected files in `data/processed/`:
 
-- `companies_house_enriched.csv`
-- `companies_house_unmatched.csv`
-- `companies_house_candidates_top3.csv`
-- `companies_house_checkpoint.csv`
-- `companies_house_resume_report.json`
+- `sponsor_enriched.csv`
+- `sponsor_unmatched.csv`
+- `sponsor_match_candidates_top3.csv`
+- `sponsor_enrich_checkpoint.csv`
+- `sponsor_enrich_resume_report.json`
 - `companies_scored.csv`
 - `companies_shortlist.csv`
 - `companies_explain.csv`
@@ -163,8 +166,8 @@ uv run uk-sponsor transform-enrich --batch-size 50
 
 Resume artefacts:
 
-- `data/processed/companies_house_checkpoint.csv`
-- `data/processed/companies_house_resume_report.json`
+- `data/processed/sponsor_enrich_checkpoint.csv`
+- `data/processed/sponsor_enrich_resume_report.json`
 
 When running with `--no-resume`, outputs are written to a timestamped subdirectory under the
 selected output directory.
@@ -265,13 +268,13 @@ print(result.usage["shortlist"])
 Contributions are expected to improve either:
 
 - **Pipeline quality**: correctness, reproducibility, fail-fast guarantees.
-- **Decision quality**: better matching, scoring, and explainability.
+- **Decision quality**: better matching, scoring, profile selection, and explainability.
 - **Operational quality**: clearer onboarding, safer runbooks, stronger validation.
 
 ### High-Impact Contribution Areas
 
 1. Data quality checks for refresh and transform outputs.
-2. Explainability improvements in shortlist scoring outputs.
+2. Role/profile improvements (job type first, then sector/location/size) and shortlist explainability.
 3. Documentation and onboarding improvements for first-time contributors.
 4. Validation tooling and reproducibility checks.
 
@@ -332,6 +335,13 @@ Run contract checks against snapshot and processed artefacts:
 ```bash
 uv run python scripts/validation_check_snapshots.py --snapshot-root data/cache/snapshots
 uv run python scripts/validation_check_outputs.py --out-dir data/processed
+uv run python scripts/validation_audit_enrichment.py --out-dir data/processed
+```
+
+Use strict audit mode to fail on warning-threshold breaches:
+
+```bash
+uv run python scripts/validation_audit_enrichment.py --out-dir data/processed --strict
 ```
 
 Run fixture-driven e2e CLI validation (outside pytest):

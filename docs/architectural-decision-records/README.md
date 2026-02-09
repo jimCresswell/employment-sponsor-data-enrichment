@@ -1,6 +1,6 @@
 # Architectural Decision Records
 
-This directory contains the ADRs for the UK Sponsor → Tech Hiring Pipeline.
+This directory contains the ADRs for the UK Sponsor → Hiring Signals Pipeline.
 
 ## Index
 
@@ -24,6 +24,7 @@ This directory contains the ADRs for the UK Sponsor → Tech Hiring Pipeline.
 - `adr0020-file-first-companies-house-lookup.md`
 - `adr0021-refresh-step-groups-and-staged-acquire-clean.md`
 - `adr0022-file-only-runtime-io-boundaries-and-single-region-filtering.md`
+- `adr0023-file-mode-enrichment-throughput-strategy.md`
 
 ## Superseded
 

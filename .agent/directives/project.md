@@ -1,8 +1,12 @@
-# Project Definition: UK Sponsor → Tech Hiring Pipeline
+# Project Definition: UK Sponsor → Hiring Signals Pipeline
 
 ## Purpose
 
-Produce a reproducible, auditable shortlist of UK sponsor‑licensed companies likely to hire senior engineers who require visa sponsorship. The goal is to replace manual scanning with a transparent, explainable pipeline.
+Produce a reproducible, auditable shortlist of UK sponsor‑licensed companies likely to hire for target job types that require visa sponsorship. The goal is to replace manual scanning with a transparent, explainable pipeline.
+
+Current scoring defaults are tech-role focused as an early proof of concept. The target product
+direction is broader filtering and ranking across job type, sector, location, and organisation
+size.
 
 ## Read Order
 
@@ -27,7 +31,7 @@ Produce a reproducible, auditable shortlist of UK sponsor‑licensed companies l
 1. **refresh-sponsor** → download and clean the GOV.UK sponsor register snapshot.
 2. **refresh-companies-house** → download, clean, and index the bulk Companies House snapshot.
 3. **transform-enrich** → enrich sponsor data using Companies House (file-first by default).
-4. **transform-score** → score for tech‑likelihood and write the scored artefact.
+4. **transform-score** → score with the active role/profile model and write the scored artefact.
 5. **usage-shortlist** → apply thresholds and geographic filters, then produce shortlist + explainability.
 
 Pipeline runs (for example `run-all`) consume clean snapshots only and fail fast if required
