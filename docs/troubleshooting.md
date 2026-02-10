@@ -224,6 +224,9 @@ Common causes:
 
 - Local command failure during grouped refresh or runtime flow.
 - Fixture contract mismatch with current pipeline rules.
+- Deterministic rerun mismatch across two unchanged `--no-resume` enrich runs.
+- Resume rerun invariants failed (`status != complete`, non-zero `processed_in_run`,
+  or non-zero `remaining`).
 - Port binding issues for the local fixture server.
 
 Recovery:
@@ -257,8 +260,17 @@ Strict mode:
 uv run python scripts/validation_audit_enrichment.py --out-dir <path> --strict
 ```
 
+Exit code contract:
+
+- `0`: pass (or warnings only when not strict),
+- `1`: structural/data-contract failure,
+- `2`: threshold breach in strict mode.
+
 Common causes:
 
+- duplicate organisations in enriched output,
+- overlap between enriched and unmatched organisation sets,
+- missing key enriched fields,
 - too many low-similarity matches,
 - too many non-active matched companies,
 - too many sponsors sharing one Companies House company number,
@@ -269,3 +281,5 @@ Recovery:
 1. Review reported metrics against expected baseline.
 2. Sample suspicious rows from `sponsor_enriched.csv` and `sponsor_unmatched.csv`.
 3. Tune thresholds for this run or investigate matching logic before accepting outputs.
+
+For the canonical contract and exit-code definitions, see `docs/data-contracts.md`.

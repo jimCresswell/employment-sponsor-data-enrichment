@@ -1,10 +1,10 @@
 # Linear Delivery Plan (Standalone Session Entry Point)
 
 Status: Active  
-Last updated: 2026-02-09
+Last updated: 2026-02-10
 Handoff readiness: Ready
 Current batch in progress: `none`
-Next batch to execute: `M3-B1`
+Next batch to execute: `M3-P3`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -25,8 +25,8 @@ Next batch to execute: `M3-B1`
 1. Run `git status --short` and confirm working tree is clean before implementation work.
 1. Re-read this file fully, then go directly to:
 1. `Execution Batch Protocol (Recorded Standard)`
-1. `Future Batch Index (Milestones 2-5)`
-1. Start the first non-complete batch in order (currently `M3-B1`).
+1. `Future Batch Index (Milestones 3-5)`
+1. Start the first non-complete batch in order (currently `M3-P3`).
 1. Set that batch status to `In progress` before writing code.
 1. Execute using TDD and complete the full batch lifecycle.
 1. On batch completion:
@@ -70,6 +70,7 @@ When starting any new session, choose work using this deterministic rule:
 1. Runtime mode archive:
 1. `docs/archived-api-runtime-mode.md`
 1. Validation/troubleshooting:
+1. `docs/data-contracts.md`
 1. `docs/validation-protocol.md`
 1. `docs/troubleshooting.md`
 1. Performance roadmap:
@@ -85,7 +86,7 @@ When starting any new session, choose work using this deterministic rule:
 1. Milestone 0: File-only runtime, DI IO boundaries, and onboarding hardening.
 1. Milestone 1: Validation tooling implementation.
 1. Milestone 2: Validation protocol operational baseline run.
-1. Milestone 3: Sector-profile externalisation for scoring.
+1. Milestone 3: Performance hardening and sector profile externalisation.
 1. Milestone 4: Config-file support.
 1. Milestone 5: Developer ergonomics (optional).
 
@@ -181,12 +182,24 @@ Source: `docs/validation-protocol.md`
 1. `docs/validation-protocol.md` and `docs/troubleshooting.md` remain consistent.
 1. `uv run check` passes if code/docs changed.
 
-## Milestone 3: Sector Profile Externalisation (Scoring)
+## Milestone 3: Performance Hardening and Sector Profile Externalisation
 
 Source: `.agent/plans/archive/sector-profiles.plan.md`
 
 ### Requirements
 
+1. Complete performance and scenario-proof batches (`M3-P1` to `M3-P4`) before profile
+   externalisation batches (`M3-B1` to `M3-B5`).
+1. Encode issue-to-fixture proof for all previously identified risks:
+1. unattended deterministic reruns
+1. unmatched sponsor handling
+1. structural output integrity (duplicates/overlap/missing key fields)
+1. match-quality warning thresholds
+1. throughput regression visibility
+1. Implement and verify Track A improvements from
+   `docs/performance-improvement-plan.md` with measured before/after evidence.
+1. Apply Track B changes only when trigger conditions are met and capture that decision
+   in docs and this plan.
 1. Externalise scoring signals into configurable, job-type-first profiles (including
    sector/location/size signals where relevant).
 1. Preserve current tech profile behaviour as a starter profile, not a fixed product scope.
@@ -195,6 +208,10 @@ Source: `.agent/plans/archive/sector-profiles.plan.md`
 
 ### Acceptance Criteria
 
+1. Scenario-proof matrix exists in this plan and every row has executable verification.
+1. Repeated runs on unchanged snapshots are deterministic by contract and test evidence.
+1. Track A performance work is implemented and benchmark evidence is recorded.
+1. Track B decision is explicit: either deferred with rationale or implemented with tests.
 1. Default run output remains unchanged with no profile override.
 1. A custom profile changes scoring deterministically.
 1. Profile selection works through CLI and env.
@@ -223,7 +240,8 @@ Source: `.agent/plans/deferred-features.md`
 
 ### Requirements
 
-1. Add GitHub Actions CI for quality gates.
+1. Keep the existing GitHub Actions CI quality-gate workflow (`.github/workflows/ci.yml`)
+   aligned with local quality gates.
 1. Add CLI `--version` flag.
 
 ### Acceptance Criteria
@@ -291,19 +309,50 @@ Follow in order. Do not reorder milestones.
 1. Run `uv run check` if code or docs changed.
 1. Mark Milestone 2 status as in progress or complete in this file based on outcome.
 
-### Milestone 3 TODO (Sector Profile Externalisation)
+### Milestone 3 TODO (Performance Hardening + Sector Profile Externalisation)
 
-1. Add characterisation tests that lock current scoring behaviour as the starter tech-profile baseline.
-1. Define a strict profile schema for job-type-first signals (including sector/location/size where required), weights, and thresholds.
-1. Add profile parsing and fail-fast validation tests for missing fields, unknown keys, wrong types, and invalid ranges.
-1. Implement profile model and loader module under `src/uk_sponsor_pipeline/domain/` or `src/uk_sponsor_pipeline/application/` with clear boundary ownership.
-1. Externalise current hard-coded scoring signals from `src/uk_sponsor_pipeline/domain/scoring.py` into a default starter profile file while preserving default output.
-1. Add CLI options for profile selection on `transform-score` (`--sector-profile` and `--sector`) and wire env fallbacks.
-1. Extend `PipelineConfig` and config loading to carry profile path/name without re-reading env outside entry points.
-1. Add deterministic tests proving a custom profile changes scoring output in expected ways.
-1. Add docs for profile schema, defaults, and override examples in `README.md` and docs.
+1. Define and maintain the scenario-proof matrix in this plan (see section below) with one
+   executable verification per identified issue.
+1. Expand fixture coverage to prove issue resolution paths:
+1. duplicate organisations in enriched output
+1. overlap between enriched and unmatched outputs
+1. missing key enriched fields
+1. low-similarity matched spike
+1. non-active matched spike
+1. shared company-number spike
+1. near-threshold unmatched spike
+1. Add deterministic rerun checks for unchanged snapshots:
+1. two no-resume runs produce stable row counts and deterministic ordering
+1. resume-mode rerun produces zero unprocessed records when complete
+1. Implement Track A improvements from `docs/performance-improvement-plan.md` and capture
+   before/after benchmark evidence on representative data.
+1. Add throughput regression checks to validation workflow (for example, command-level timing
+   budget assertions in benchmark tooling and strict audit threshold checks).
+1. Execute the Track B decision gate:
+1. if triggers are not met, record explicit deferral rationale for Option 2
+1. if triggers are met, implement chosen Track B path with deterministic merge rules and tests
+1. After performance and scenario-proof batches complete, continue sector-profile work:
+1. add characterisation tests that lock current scoring behaviour as the starter tech-profile baseline
+1. define strict profile schema for job-type-first signals (including sector/location/size)
+1. add parsing and fail-fast validation tests for missing fields, unknown keys, wrong types, and invalid ranges
+1. implement profile model and loader module with clear boundary ownership
+1. externalise hard-coded scoring signals into a default starter profile while preserving default output
+1. add CLI options for profile selection on `transform-score` (`--sector-profile` and `--sector`) and wire env fallbacks
+1. extend `PipelineConfig` to carry profile path/name without re-reading env outside entry points
+1. add deterministic tests proving a custom profile changes scoring output in expected ways
+1. add docs for profile schema, defaults, and override examples in `README.md` and docs
 1. Run `uv run check`.
 1. Mark Milestone 3 status as in progress or complete in this file based on outcome.
+
+### Scenario-Proof Matrix (Issues Identified So Far)
+
+| Issue to Prove | Primary Fixture/Validation | Executable Verification | Pass Criteria | Owning Batch |
+| --- | --- | --- | --- | --- |
+| Pipeline can run unattended and repeatably | Fixture e2e flow with rerun extension | `uv run python scripts/validation_e2e_fixture.py` | Grouped refresh + runtime flow completes without intervention and rerun checks pass | `M3-P2` |
+| Unmatched sponsor organisations are excluded from enriched output and retained for analysis | Enrichment audit fixture + live output checks | `uv run python scripts/validation_audit_enrichment.py --out-dir data/processed --strict` | No structural overlap; unmatched contract retained; strict mode passes agreed thresholds | `M3-P1` |
+| Structural output integrity does not regress | Fixture matrix in `tests/support/enrichment_audit_fixtures.py` | `uv run pytest tests/devtools/test_enrichment_audit.py` | All structural fail-fast scenarios and baseline scenario pass | `M3-P1` |
+| Throughput does not regress after optimisation work | Benchmark harness + protocol run timings | `uv run uk-sponsor transform-enrich` on baseline snapshots with recorded timing | Runtime stays within agreed SLA and improves or matches measured baseline | `M3-P3` |
+| Option 2 decision is evidence-based | Decision gate against Option 2 triggers | Plan/log review + benchmark results in docs | Clear defer-or-implement decision recorded with evidence and follow-up action | `M3-P4` |
 
 ### Milestone 4 TODO (Config-File Support)
 
@@ -319,8 +368,9 @@ Follow in order. Do not reorder milestones.
 
 ### Milestone 5 TODO (Optional Developer Ergonomics)
 
-1. Add CI workflow file `.github/workflows/ci.yml` running full gates on push and pull request.
-1. Ensure CI uses `uv` and fails on the first quality gate failure.
+1. Validate existing CI workflow `.github/workflows/ci.yml` still runs `uv run check` on
+   push and pull request.
+1. If CI workflow drift is found, fix it to keep parity with local quality gates.
 1. Add CLI `--version` flag with tests to return package version and exit `0`.
 1. Wire version source from `uk_sponsor_pipeline.__version__` or explicit fallback.
 1. Update docs for CI behaviour and version command usage.
@@ -576,6 +626,113 @@ The following batches are the approved execution slices for Milestone 1.
 1. `uv run check` passes.
 1. Milestone 1 status updated from `Not started` to `Complete` when done.
 
+## Execution Batches (Milestone 3)
+
+The following batches are the approved execution slices for Milestone 3.
+
+### Batch M3-P1
+
+1. Batch ID: `M3-P1`
+1. Objective: Formalise scenario-proof fixtures and audit coverage for previously identified matching/output risks.
+1. Status: `Complete`
+1. Depends on: `M2-B3`
+1. Scope (in): enrichment audit fixture matrix completeness, strict-mode checks, and plan matrix wiring.
+1. Scope (out): algorithmic runtime optimisation and scoring profile schema work.
+1. Primary files:
+1. `tests/support/enrichment_audit_fixtures.py`
+1. `tests/devtools/test_enrichment_audit.py`
+1. `tests/scripts/test_validation_scripts.py`
+1. `scripts/validation_audit_enrichment.py`
+1. `.agent/plans/linear-delivery-plan.md`
+1. Exit criteria:
+1. Every identified matching/output risk has at least one deterministic fixture and test.
+1. Scenario-proof matrix rows are executable and pass locally.
+
+### Batch M3-P2
+
+1. Batch ID: `M3-P2`
+1. Objective: Prove unattended repeatability and deterministic rerun behaviour for unchanged snapshots.
+1. Status: `Complete`
+1. Depends on: `M3-P1`
+1. Scope (in): fixture e2e rerun scenarios and deterministic output assertions.
+1. Scope (out): performance implementation changes.
+1. Primary files:
+1. `scripts/validation_e2e_fixture.py`
+1. `tests/scripts/test_validation_scripts.py`
+1. `docs/validation-protocol.md`
+1. Exit criteria:
+1. Repeated unchanged-input runs prove deterministic ordering/count contracts.
+1. Resume-mode completion path is proven with zero unprocessed records on rerun.
+
+### Batch M3-P3
+
+1. Batch ID: `M3-P3`
+1. Objective: Implement Track A runtime optimisations with benchmark evidence.
+1. Status: `Planned`
+1. Depends on: `M3-P2`
+1. Scope (in): query/result memoisation, normalisation reuse, and write-path optimisation from `docs/performance-improvement-plan.md`.
+1. Scope (out): Track B implementation.
+1. Primary files:
+1. `src/uk_sponsor_pipeline/application/transform_enrich.py`
+1. `src/uk_sponsor_pipeline/application/companies_house_source.py`
+1. `docs/performance-improvement-plan.md`
+1. `.agent/plans/linear-delivery-plan.md`
+1. Exit criteria:
+1. Baseline-vs-updated benchmark evidence is recorded.
+1. Deterministic output and validation contracts remain unchanged.
+
+### Batch M3-P4
+
+1. Batch ID: `M3-P4`
+1. Objective: Execute Option 2 decision gate and either defer or implement Track B with evidence.
+1. Status: `Planned`
+1. Depends on: `M3-P3`
+1. Scope (in): trigger evaluation, documented decision, and implementation only if triggered.
+1. Scope (out): scoring profile externalisation features.
+1. Primary files:
+1. `docs/architectural-decision-records/adr0023-file-mode-enrichment-throughput-strategy.md`
+1. `docs/performance-improvement-plan.md`
+1. `.agent/plans/linear-delivery-plan.md`
+1. (if triggered) runtime source/refresh modules required for Track B.
+1. Exit criteria:
+1. Decision is explicit and evidence-backed.
+1. If implemented, Track B changes pass full gates and benchmark acceptance criteria.
+
+### Batch M3-B1
+
+1. Batch ID: `M3-B1`
+1. Objective: Characterisation tests for current scoring behaviour baseline.
+1. Status: `Planned`
+1. Depends on: `M3-P4`
+
+### Batch M3-B2
+
+1. Batch ID: `M3-B2`
+1. Objective: Profile schema + loader + validation tests.
+1. Status: `Planned`
+1. Depends on: `M3-B1`
+
+### Batch M3-B3
+
+1. Batch ID: `M3-B3`
+1. Objective: CLI/env profile selection wiring.
+1. Status: `Planned`
+1. Depends on: `M3-B2`
+
+### Batch M3-B4
+
+1. Batch ID: `M3-B4`
+1. Objective: Custom profile deterministic output tests + docs.
+1. Status: `Planned`
+1. Depends on: `M3-B3`
+
+### Batch M3-B5
+
+1. Batch ID: `M3-B5`
+1. Objective: Milestone 3 closeout.
+1. Status: `Planned`
+1. Depends on: `M3-B4`
+
 ## Batch Status Board
 
 Use this as the canonical live tracker for batch execution state.
@@ -605,6 +762,10 @@ Use this as the canonical live tracker for batch execution state.
 
 ### Milestone 3
 
+1. `M3-P1`: Complete
+1. `M3-P2`: Complete
+1. `M3-P3`: Planned
+1. `M3-P4`: Planned
 1. `M3-B1`: Planned
 1. `M3-B2`: Planned
 1. `M3-B3`: Planned
@@ -620,18 +781,18 @@ Use this as the canonical live tracker for batch execution state.
 
 ### Milestone 5
 
-1. `M5-B1`: Planned
+1. `M5-B1`: Complete
 1. `M5-B2`: Planned
 1. `M5-B3`: Planned
 
-## Future Batch Index (Milestones 2-5)
+## Future Batch Index (Milestones 3-5)
 
-Use the recorded protocol to define and execute these batches when Milestone 1 is complete.
+Use the recorded protocol to define and execute the remaining batches in order.
+`M5-B1` is already complete (delivered in `R-B5`) and is excluded from remaining
+execution ordering.
 
-1. `M2-B1`: Implement Option 1 throughput refactor, then run full file-first validation protocol and capture run log.
-1. `M2-B1` escalation rule: implement Option 2 only if the Decision Lock trigger conditions are met.
-1. `M2-B2`: Align protocol/troubleshooting docs from real run findings.
-1. `M2-B3`: Milestone 2 closeout (`uv run check`, status updates).
+1. `M3-P3`: Track A optimisation implementation with benchmark evidence.
+1. `M3-P4`: Track B/Option 2 decision gate and implementation only if triggered.
 1. `M3-B1`: Characterisation tests for current scoring behaviour baseline.
 1. `M3-B2`: Profile schema + loader + validation tests.
 1. `M3-B3`: CLI/env profile selection wiring.
@@ -641,7 +802,6 @@ Use the recorded protocol to define and execute these batches when Milestone 1 i
 1. `M4-B2`: Precedence implementation (CLI > config > env > defaults) + tests.
 1. `M4-B3`: CLI entry-point integration + docs.
 1. `M4-B4`: Milestone 4 closeout.
-1. `M5-B1`: GitHub Actions CI quality gate workflow.
 1. `M5-B2`: CLI `--version` implementation + tests.
 1. `M5-B3`: Milestone 5 closeout.
 
@@ -816,7 +976,37 @@ Status: Complete
 Summary: Closed Milestone 2 with status reconciliation, run-log capture, and full quality-gate validation after code/doc updates.
 Quality gates: uv run check (pass)
 Docs updated: .agent/plans/linear-delivery-plan.md
-Follow-ups: Execute M3-B1 (scoring profile characterisation baseline).
+Follow-ups: Execute M3-P1 (scenario-proof fixtures and enrichment audit coverage).
+```
+
+```text
+Date: 2026-02-10
+Batch ID: M3-P1
+Status: Complete
+Summary: Added CLI-level failure-mode coverage for enrichment audit outputs, including structural fixture failures and strict/non-strict warning threshold contracts with explicit exit-code assertions.
+Quality gates: uv run pytest tests/devtools/test_enrichment_audit.py tests/scripts/test_validation_scripts.py (pass); uv run python scripts/validation_audit_enrichment.py --out-dir data/processed --strict (pass); uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M3-P2 (deterministic rerun and unattended repeatability proofs).
+```
+
+```text
+Date: 2026-02-10
+Batch ID: M3-P2
+Status: Complete
+Summary: Extended fixture e2e validation to run `transform-enrich --no-resume` twice on unchanged snapshots, prove deterministic byte-identical enrich outputs, rerun resume mode with zero-work invariants, and continue score/shortlist validation on the verified rerun output.
+Quality gates: uv run python scripts/validation_e2e_fixture.py (pass); uv run pytest tests/scripts/test_validation_scripts.py tests/devtools/test_validation_e2e_determinism.py (pass); uv run check (pass)
+Docs updated: docs/validation-protocol.md, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M3-P3 (Track A runtime optimisation implementation and benchmark evidence).
+```
+
+```text
+Date: 2026-02-10
+Batch ID: M5-B1
+Status: Complete
+Summary: Reconciled roadmap state to mark CI workflow work complete because `.github/workflows/ci.yml` was already delivered in `R-B5` and is now treated as baseline.
+Quality gates: Covered by R-B5 (`uv run check` pass on 2026-02-06); no code changes required in this reconciliation.
+Docs updated: .agent/plans/linear-delivery-plan.md, .agent/plans/deferred-features.md, .agent/plans/README.md
+Follow-ups: Execute M5-B2 when prioritised (CLI `--version` implementation + tests).
 ```
 
 ```text
@@ -835,10 +1025,10 @@ Runtime commands executed:
   CH_SOURCE_TYPE=file uv run uk-sponsor usage-shortlist
   CH_SOURCE_TYPE=file uv run uk-sponsor run-all
 Output artefact locations:
-  data/processed/companies_house_enriched.csv (100,850 lines incl header)
-  data/processed/companies_house_unmatched.csv (18,261 lines incl header)
-  data/processed/companies_house_candidates_top3.csv (254,716 lines incl header)
-  data/processed/companies_house_checkpoint.csv (119,110 lines incl header)
+  data/processed/sponsor_enriched.csv (100,850 lines incl header)
+  data/processed/sponsor_unmatched.csv (18,261 lines incl header)
+  data/processed/sponsor_match_candidates_top3.csv (254,716 lines incl header)
+  data/processed/sponsor_enrich_checkpoint.csv (119,110 lines incl header)
   data/processed/companies_scored.csv (100,850 lines incl header)
   data/processed/companies_shortlist.csv (11,062 lines incl header)
   data/processed/companies_explain.csv (11,062 lines incl header)
@@ -853,7 +1043,7 @@ Result: pass
 ## Operational Discoveries (2026-02-08)
 
 1. Pipeline automation: CLI orchestration is non-interactive (`run-all`), but strict reproducibility requires controlling output state because `transform-enrich` defaults to resume mode.
-1. Matching contract: sponsor organisations without a qualifying Companies House match are excluded from `data/processed/companies_house_enriched.csv` and retained in `data/processed/companies_house_unmatched.csv` for analysis.
+1. Matching contract: sponsor organisations without a qualifying Companies House match are excluded from `data/processed/sponsor_enriched.csv` and retained in `data/processed/sponsor_unmatched.csv` for analysis.
 1. Live-data compatibility drift observed and fixed: Companies House URI host/path variants and `DD/MM/YYYY` incorporation dates now parse in cleaning.
 1. Primary runtime blocker is algorithmic, not just data volume: `FileCompaniesHouseSource._load_profiles_for_numbers` repeatedly scans full `profiles_<bucket>.csv` artefacts, which does not scale to the current bulk snapshot size.
 1. Decision locked: prioritise Option 1 (single-pass bucket profile loading) for this use case; defer Option 2 unless trigger thresholds are reached.
@@ -864,16 +1054,30 @@ Result: pass
 1. Full live Step 4 runtime completed unattended: `transform-enrich` finished 119,109 organisations in 44m52s with 100,849 matched and 18,260 unmatched.
 1. `run-all` sanity check confirms deterministic resume behaviour after full completion: 0 unprocessed organisations and no source-mode errors.
 1. Live protocol surfaced a manifest-validation contract drift (Companies House `artefacts.manifest` absent); fixed in `validation_snapshots` with matching test coverage.
-1. Milestone 2 is complete; next active batch is `M3-B1`.
+1. Milestone 2 closeout transitioned execution focus to `M3-P1`.
 
 ## Operational Discoveries (2026-02-09)
 
-1. Enrichment intent confirmed in live behaviour: sponsor organisations with qualifying Companies House matches are written to `data/processed/companies_house_enriched.csv`; non-matches are excluded from enriched output and retained in `data/processed/companies_house_unmatched.csv` for analysis.
+1. Enrichment intent confirmed in live behaviour: sponsor organisations with qualifying Companies House matches are written to `data/processed/sponsor_enriched.csv`; non-matches are excluded from enriched output and retained in `data/processed/sponsor_unmatched.csv` for analysis.
 1. Added deterministic enrichment audit tooling (`scripts/validation_audit_enrichment.py`) with structural fail-fast checks and threshold-based warning metrics; strict mode returns non-zero on threshold breaches.
 1. Added comprehensive fixture matrix for enrichment audit scenarios in `tests/support/enrichment_audit_fixtures.py` and coverage in `tests/devtools/test_enrichment_audit.py` plus script tests.
 1. Live audit on current processed outputs passed with baseline metrics: enriched rows `100,849`, unmatched rows `18,260`, low-similarity matches `247`, non-active matched companies `2,307`, shared-company-number rows `1,566`, near-threshold unmatched rows `1,299`.
 1. Processed artefact footprint currently measured at approximately `108M` under `data/processed`; default project stance remains to avoid committing processed outputs.
 1. Added `docs/performance-improvement-plan.md` capturing incremental and high-impact optimisation tracks, deterministic guardrails, and acceptance metrics for future throughput work.
+
+## Operational Discoveries (2026-02-10)
+
+1. `M3-P1` is now closed with explicit CLI-level proof for enrichment audit structural failures and strict/non-strict threshold behaviour.
+1. Fixture e2e validation now executes deterministic rerun checks by running `transform-enrich --no-resume` twice on unchanged snapshots and asserting byte-identical enrich outputs.
+1. Resume-mode rerun invariants are now contract-checked in e2e validation (`status=complete`, `processed_in_run=0`, `remaining=0`) before score and shortlist steps run.
+1. Validation protocol Step 6 now documents deterministic rerun pass criteria and resume-zero expectations.
+1. Durable contracts promoted to permanent docs:
+1. `README.md`
+1. `docs/data-contracts.md`
+1. `docs/validation-protocol.md`
+1. `docs/troubleshooting.md`
+1. `docs/architectural-decision-records/README.md`
+1. Next active batch is `M3-P3`.
 
 ## Session Completion Rules (Every Session)
 
@@ -888,6 +1092,6 @@ Result: pass
 1. Milestone 0: Complete.
 1. Milestone 1: Complete.
 1. Milestone 2: Complete.
-1. Milestone 3: Not started.
+1. Milestone 3: In progress.
 1. Milestone 4: Not started.
-1. Milestone 5: Not started.
+1. Milestone 5: In progress (`M5-B1` complete; `M5-B2` and `M5-B3` planned).

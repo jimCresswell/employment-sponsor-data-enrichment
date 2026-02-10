@@ -43,7 +43,7 @@ Snapshots -> transform-enrich -> transform-score -> usage-shortlist
 | --- | --- | --- | --- |
 | `refresh-sponsor` | Sponsor CSV URL | `data/cache/snapshots/sponsor/<YYYY-MM-DD>/...` | Discover, download, clean, snapshot sponsor data |
 | `refresh-companies-house` | Companies House ZIP/CSV URL | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/...` | Discover, download/extract, clean, index, snapshot CH data |
-| `transform-enrich` | Clean snapshots | `data/processed/companies_house_*.csv` | Match sponsor organisations to CH entities |
+| `transform-enrich` | Clean snapshots | `data/processed/sponsor_*.csv` | Match sponsor organisations to CH entities |
 | `transform-score` | Enriched CSV | `data/processed/companies_scored.csv` | Apply default role-likelihood scoring profile (currently tech-focused) |
 | `usage-shortlist` | Scored CSV | `data/processed/companies_shortlist.csv`, `data/processed/companies_explain.csv` | Apply thresholds and geo filters for final shortlist |
 
@@ -338,6 +338,12 @@ uv run python scripts/validation_check_outputs.py --out-dir data/processed
 uv run python scripts/validation_audit_enrichment.py --out-dir data/processed
 ```
 
+`validation_audit_enrichment.py` contract:
+
+- exit `0`: pass (or warnings in non-strict mode),
+- exit `1`: structural/data-contract failure,
+- exit `2`: strict mode threshold breach.
+
 Use strict audit mode to fail on warning-threshold breaches:
 
 ```bash
@@ -350,13 +356,22 @@ Run fixture-driven e2e CLI validation (outside pytest):
 uv run python scripts/validation_e2e_fixture.py
 ```
 
+`validation_e2e_fixture.py` contract:
+
+- runs grouped refresh once,
+- runs `transform-enrich --no-resume` twice on unchanged snapshots,
+- asserts deterministic byte-identical enrich outputs,
+- reruns `transform-enrich --resume` and requires `status=complete`,
+  `processed_in_run=0`, and `remaining=0`,
+- runs score and shortlist on validated outputs.
+
 ## Documentation Map
 
 - `docs/snapshots.md`: snapshot lifecycle, layout, and manifests
 - `docs/validation-protocol.md`: reproducible validation runbook
 - `docs/troubleshooting.md`: common failure modes and recovery
 - `docs/architectural-decision-records/README.md`: architecture decision index and ADR history
-- `docs/data-contracts.md`: schema and column contracts
+- `docs/data-contracts.md`: schema, output partition, and validation contracts
 - `docs/companies-house-file-source.md`: file-source lookup/index rules
 - `docs/refresh-and-run-all-diagrams.md`: refresh and cache-only flow diagrams
 - `docs/archived-api-runtime-mode.md`: archived runtime API wiring notes

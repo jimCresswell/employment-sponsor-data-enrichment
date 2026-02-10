@@ -6,8 +6,8 @@ This directory contains planning documents for active and historical work.
 
 | File | Purpose | Status | Owner | Last Updated |
 | --- | --- | --- | --- | --- |
-| `.agent/plans/linear-delivery-plan.md` | Single ordered execution path with milestone requirements and acceptance criteria. | Active | Jim + Codex | 2026-02-06 |
-| `.agent/plans/deferred-features.md` | Backlog items not in the active linear path. | Active backlog | Jim + Codex | 2026-02-06 |
+| `.agent/plans/linear-delivery-plan.md` | Single ordered execution path with milestone requirements and acceptance criteria. | Active | Jim + Codex | 2026-02-10 |
+| `.agent/plans/deferred-features.md` | Backlog items not in the active linear path. | Active backlog | Jim + Codex | 2026-02-10 |
 
 ## Promoted Improvement Plans
 

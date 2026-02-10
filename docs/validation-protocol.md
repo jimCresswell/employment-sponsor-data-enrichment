@@ -22,6 +22,9 @@ Out of scope:
 - runtime API mode validation (archived reference only),
 - non-reproducible/manual transformations outside pipeline commands.
 
+Durable schema/output and validation contracts are defined in `docs/data-contracts.md`.
+This runbook focuses on operational command execution and acceptance checks.
+
 ## Pre-Flight Checklist
 
 1. Confirm tooling:
@@ -163,6 +166,9 @@ Expected behaviour:
 - Exit code `0` with `PASS ...` output when validation succeeds.
 - Non-zero exit with `FAIL ...` output when any required artefact, field, or column check fails.
 - Enrichment audit prints key matching quality metrics and exits `0` by default.
+- Enrichment audit exit codes are:
+  - `1` for structural/data-contract failures.
+  - `2` for warning-threshold breaches in `--strict` mode.
 - Use `--strict` on enrichment audit to fail non-zero when warning thresholds are exceeded.
 
 Run fixture-driven e2e CLI validation (outside pytest):
@@ -173,8 +179,17 @@ uv run python scripts/validation_e2e_fixture.py
 
 Expected behaviour:
 
-- Script builds local fixtures, serves them on a local HTTP server, executes grouped refresh and
-  runtime steps, validates required output contracts, and exits `0` on success.
+- Script builds local fixtures, serves them on a local HTTP server, executes grouped refresh once,
+  then runs `transform-enrich --no-resume` twice on unchanged snapshots.
+- Script verifies deterministic enrich contracts by asserting byte-identical outputs for:
+  - `sponsor_enriched.csv`
+  - `sponsor_unmatched.csv`
+  - `sponsor_match_candidates_top3.csv`
+  - `sponsor_enrich_checkpoint.csv`
+- Script reruns `transform-enrich --resume` against the second no-resume output and verifies
+  resume completion invariants (`status=complete`, `processed_in_run=0`, `remaining=0`).
+- Script then runs `transform-score` and `usage-shortlist` on the validated second-run outputs,
+  validates required output contracts, and exits `0` on success.
 - On failure, script exits non-zero with the failing command or contract violation in stderr.
 
 ## Optional: Filter Validation

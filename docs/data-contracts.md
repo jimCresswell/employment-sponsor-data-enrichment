@@ -121,3 +121,65 @@ uri
 - `schema_version` is recorded in snapshot manifests.
 - Bump `ch_clean_v1` only when canonical columns or normalisation rules change.
 - Raw CSV headers are treated as a strict contract; missing columns are errors.
+
+## Transform Enrich Output Partition Contract
+
+For a completed `transform-enrich` run:
+
+- matched organisations are written to `sponsor_enriched.csv`,
+- non-matched organisations are written to `sponsor_unmatched.csv`,
+- each organisation name appears in at most one of those two files,
+- output ordering is deterministic (`Organisation Name` sort in finalised outputs),
+- checkpoint ordering is deterministic (`Organisation Name` sort).
+
+Validation and enforcement:
+
+- `scripts/validation_audit_enrichment.py` enforces structural partition checks.
+- `scripts/validation_e2e_fixture.py` enforces deterministic rerun checks.
+
+## Enrichment Audit CLI Contract
+
+Command:
+
+```bash
+uv run python scripts/validation_audit_enrichment.py --out-dir <path>
+```
+
+Exit codes:
+
+- `0`: pass (and warnings only when not using `--strict`),
+- `1`: structural/data-contract failure,
+- `2`: threshold breach in `--strict` mode.
+
+Structural failures (exit `1`) include:
+
+- duplicate organisations in enriched output,
+- duplicate organisations in unmatched output,
+- overlap between enriched and unmatched organisation sets,
+- missing key enriched fields (`ch_company_number`, `ch_company_name`,
+  `match_score`, `score_name_similarity`),
+- invalid numeric fields in audit-required columns.
+
+## Fixture E2E Deterministic Rerun Contract
+
+Command:
+
+```bash
+uv run python scripts/validation_e2e_fixture.py
+```
+
+The script contract is:
+
+1. Run grouped refresh once on local fixtures.
+2. Run `transform-enrich --no-resume` twice on unchanged snapshots.
+3. Assert byte-identical output for:
+   - `sponsor_enriched.csv`
+   - `sponsor_unmatched.csv`
+   - `sponsor_match_candidates_top3.csv`
+   - `sponsor_enrich_checkpoint.csv`
+4. Run `transform-enrich --resume` against the second no-resume output.
+5. Assert resume invariants:
+   - `status=complete`
+   - `processed_in_run=0`
+   - `remaining=0`
+6. Run `transform-score` and `usage-shortlist` on the validated second-run output.

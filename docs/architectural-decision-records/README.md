@@ -30,3 +30,8 @@ This directory contains the ADRs for the UK Sponsor → Hiring Signals Pipeline.
 
 - `superseded/adr0003-csv-artefact-pipeline.md`
 - `adr0016-configurable-companies-house-source.md`
+
+## Related Non-ADR Runtime Contracts
+
+- `docs/data-contracts.md` (schema and deterministic validation contracts)
+- `docs/validation-protocol.md` (operational runbook and verification commands)

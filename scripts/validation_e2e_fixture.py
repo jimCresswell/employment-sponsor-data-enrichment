@@ -17,6 +17,10 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from uk_sponsor_pipeline.application.companies_house_bulk import RAW_HEADERS_TRIMMED
+from uk_sponsor_pipeline.devtools.validation_e2e_determinism import (
+    assert_deterministic_enrich_outputs,
+    assert_resume_rerun_completed,
+)
 from uk_sponsor_pipeline.schemas import (
     TRANSFORM_ENRICH_OUTPUT_COLUMNS,
     TRANSFORM_SCORE_EXPLAIN_COLUMNS,
@@ -193,11 +197,53 @@ def _assert_columns(*, present: list[str], required: list[str], label: str) -> N
         raise RuntimeError(f"{label}: missing required columns: {missing}")
 
 
+def _run_dirs(root: Path) -> set[Path]:
+    if not root.exists():
+        return set()
+    return {
+        path
+        for path in root.iterdir()
+        if path.is_dir() and path.name.startswith("run_")
+    }
+
+
+def _run_transform_enrich_no_resume(
+    *,
+    output_parent: Path,
+    env: dict[str, str],
+    cwd: Path,
+) -> Path:
+    before = _run_dirs(output_parent)
+    _run_cli(
+        [
+            "uv",
+            "run",
+            "uk-sponsor",
+            "transform-enrich",
+            "--output-dir",
+            str(output_parent),
+            "--no-resume",
+        ],
+        env=env,
+        cwd=cwd,
+    )
+    after = _run_dirs(output_parent)
+    created = sorted(after - before, key=lambda path: path.name)
+    if len(created) != 1:
+        message = (
+            "Expected exactly one new no-resume output directory, "
+            f"found {len(created)} under {output_parent}."
+        )
+        raise RuntimeError(message)
+    return created[0]
+
+
 def _run_fixture_flow(*, work_dir: Path) -> None:
     http_root = work_dir / "http"
     runtime_root = work_dir / "runtime"
     snapshot_root = runtime_root / "snapshots"
-    processed_dir = runtime_root / "processed"
+    processed_root_one = runtime_root / "processed_run_one"
+    processed_root_two = runtime_root / "processed_run_two"
 
     if work_dir.exists():
         shutil.rmtree(work_dir)
@@ -218,7 +264,7 @@ def _run_fixture_flow(*, work_dir: Path) -> None:
             }
         )
 
-        commands = [
+        refresh_commands = [
             [
                 "uv",
                 "run",
@@ -263,42 +309,69 @@ def _run_fixture_flow(*, work_dir: Path) -> None:
                 "--snapshot-root",
                 str(snapshot_root),
             ],
+        ]
+
+        for command in refresh_commands:
+            _run_cli(command, env=env, cwd=repo_root)
+
+        first_run_dir = _run_transform_enrich_no_resume(
+            output_parent=processed_root_one,
+            env=env,
+            cwd=repo_root,
+        )
+        second_run_dir = _run_transform_enrich_no_resume(
+            output_parent=processed_root_two,
+            env=env,
+            cwd=repo_root,
+        )
+        assert_deterministic_enrich_outputs(first_run_dir, second_run_dir)
+
+        _run_cli(
             [
                 "uv",
                 "run",
                 "uk-sponsor",
                 "transform-enrich",
                 "--output-dir",
-                str(processed_dir),
+                str(second_run_dir),
+                "--resume",
             ],
+            env=env,
+            cwd=repo_root,
+        )
+        assert_resume_rerun_completed(second_run_dir / "sponsor_enrich_resume_report.json")
+
+        _run_cli(
             [
                 "uv",
                 "run",
                 "uk-sponsor",
                 "transform-score",
                 "--input",
-                str(processed_dir / "sponsor_enriched.csv"),
+                str(second_run_dir / "sponsor_enriched.csv"),
                 "--output-dir",
-                str(processed_dir),
+                str(second_run_dir),
             ],
+            env=env,
+            cwd=repo_root,
+        )
+        _run_cli(
             [
                 "uv",
                 "run",
                 "uk-sponsor",
                 "usage-shortlist",
                 "--input",
-                str(processed_dir / "companies_scored.csv"),
+                str(second_run_dir / "companies_scored.csv"),
                 "--output-dir",
-                str(processed_dir),
+                str(second_run_dir),
                 "--threshold",
                 "0.0",
             ],
-        ]
-
-        for command in commands:
-            _run_cli(command, env=env, cwd=repo_root)
-
-    _assert_required_outputs(processed_dir)
+            env=env,
+            cwd=repo_root,
+        )
+        _assert_required_outputs(second_run_dir)
 
 
 def main(argv: list[str] | None = None) -> int:

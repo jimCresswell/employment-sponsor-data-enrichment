@@ -238,7 +238,45 @@ def test_validation_audit_enrichment_script_passes_for_valid_fixture(tmp_path: P
     assert "PASS enrichment audit" in result.stdout
 
 
-def test_validation_audit_enrichment_script_strict_fails_for_breaches(tmp_path: Path) -> None:
+def test_validation_audit_enrichment_script_fails_for_structural_fixture_errors(
+    tmp_path: Path,
+) -> None:
+    out_dir = tmp_path / "processed"
+    for fixture_name in (
+        "duplicate_org_enriched",
+        "overlap_between_sets",
+        "missing_key_field",
+    ):
+        write_enrichment_audit_fixture(out_dir=out_dir, fixture_name=fixture_name)
+        result = _run_script(
+            Path("scripts/validation_audit_enrichment.py"),
+            ["--out-dir", str(out_dir)],
+        )
+        assert result.returncode == 1
+        assert "FAIL enrichment audit" in result.stderr
+
+
+def test_validation_audit_enrichment_script_non_strict_warns_and_returns_zero(
+    tmp_path: Path,
+) -> None:
+    out_dir = tmp_path / "processed"
+    write_enrichment_audit_fixture(out_dir=out_dir, fixture_name="low_similarity_spike")
+    result = _run_script(
+        Path("scripts/validation_audit_enrichment.py"),
+        [
+            "--out-dir",
+            str(out_dir),
+            "--max-low-similarity-matches",
+            "2",
+        ],
+    )
+    assert result.returncode == 0
+    assert "WARN enrichment audit" in result.stderr
+
+
+def test_validation_audit_enrichment_script_strict_fails_with_exit_code_2(
+    tmp_path: Path,
+) -> None:
     out_dir = tmp_path / "processed"
     write_enrichment_audit_fixture(out_dir=out_dir, fixture_name="low_similarity_spike")
 
@@ -253,5 +291,6 @@ def test_validation_audit_enrichment_script_strict_fails_for_breaches(tmp_path: 
         ],
     )
 
-    assert result.returncode != 0
+    assert result.returncode == 2
+    assert "WARN enrichment audit" in result.stderr
     assert "FAIL enrichment audit" in result.stderr
