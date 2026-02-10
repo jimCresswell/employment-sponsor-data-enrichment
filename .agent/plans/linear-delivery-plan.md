@@ -24,11 +24,13 @@ Next batch to execute: `none`
 
 1. Run `git status --short` and confirm working tree is clean before implementation work.
 1. Re-read this file fully, then go directly to:
-1. `Execution Batch Protocol (Recorded Standard)`
-1. `Future Batch Index (Milestones 3-5)`
-1. Start the first non-complete batch in order (currently `M4-B1`).
-1. Set that batch status to `In progress` before writing code.
-1. Execute using TDD and complete the full batch lifecycle.
+1. `Session Entry Decision Rule`
+1. `Batch Status Board`
+1. `Status Tracking`
+1. If any batch is `In progress`, resume that batch first.
+1. If no batch is `In progress` and at least one batch is `Planned`, start the earliest planned batch.
+1. If no batches are `In progress` or `Planned` (current state), treat roadmap execution as complete and only start new work by first adding a new batch record in this file.
+1. Use TDD and complete the full batch lifecycle for any new batch.
 1. On batch completion:
 1. Set batch status to `Complete`.
 1. Record closeout in `Batch Closeout Log`.
@@ -39,8 +41,9 @@ Next batch to execute: `none`
 When starting any new session, choose work using this deterministic rule:
 
 1. If any batch is `In progress`, resume that batch first.
-1. Otherwise, select the earliest batch in milestone order with status `Planned`.
-1. Do not start a later batch while an earlier dependent batch is incomplete.
+1. Otherwise, if any batch is `Planned`, select the earliest batch in milestone order.
+1. If no batches are `In progress` or `Planned`, roadmap execution is complete; only start new work after recording a new batch in this file.
+1. Do not start a later dependent batch while an earlier one is incomplete.
 1. If blocked, set status to `Blocked`, record blocker + unblock action, then stop or resolve blocker explicitly.
 
 ## Current Baseline (Already Delivered)
@@ -787,11 +790,9 @@ Use this as the canonical live tracker for batch execution state.
 
 ## Future Batch Index (Milestones 3-5)
 
-Use the recorded protocol to define and execute the remaining batches in order.
-`M5-B1` is already complete (delivered in `R-B5`) and is excluded from remaining
-execution ordering.
-
 All recorded batches are complete.
+No pending execution batches remain in milestones 3-5.
+If new work is approved, append new batches after `M5-B3` using the recorded batch protocol.
 
 ## Batch Closeout Log
 
