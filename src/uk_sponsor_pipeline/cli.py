@@ -20,6 +20,7 @@ from typing import Annotated, Protocol
 import typer
 from rich import print as rprint
 
+from . import __version__
 from .application.refresh_companies_house import (
     run_refresh_companies_house,
     run_refresh_companies_house_acquire,
@@ -42,7 +43,13 @@ from .application.transform_score import run_transform_score
 from .application.usage import run_usage_shortlist
 from .cli_progress import CliProgressReporter
 from .config import PipelineConfig
-from .exceptions import SnapshotArtefactMissingError
+from .config_file import load_pipeline_config_file
+from .exceptions import (
+    ConfigFileNotFoundError,
+    ConfigFileParseError,
+    ConfigFileValidationError,
+    SnapshotArtefactMissingError,
+)
 from .protocols import FileSystem, HttpClient, HttpSession
 
 
@@ -145,6 +152,12 @@ class RunAllOnly(StrEnum):
     USAGE_SHORTLIST = "usage-shortlist"
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        rprint(f"uk-sponsor {__version__}")
+        raise typer.Exit()
+
+
 def _single_region(region: list[str] | None) -> str | None:
     if not region:
         return None
@@ -224,9 +237,45 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
     )
 
     @app.callback()
-    def main(ctx: typer.Context) -> None:
+    def main(
+        ctx: typer.Context,
+        version: Annotated[
+            bool,
+            typer.Option(
+                "--version",
+                callback=_version_callback,
+                is_eager=True,
+                help="Show the tool version and exit.",
+            ),
+        ] = False,
+        config_file: Annotated[
+            Path | None,
+            typer.Option(
+                "--config",
+                help="Path to pipeline config TOML file.",
+            ),
+        ] = None,
+    ) -> None:
         """Initialise CLI context."""
-        ctx.obj = CliContext(config=PipelineConfig.from_env(), deps_builder=deps_builder)
+        _ = version
+        config = PipelineConfig.from_env()
+        if config_file is not None:
+            deps = deps_builder(
+                config=config,
+                cache_dir=DEFAULT_CACHE_DIR,
+                build_http_client=False,
+            )
+            try:
+                file_config = load_pipeline_config_file(path=config_file, fs=deps.fs)
+            except (
+                ConfigFileNotFoundError,
+                ConfigFileParseError,
+                ConfigFileValidationError,
+            ) as exc:
+                raise typer.BadParameter(str(exc), param_hint="--config") from exc
+            config = config.with_file_overrides(file_config)
+
+        ctx.obj = CliContext(config=config, deps_builder=deps_builder)
 
     @app.command(name="refresh-sponsor")
     def refresh_sponsor(

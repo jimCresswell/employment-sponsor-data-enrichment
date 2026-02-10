@@ -283,3 +283,24 @@ Recovery:
 3. Tune thresholds for this run or investigate matching logic before accepting outputs.
 
 For the canonical contract and exit-code definitions, see `docs/data-contracts.md`.
+
+## 14) Config File Fails to Load
+
+Symptom:
+
+- CLI fails before command execution when using `--config <path>`.
+
+Examples:
+
+```text
+Config file not found: <path>.
+Config file parse failed for <path>: <detail>
+Config file validation failed for <path>: <detail>
+```
+
+Recovery:
+
+1. Confirm the file exists and the path is correct.
+2. Confirm TOML syntax is valid (`schema_version = 1`, then `[pipeline]`).
+3. Remove unknown keys and fix invalid values (for example multi-region `geo_filter_region`).
+4. Rerun command with the same `--config` path.

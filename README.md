@@ -144,6 +144,12 @@ uv run uk-sponsor usage-shortlist
 uv run uk-sponsor run-all
 ```
 
+Print installed tool version:
+
+```bash
+uv run uk-sponsor --version
+```
+
 Optional scoring profile selection:
 
 ```bash
@@ -239,6 +245,58 @@ GEO_FILTER_REGION=
 GEO_FILTER_POSTCODES=
 LOCATION_ALIASES_PATH=data/reference/location_aliases.json
 ```
+
+## Config File Support
+
+You can supply a TOML config file at the CLI entry point:
+
+```bash
+uv run uk-sponsor --config config/pipeline.toml run-all
+```
+
+Precedence is fixed:
+
+1. CLI command options
+2. config file values
+3. environment variables (`.env`)
+4. built-in defaults
+
+Config files must use this structure:
+
+```toml
+schema_version = 1
+
+[pipeline]
+ch_source_type = "file"
+snapshot_root = "data/cache/snapshots"
+ch_batch_size = 250
+ch_min_match_score = 0.72
+ch_search_limit = 10
+tech_score_threshold = 0.55
+geo_filter_region = "London"
+geo_filter_postcodes = ["EC", "SW"]
+sector_profile_path = "data/reference/scoring_profiles.json"
+sector_name = "tech"
+location_aliases_path = "data/reference/location_aliases.json"
+```
+
+Supported `[pipeline]` keys:
+
+- `ch_source_type`
+- `snapshot_root`
+- `sponsor_clean_path`
+- `ch_clean_path`
+- `ch_token_index_dir`
+- `ch_file_max_candidates`
+- `ch_batch_size`
+- `ch_min_match_score`
+- `ch_search_limit`
+- `tech_score_threshold`
+- `sector_profile_path`
+- `sector_name`
+- `geo_filter_region`
+- `geo_filter_postcodes`
+- `location_aliases_path`
 
 ## Programmatic Usage
 

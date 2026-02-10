@@ -8,6 +8,7 @@ from typing import Self
 
 from dotenv import load_dotenv
 
+from .config_file import PipelineConfigFile
 from .exceptions import GeoFilterRegionError
 
 
@@ -124,6 +125,57 @@ class PipelineConfig:
             location_aliases_path=self.location_aliases_path
             if location_aliases_path is None
             else location_aliases_path,
+        )
+
+    def with_file_overrides(self, file_config: PipelineConfigFile) -> Self:
+        """Return a new config with config-file values overriding env/default values."""
+        return replace(
+            self,
+            ch_source_type=self.ch_source_type
+            if file_config.ch_source_type is None
+            else file_config.ch_source_type,
+            snapshot_root=self.snapshot_root
+            if file_config.snapshot_root is None
+            else file_config.snapshot_root,
+            sponsor_clean_path=self.sponsor_clean_path
+            if file_config.sponsor_clean_path is None
+            else file_config.sponsor_clean_path,
+            ch_clean_path=self.ch_clean_path
+            if file_config.ch_clean_path is None
+            else file_config.ch_clean_path,
+            ch_token_index_dir=self.ch_token_index_dir
+            if file_config.ch_token_index_dir is None
+            else file_config.ch_token_index_dir,
+            ch_file_max_candidates=self.ch_file_max_candidates
+            if file_config.ch_file_max_candidates is None
+            else file_config.ch_file_max_candidates,
+            ch_batch_size=self.ch_batch_size
+            if file_config.ch_batch_size is None
+            else file_config.ch_batch_size,
+            ch_min_match_score=self.ch_min_match_score
+            if file_config.ch_min_match_score is None
+            else file_config.ch_min_match_score,
+            ch_search_limit=self.ch_search_limit
+            if file_config.ch_search_limit is None
+            else file_config.ch_search_limit,
+            tech_score_threshold=self.tech_score_threshold
+            if file_config.tech_score_threshold is None
+            else file_config.tech_score_threshold,
+            sector_profile_path=self.sector_profile_path
+            if file_config.sector_profile_path is None
+            else file_config.sector_profile_path,
+            sector_name=self.sector_name
+            if file_config.sector_name is None
+            else file_config.sector_name,
+            geo_filter_region=self.geo_filter_region
+            if file_config.geo_filter_region is None
+            else file_config.geo_filter_region,
+            geo_filter_postcodes=self.geo_filter_postcodes
+            if file_config.geo_filter_postcodes is None
+            else file_config.geo_filter_postcodes,
+            location_aliases_path=self.location_aliases_path
+            if file_config.location_aliases_path is None
+            else file_config.location_aliases_path,
         )
 
 

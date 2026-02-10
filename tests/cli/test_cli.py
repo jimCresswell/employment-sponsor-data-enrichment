@@ -69,6 +69,39 @@ def _build_app() -> typer.Typer:
     return cli.create_app(_build_cli_dependencies)
 
 
+def _build_app_with_dependencies(deps: CliDependencies) -> typer.Typer:
+    def build_with_shared_deps(
+        *,
+        config: PipelineConfig,
+        cache_dir: str | Path,
+        build_http_client: bool = False,
+    ) -> CliDependencies:
+        _ = (config, cache_dir, build_http_client)
+        return deps
+
+    return cli.create_app(build_with_shared_deps)
+
+
+def test_cli_version_option_prints_package_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig()
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+    monkeypatch.setattr(cli, "__version__", "9.9.9", raising=False)
+
+    app = _build_app()
+    result = runner.invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    plain_output = _strip_ansi(result.output)
+    assert "9.9.9" in plain_output
+
+
 def test_cli_usage_shortlist_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, PipelineConfig] = {}
 
@@ -155,6 +188,156 @@ def test_cli_transform_score_overrides_profile_selection(
     assert result.exit_code == 0
     assert captured["config"].sector_profile_path == "data/reference/scoring_profiles.json"
     assert captured["config"].sector_name == "tech"
+
+
+def test_cli_global_config_file_overrides_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, PipelineConfig] = {}
+    fs = InMemoryFileSystem()
+    fs.write_text(
+        """
+schema_version = 1
+[pipeline]
+tech_score_threshold = 0.4
+geo_filter_region = "Manchester"
+geo_filter_postcodes = ["M"]
+""".strip(),
+        Path("config/pipeline.toml"),
+    )
+
+    deps = CliDependencies(fs=fs, http_session=DummySession(), http_client=None)
+
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig(
+            tech_score_threshold=0.9,
+            geo_filter_region="London",
+            geo_filter_postcodes=("EC",),
+        )
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    def fake_run_usage_shortlist(
+        *,
+        scored_path: str | Path,
+        out_dir: str | Path,
+        config: PipelineConfig,
+        fs: FileSystem,
+    ) -> dict[str, Path]:
+        _ = (scored_path, out_dir, fs)
+        captured["config"] = config
+        return {"shortlist": Path("short.csv"), "explain": Path("explain.csv")}
+
+    monkeypatch.setattr(cli, "run_usage_shortlist", fake_run_usage_shortlist)
+
+    app = _build_app_with_dependencies(deps)
+    result = runner.invoke(
+        app,
+        ["--config", "config/pipeline.toml", "usage-shortlist"],
+    )
+
+    assert result.exit_code == 0
+    assert captured["config"].tech_score_threshold == 0.4
+    assert captured["config"].geo_filter_region == "Manchester"
+    assert captured["config"].geo_filter_postcodes == ("M",)
+
+
+def test_cli_global_config_file_values_can_be_overridden_by_cli(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, PipelineConfig] = {}
+    fs = InMemoryFileSystem()
+    fs.write_text(
+        """
+schema_version = 1
+[pipeline]
+tech_score_threshold = 0.4
+geo_filter_region = "Manchester"
+geo_filter_postcodes = ["M"]
+""".strip(),
+        Path("config/pipeline.toml"),
+    )
+
+    deps = CliDependencies(fs=fs, http_session=DummySession(), http_client=None)
+
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig(
+            tech_score_threshold=0.9,
+            geo_filter_region="London",
+            geo_filter_postcodes=("EC",),
+        )
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    def fake_run_usage_shortlist(
+        *,
+        scored_path: str | Path,
+        out_dir: str | Path,
+        config: PipelineConfig,
+        fs: FileSystem,
+    ) -> dict[str, Path]:
+        _ = (scored_path, out_dir, fs)
+        captured["config"] = config
+        return {"shortlist": Path("short.csv"), "explain": Path("explain.csv")}
+
+    monkeypatch.setattr(cli, "run_usage_shortlist", fake_run_usage_shortlist)
+
+    app = _build_app_with_dependencies(deps)
+    result = runner.invoke(
+        app,
+        [
+            "--config",
+            "config/pipeline.toml",
+            "usage-shortlist",
+            "--threshold",
+            "0.3",
+            "--region",
+            "Bristol",
+            "--postcode-prefix",
+            "BS",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["config"].tech_score_threshold == 0.3
+    assert captured["config"].geo_filter_region == "Bristol"
+    assert captured["config"].geo_filter_postcodes == ("BS",)
+
+
+def test_cli_global_config_file_missing_fails_fast(monkeypatch: pytest.MonkeyPatch) -> None:
+    deps = CliDependencies(
+        fs=InMemoryFileSystem(),
+        http_session=DummySession(),
+        http_client=None,
+    )
+
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig()
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    app = _build_app_with_dependencies(deps)
+    result = runner.invoke(
+        app,
+        ["--config", "config/missing.toml", "usage-shortlist"],
+    )
+
+    assert result.exit_code != 0
+    plain_output = _strip_ansi(result.output)
+    assert "Config file not found" in plain_output
 
 
 def test_cli_usage_shortlist_rejects_multiple_regions(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -291,6 +474,73 @@ def test_cli_run_all_resolves_snapshot_paths(monkeypatch: pytest.MonkeyPatch) ->
     assert captured_config.sponsor_clean_path == "snapshots/sponsor/2026-02-01/clean.csv"
     assert captured_config.ch_clean_path == "snapshots/companies_house/2026-02-01/clean.csv"
     assert captured_config.ch_token_index_dir == "snapshots/companies_house/2026-02-01"
+
+
+def test_cli_run_all_reads_runtime_mode_and_snapshot_root_from_config_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fs = InMemoryFileSystem()
+    fs.write_text(
+        """
+schema_version = 1
+[pipeline]
+ch_source_type = "file"
+snapshot_root = "cfg/snapshots"
+""".strip(),
+        Path("config/pipeline.toml"),
+    )
+    deps = CliDependencies(fs=fs, http_session=DummySession(), http_client=None)
+    captured_snapshot_root = Path("unset")
+
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig(ch_source_type="api", snapshot_root="env/snapshots")
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    def fake_resolve_sponsor_clean_path(
+        *,
+        config: PipelineConfig,
+        fs: FileSystem,
+        snapshot_root: Path | None = None,
+    ) -> Path:
+        nonlocal captured_snapshot_root
+        _ = (config, fs)
+        captured_snapshot_root = snapshot_root if snapshot_root is not None else Path("missing")
+        return Path("snapshots/sponsor/2026-02-01/clean.csv")
+
+    def fake_resolve_companies_house_paths(
+        *,
+        config: PipelineConfig,
+        fs: FileSystem,
+        snapshot_root: Path | None = None,
+    ) -> tuple[Path, Path]:
+        _ = (config, fs, snapshot_root)
+        return (
+            Path("snapshots/companies_house/2026-02-01/clean.csv"),
+            Path("snapshots/companies_house/2026-02-01"),
+        )
+
+    def fake_run_transform_enrich(**kwargs: object) -> dict[str, Path]:
+        _ = kwargs
+        return {"enriched": Path("enriched.csv")}
+
+    monkeypatch.setattr(cli, "_resolve_sponsor_clean_path", fake_resolve_sponsor_clean_path)
+    monkeypatch.setattr(cli, "_resolve_companies_house_paths", fake_resolve_companies_house_paths)
+    monkeypatch.setattr(cli, "run_transform_enrich", fake_run_transform_enrich)
+
+    app = _build_app_with_dependencies(deps)
+    result = runner.invoke(
+        app,
+        ["--config", "config/pipeline.toml", "run-all", "--only", "transform-enrich"],
+    )
+
+    assert result.exit_code == 0
+    assert captured_snapshot_root == Path("cfg/snapshots")
 
 
 def test_cli_refresh_sponsor_discovery_only(monkeypatch: pytest.MonkeyPatch) -> None:

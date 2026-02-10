@@ -4,7 +4,7 @@ Status: Active
 Last updated: 2026-02-10
 Handoff readiness: Ready
 Current batch in progress: `none`
-Next batch to execute: `M4-B1`
+Next batch to execute: `none`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -774,16 +774,16 @@ Use this as the canonical live tracker for batch execution state.
 
 ### Milestone 4
 
-1. `M4-B1`: Planned
-1. `M4-B2`: Planned
-1. `M4-B3`: Planned
-1. `M4-B4`: Planned
+1. `M4-B1`: Complete
+1. `M4-B2`: Complete
+1. `M4-B3`: Complete
+1. `M4-B4`: Complete
 
 ### Milestone 5
 
 1. `M5-B1`: Complete
-1. `M5-B2`: Planned
-1. `M5-B3`: Planned
+1. `M5-B2`: Complete
+1. `M5-B3`: Complete
 
 ## Future Batch Index (Milestones 3-5)
 
@@ -791,12 +791,7 @@ Use the recorded protocol to define and execute the remaining batches in order.
 `M5-B1` is already complete (delivered in `R-B5`) and is excluded from remaining
 execution ordering.
 
-1. `M4-B1`: Config-file schema/parser and fail-fast tests.
-1. `M4-B2`: Precedence implementation (CLI > config > env > defaults) + tests.
-1. `M4-B3`: CLI entry-point integration + docs.
-1. `M4-B4`: Milestone 4 closeout.
-1. `M5-B2`: CLI `--version` implementation + tests.
-1. `M5-B3`: Milestone 5 closeout.
+All recorded batches are complete.
 
 ## Batch Closeout Log
 
@@ -1064,12 +1059,72 @@ Follow-ups: Execute M4-B1 (config-file schema/parser and fail-fast tests).
 
 ```text
 Date: 2026-02-10
+Batch ID: M4-B1
+Status: Complete
+Summary: Added strict TOML config-file parsing with schema-version validation, fail-fast error contracts, and dedicated unit coverage for valid and invalid file states.
+Quality gates: uv run pytest tests/config/test_config_file.py (pass); uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M4-B2 (precedence implementation: CLI > config file > env > defaults).
+```
+
+```text
+Date: 2026-02-10
+Batch ID: M4-B2
+Status: Complete
+Summary: Implemented config precedence merge behaviour by adding `PipelineConfig.with_file_overrides`, then verified precedence contract with dedicated tests proving CLI > config file > env/defaults.
+Quality gates: uv run pytest tests/config (pass); uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M4-B3 (CLI entry-point config-file integration and docs).
+```
+
+```text
+Date: 2026-02-10
+Batch ID: M4-B3
+Status: Complete
+Summary: Added global CLI `--config` entry-point support with fail-fast config-file load errors, merged config-file values into runtime config before command execution, and preserved CLI option precedence over config-file values.
+Quality gates: uv run pytest tests/cli/test_cli.py tests/config (pass); uv run check (pass)
+Docs updated: README.md, docs/troubleshooting.md, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M4-B4 (Milestone 4 closeout).
+```
+
+```text
+Date: 2026-02-10
+Batch ID: M4-B4
+Status: Complete
+Summary: Closed Milestone 4 by reconciling acceptance criteria, batch-status tracking, and handoff sequencing after config-file parser, precedence, CLI integration, and docs updates were delivered.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M5-B2 (CLI `--version` implementation + tests).
+```
+
+```text
+Date: 2026-02-10
 Batch ID: M5-B1
 Status: Complete
 Summary: Reconciled roadmap state to mark CI workflow work complete because `.github/workflows/ci.yml` was already delivered in `R-B5` and is now treated as baseline.
 Quality gates: Covered by R-B5 (`uv run check` pass on 2026-02-06); no code changes required in this reconciliation.
 Docs updated: .agent/plans/linear-delivery-plan.md, .agent/plans/deferred-features.md, .agent/plans/README.md
 Follow-ups: Execute M5-B2 when prioritised (CLI `--version` implementation + tests).
+```
+
+```text
+Date: 2026-02-10
+Batch ID: M5-B2
+Status: Complete
+Summary: Added global CLI `--version` option with eager exit behaviour and package-version output; added CLI test coverage and README command documentation.
+Quality gates: uv run pytest tests/cli/test_cli.py (pass); uv run check (pass)
+Docs updated: README.md, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M5-B3 (Milestone 5 closeout).
+```
+
+```text
+Date: 2026-02-10
+Batch ID: M5-B3
+Status: Complete
+Summary: Closed Milestone 5 by reconciling batch-state tracking and confirming roadmap completion after M5-B2 delivery.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: none.
 ```
 
 ```text
@@ -1148,7 +1203,7 @@ Result: pass
 1. `docs/architectural-decision-records/README.md`
 1. `M3-B4` is now closed with profile-driven scoring integration and deterministic custom-profile output coverage in application and domain tests.
 1. `M3-B5` is now closed with milestone-state reconciliation and next-batch handoff updates.
-1. Next active batch is `M4-B1`.
+1. Next active batch is `none` (all recorded batches complete).
 
 ## Session Completion Rules (Every Session)
 
@@ -1164,5 +1219,5 @@ Result: pass
 1. Milestone 1: Complete.
 1. Milestone 2: Complete.
 1. Milestone 3: Complete.
-1. Milestone 4: Not started.
-1. Milestone 5: In progress (`M5-B1` complete; `M5-B2` and `M5-B3` planned).
+1. Milestone 4: Complete.
+1. Milestone 5: Complete.

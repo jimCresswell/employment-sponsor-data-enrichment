@@ -295,6 +295,27 @@ class GeoFilterRegionError(PipelineError):
         super().__init__("GEO_FILTER_REGION must contain a single region value.")
 
 
+class ConfigFileNotFoundError(PipelineError):
+    """Raised when a requested config file cannot be found."""
+
+    def __init__(self, path: str) -> None:
+        super().__init__(f"Config file not found: {path}.")
+
+
+class ConfigFileParseError(PipelineError):
+    """Raised when a config file cannot be parsed."""
+
+    def __init__(self, path: str, detail: str) -> None:
+        super().__init__(f"Config file parse failed for {path}: {detail}")
+
+
+class ConfigFileValidationError(PipelineError):
+    """Raised when parsed config file data fails schema validation."""
+
+    def __init__(self, path: str, detail: str) -> None:
+        super().__init__(f"Config file validation failed for {path}: {detail}")
+
+
 class AuthenticationError(PipelineError):
     """Raised when API authentication fails (401 Unauthorised).
 
