@@ -104,13 +104,15 @@ def score_candidates(
         postcode = addr.get("postal_code") or ""
 
         name_sim = similarity_fn(org_norm, title)
+        locality_norm = normalise_fn(loc)
+        region_norm = normalise_fn(region)
 
         locality_bonus = 0.0
-        if town_norm and (town_norm in normalise_fn(loc) or town_norm in normalise_fn(region)):
+        if town_norm and (town_norm in locality_norm or town_norm in region_norm):
             locality_bonus = 0.08
 
         region_bonus = 0.0
-        if county_norm and county_norm in normalise_fn(region):
+        if county_norm and county_norm in region_norm:
             region_bonus = 0.05
 
         status_bonus = 0.05 if (status or "").lower() == "active" else 0.0

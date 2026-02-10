@@ -43,6 +43,70 @@ contracts and fail-fast behaviour.
    - Keep append and finalise passes deterministic.
    - Expected impact: incremental (`~5-15%`).
 
+## Track A Implementation Record (`M3-P3`)
+
+Date: 2026-02-10
+
+Implemented in code:
+
+1. Query result memoisation in `transform-enrich` run scope:
+   - repeated query variants now reuse cached `source.search(query)` results.
+   - duplicate query variants are deduplicated before search/scoring loops.
+2. Match-path normalisation reuse in candidate scoring:
+   - locality and region are normalised once per candidate row and reused for bonus checks.
+3. Write-path optimisation in enrich batch flushing:
+   - empty matched/unmatched/candidate buffers now skip DataFrame construction and append calls.
+
+Verification:
+
+- Targeted TDD coverage added for:
+  - query memoisation behaviour in enrich runtime tests,
+  - normalisation reuse behaviour in domain scoring tests.
+- Deterministic e2e runtime contract check:
+  - `uv run python scripts/validation_e2e_fixture.py` (pass).
+- Full quality gates:
+  - `uv run check` (pass).
+
+Benchmark evidence (bounded live probe):
+
+- Command:
+  - `CH_SOURCE_TYPE=file uv run uk-sponsor transform-enrich --batch-count 1 --no-resume --output-dir /tmp/m3_p3_enrich_probe`
+- Baseline reference (pre-`M3-P3`, recorded 2026-02-08 in plan):
+  - ~25 seconds for 250 organisations.
+- Post-change run `run_20260210_115836`:
+  - `38.634` seconds for 250 organisations.
+- Post-change run `run_20260210_115936`:
+  - `41.804` seconds for 250 organisations.
+
+Interpretation:
+
+- Probe runtime remains within the unattended Step 4 operational threshold when extrapolated.
+- This probe is dominated by file-source profile bucket load cost and shows run-to-run variance;
+  Track A changes preserve contracts and observability while deferring Option 2 decisioning to
+  `M3-P4`.
+
+## Track B Decision Gate Record (`M3-P4`)
+
+Date: 2026-02-10
+
+Decision: **defer Option 2** (refresh-time profile offset index) at this stage.
+
+Trigger check:
+
+1. Step 4 runtime cannot complete unattended within 6 hours on baseline live scale.
+   - Status: not met.
+   - Evidence: full live baseline run completed in `44m52s` for `119,109` sponsor
+     organisations (2026-02-08 protocol run record).
+2. Repeated unchanged-input enrich reruns are a normal operational need.
+   - Status: not met.
+   - Evidence: deterministic reruns are supported and validated, but no new operational
+     requirement has been recorded that makes repeated reruns the standard workflow.
+
+Follow-on action:
+
+- Keep Option 2 as a gated path and re-evaluate only when one of the trigger conditions
+  becomes true in documented operational evidence.
+
 ### Track B: Throughput Improvements (Higher Impact)
 
 1. Deterministic worker parallelism for enrich:
@@ -85,4 +149,3 @@ contracts and fail-fast behaviour.
    - `scripts/validation_audit_enrichment.py` metrics do not regress beyond agreed thresholds.
 4. Engineering gates:
    - `uv run check` passes.
-

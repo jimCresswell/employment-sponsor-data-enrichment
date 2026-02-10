@@ -28,6 +28,9 @@ from ..schemas import (
     validate_columns,
 )
 from ..types import TransformEnrichRow
+from .scoring_profiles import load_scoring_profile_catalog, resolve_scoring_profile
+
+DEFAULT_SCORING_PROFILE_PATH = Path("data/reference/scoring_profiles.json")
 
 
 def _normalise_invalid_match_score(value: object) -> str:
@@ -60,6 +63,18 @@ def _parse_match_score(values: pd.Series) -> pd.Series:
         sample = _format_invalid_match_scores(invalid_values)
         raise InvalidMatchScoreError(sample)
     return numeric
+
+
+def _resolve_configured_profile_name(config: PipelineConfig, fs: FileSystem) -> str | None:
+    profile_path_text = config.sector_profile_path.strip()
+    profile_name = config.sector_name.strip()
+    if not profile_path_text and not profile_name:
+        return None
+
+    profile_path = Path(profile_path_text) if profile_path_text else DEFAULT_SCORING_PROFILE_PATH
+    catalog = load_scoring_profile_catalog(path=profile_path, fs=fs)
+    profile = resolve_scoring_profile(catalog, profile_name=profile_name or None)
+    return profile.name
 
 
 def run_transform_score(
@@ -98,6 +113,10 @@ def run_transform_score(
 
     # Ensure match_score is numeric for correct sorting
     df["match_score"] = _parse_match_score(df["match_score"])
+
+    selected_profile_name = _resolve_configured_profile_name(config, fs)
+    if selected_profile_name is not None:
+        logger.info("Using scoring profile: %s", selected_profile_name)
 
     logger.info("Scoring: %s companies", len(df))
 

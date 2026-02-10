@@ -4,7 +4,7 @@ Status: Active
 Last updated: 2026-02-10
 Handoff readiness: Ready
 Current batch in progress: `none`
-Next batch to execute: `M3-P3`
+Next batch to execute: `M3-B4`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -26,7 +26,7 @@ Next batch to execute: `M3-P3`
 1. Re-read this file fully, then go directly to:
 1. `Execution Batch Protocol (Recorded Standard)`
 1. `Future Batch Index (Milestones 3-5)`
-1. Start the first non-complete batch in order (currently `M3-P3`).
+1. Start the first non-complete batch in order (currently `M3-B4`).
 1. Set that batch status to `In progress` before writing code.
 1. Execute using TDD and complete the full batch lifecycle.
 1. On batch completion:
@@ -668,7 +668,7 @@ The following batches are the approved execution slices for Milestone 3.
 
 1. Batch ID: `M3-P3`
 1. Objective: Implement Track A runtime optimisations with benchmark evidence.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M3-P2`
 1. Scope (in): query/result memoisation, normalisation reuse, and write-path optimisation from `docs/performance-improvement-plan.md`.
 1. Scope (out): Track B implementation.
@@ -685,7 +685,7 @@ The following batches are the approved execution slices for Milestone 3.
 
 1. Batch ID: `M3-P4`
 1. Objective: Execute Option 2 decision gate and either defer or implement Track B with evidence.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M3-P3`
 1. Scope (in): trigger evaluation, documented decision, and implementation only if triggered.
 1. Scope (out): scoring profile externalisation features.
@@ -702,21 +702,21 @@ The following batches are the approved execution slices for Milestone 3.
 
 1. Batch ID: `M3-B1`
 1. Objective: Characterisation tests for current scoring behaviour baseline.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M3-P4`
 
 ### Batch M3-B2
 
 1. Batch ID: `M3-B2`
 1. Objective: Profile schema + loader + validation tests.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M3-B1`
 
 ### Batch M3-B3
 
 1. Batch ID: `M3-B3`
 1. Objective: CLI/env profile selection wiring.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M3-B2`
 
 ### Batch M3-B4
@@ -764,11 +764,11 @@ Use this as the canonical live tracker for batch execution state.
 
 1. `M3-P1`: Complete
 1. `M3-P2`: Complete
-1. `M3-P3`: Planned
-1. `M3-P4`: Planned
-1. `M3-B1`: Planned
-1. `M3-B2`: Planned
-1. `M3-B3`: Planned
+1. `M3-P3`: Complete
+1. `M3-P4`: Complete
+1. `M3-B1`: Complete
+1. `M3-B2`: Complete
+1. `M3-B3`: Complete
 1. `M3-B4`: Planned
 1. `M3-B5`: Planned
 
@@ -791,11 +791,6 @@ Use the recorded protocol to define and execute the remaining batches in order.
 `M5-B1` is already complete (delivered in `R-B5`) and is excluded from remaining
 execution ordering.
 
-1. `M3-P3`: Track A optimisation implementation with benchmark evidence.
-1. `M3-P4`: Track B/Option 2 decision gate and implementation only if triggered.
-1. `M3-B1`: Characterisation tests for current scoring behaviour baseline.
-1. `M3-B2`: Profile schema + loader + validation tests.
-1. `M3-B3`: CLI/env profile selection wiring.
 1. `M3-B4`: Custom profile deterministic output tests + docs.
 1. `M3-B5`: Milestone 3 closeout.
 1. `M4-B1`: Config-file schema/parser and fail-fast tests.
@@ -1001,6 +996,56 @@ Follow-ups: Execute M3-P3 (Track A runtime optimisation implementation and bench
 
 ```text
 Date: 2026-02-10
+Batch ID: M3-P3
+Status: Complete
+Summary: Implemented Track A runtime refinements by memoising repeated query searches within enrich runs, deduplicating query variants before search/scoring, reusing candidate locality/region normalisation in scoring, and skipping empty enrich/unmatched/candidate batch DataFrame flushes.
+Quality gates: uv run pytest tests/application/test_transform_enrich.py tests/domain/test_companies_house.py (pass); uv run python scripts/validation_e2e_fixture.py (pass); CH_SOURCE_TYPE=file uv run uk-sponsor transform-enrich --batch-count 1 --no-resume --output-dir /tmp/m3_p3_enrich_probe (runs `38.634s` and `41.804s` for 250 organisations); uv run check (pass)
+Docs updated: docs/performance-improvement-plan.md, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M3-P4 (Track B/Option 2 decision gate and evidence capture).
+```
+
+```text
+Date: 2026-02-10
+Batch ID: M3-P4
+Status: Complete
+Summary: Executed the Option 2 trigger gate for Track B and recorded an evidence-backed defer decision. Trigger conditions were not met: Step 4 baseline run remains far under the 6-hour ceiling (`44m52s` on 2026-02-08), and repeated unchanged-input reruns are validated but not a normal operational requirement.
+Quality gates: uv run check (pass)
+Docs updated: docs/architectural-decision-records/adr0023-file-mode-enrichment-throughput-strategy.md, docs/performance-improvement-plan.md, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M3-B1 (characterisation tests for current scoring behaviour baseline).
+```
+
+```text
+Date: 2026-02-10
+Batch ID: M3-B1
+Status: Complete
+Summary: Added deterministic characterisation coverage for the existing scoring baseline by fixing scoring clock inputs and asserting current feature contributions, bucket outputs, and row ordering for representative strong/possible/unlikely companies.
+Quality gates: uv run pytest tests/application/test_transform_score.py (pass); uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M3-B2 (profile schema, loader, and fail-fast validation tests).
+```
+
+```text
+Date: 2026-02-10
+Batch ID: M3-B2
+Status: Complete
+Summary: Added strict scoring-profile schema/model contracts and a file-backed loader with fail-fast validation for missing fields, unknown keys, wrong types, invalid ranges, and unknown profile selection; added a canonical default profile catalogue at `data/reference/scoring_profiles.json`.
+Quality gates: uv run pytest tests/application/test_scoring_profiles.py (pass); uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M3-B3 (CLI/env profile selection wiring).
+```
+
+```text
+Date: 2026-02-10
+Batch ID: M3-B3
+Status: Complete
+Summary: Added profile-selection wiring through `PipelineConfig` (`SECTOR_PROFILE` and `SECTOR_NAME`), CLI transform-score options (`--sector-profile` and `--sector`), and transform-score profile resolution with fail-fast selection validation when configured.
+Quality gates: uv run pytest tests/config/test_config.py tests/application/test_transform_score.py tests/cli/test_cli.py (pass); uv run check (pass)
+Docs updated: .env.example, README.md, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M3-B4 (custom profile deterministic output tests and docs).
+```
+
+```text
+Date: 2026-02-10
 Batch ID: M5-B1
 Status: Complete
 Summary: Reconciled roadmap state to mark CI workflow work complete because `.github/workflows/ci.yml` was already delivered in `R-B5` and is now treated as baseline.
@@ -1071,13 +1116,19 @@ Result: pass
 1. Fixture e2e validation now executes deterministic rerun checks by running `transform-enrich --no-resume` twice on unchanged snapshots and asserting byte-identical enrich outputs.
 1. Resume-mode rerun invariants are now contract-checked in e2e validation (`status=complete`, `processed_in_run=0`, `remaining=0`) before score and shortlist steps run.
 1. Validation protocol Step 6 now documents deterministic rerun pass criteria and resume-zero expectations.
+1. `M3-P3` is now closed with Track A runtime changes in enrich query memoisation, scoring normalisation reuse, and empty-batch write-path reductions.
+1. Bounded live throughput probe for `M3-P3` recorded `38.634s` and `41.804s` for 250 organisations using `CH_SOURCE_TYPE=file uv run uk-sponsor transform-enrich --batch-count 1 --no-resume --output-dir /tmp/m3_p3_enrich_probe`.
+1. `M3-P4` decision gate completed: Option 2 remains deferred because trigger criteria were not met at current operational baseline.
+1. `M3-B1` is now closed with deterministic characterisation tests that lock the existing scoring baseline outputs.
+1. `M3-B2` is now closed with strict profile schema/loader validation and a canonical default scoring-profile catalogue.
+1. `M3-B3` is now closed with CLI/env profile selection wiring and transform-score profile-selection validation hooks.
 1. Durable contracts promoted to permanent docs:
 1. `README.md`
 1. `docs/data-contracts.md`
 1. `docs/validation-protocol.md`
 1. `docs/troubleshooting.md`
 1. `docs/architectural-decision-records/README.md`
-1. Next active batch is `M3-P3`.
+1. Next active batch is `M3-B4`.
 
 ## Session Completion Rules (Every Session)
 

@@ -144,6 +144,14 @@ uv run uk-sponsor usage-shortlist
 uv run uk-sponsor run-all
 ```
 
+Optional scoring profile selection:
+
+```bash
+uv run uk-sponsor transform-score \
+  --sector-profile data/reference/scoring_profiles.json \
+  --sector tech
+```
+
 `run-all` supports `--only`:
 
 - `all` (default)
@@ -222,6 +230,8 @@ CH_MIN_MATCH_SCORE=0.72
 CH_SEARCH_LIMIT=10
 
 TECH_SCORE_THRESHOLD=0.55
+SECTOR_PROFILE=
+SECTOR_NAME=
 GEO_FILTER_REGION=
 GEO_FILTER_POSTCODES=
 LOCATION_ALIASES_PATH=data/reference/location_aliases.json

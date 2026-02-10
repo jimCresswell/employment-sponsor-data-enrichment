@@ -58,6 +58,7 @@ from ..schemas import (
 )
 from ..types import (
     BatchRange,
+    SearchItem,
     TransformEnrichCandidateRow,
     TransformEnrichResumeReport,
     TransformEnrichRow,
@@ -118,6 +119,20 @@ def _coerce_register_row(raw: dict[str, object]) -> TransformRegisterRow:
 
 def _coerce_register_rows(raw_rows: list[dict[str, object]]) -> list[TransformRegisterRow]:
     return [_coerce_register_row(row) for row in raw_rows]
+
+
+def _dedupe_query_variants(variants: list[str], *, fallback: str) -> list[str]:
+    cleaned = [query.strip() for query in variants if query.strip()]
+    if not cleaned:
+        cleaned = [fallback]
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for query in cleaned:
+        if query in seen:
+            continue
+        seen.add(query)
+        deduped.append(query)
+    return deduped
 
 
 def _build_token_set(rows: Iterable[TransformRegisterRow]) -> set[str]:
@@ -357,24 +372,33 @@ def run_transform_enrich(
     batch_unmatched: list[TransformEnrichUnmatchedRow] = []
     batch_candidates: list[TransformEnrichCandidateRow] = []
     batch_processed: list[str] = []
+    search_results_cache: dict[str, list[SearchItem]] = {}
     processed_in_run = 0
 
     def flush_batch() -> None:
         if not batch_processed:
             return
-        _append_csv(fs, pd.DataFrame(batch_enriched), out_enriched, TRANSFORM_ENRICH_OUTPUT_COLUMNS)
-        _append_csv(
-            fs,
-            pd.DataFrame(batch_unmatched),
-            out_unmatched,
-            TRANSFORM_ENRICH_UNMATCHED_COLUMNS,
-        )
-        _append_csv(
-            fs,
-            pd.DataFrame(batch_candidates),
-            out_candidates,
-            TRANSFORM_ENRICH_CANDIDATES_COLUMNS,
-        )
+        if batch_enriched:
+            _append_csv(
+                fs,
+                pd.DataFrame(batch_enriched),
+                out_enriched,
+                TRANSFORM_ENRICH_OUTPUT_COLUMNS,
+            )
+        if batch_unmatched:
+            _append_csv(
+                fs,
+                pd.DataFrame(batch_unmatched),
+                out_unmatched,
+                TRANSFORM_ENRICH_UNMATCHED_COLUMNS,
+            )
+        if batch_candidates:
+            _append_csv(
+                fs,
+                pd.DataFrame(batch_candidates),
+                out_candidates,
+                TRANSFORM_ENRICH_CANDIDATES_COLUMNS,
+            )
         _append_csv(
             fs,
             pd.DataFrame({"Organisation Name": batch_processed}),
@@ -405,8 +429,7 @@ def run_transform_enrich(
 
             # Generate query variants
             query_variants = generate_query_variants(org)
-            if not query_variants:
-                query_variants = [org]
+            query_variants = _dedupe_query_variants(query_variants, fallback=org)
 
             best_match: CandidateMatch | None = None
             all_candidates: list[CandidateMatch] = []
@@ -414,7 +437,10 @@ def run_transform_enrich(
             # Try each query variant
             for query in query_variants:
                 try:
-                    items = source.search(query)
+                    items = search_results_cache.get(query)
+                    if items is None:
+                        items = source.search(query)
+                        search_results_cache[query] = items
                 except (AuthenticationError, CircuitBreakerOpen, RateLimitError):
                     raise
                 except (KeyError, TypeError, ValueError) as exc:

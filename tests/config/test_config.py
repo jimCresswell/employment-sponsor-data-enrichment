@@ -29,6 +29,8 @@ def test_with_overrides_preserves_fields() -> None:
         ch_token_index_dir="data/cache/snapshots/companies_house/2026-02-01",
         ch_file_max_candidates=321,
         tech_score_threshold=0.6,
+        sector_profile_path="data/reference/scoring_profiles.json",
+        sector_name="tech",
         geo_filter_region="London",
         geo_filter_postcodes=("EC",),
         location_aliases_path="data/reference/location_aliases.json",
@@ -37,6 +39,8 @@ def test_with_overrides_preserves_fields() -> None:
     updated = base.with_overrides(tech_score_threshold=0.4, geo_filter_region="Leeds")
 
     assert updated.tech_score_threshold == 0.4
+    assert updated.sector_profile_path == "data/reference/scoring_profiles.json"
+    assert updated.sector_name == "tech"
     assert updated.geo_filter_region == "Leeds"
     assert updated.geo_filter_postcodes == ("EC",)
     assert updated.location_aliases_path == "data/reference/location_aliases.json"
@@ -56,6 +60,28 @@ def test_with_overrides_preserves_fields() -> None:
     assert updated.ch_clean_path == base.ch_clean_path
     assert updated.ch_token_index_dir == base.ch_token_index_dir
     assert updated.ch_file_max_candidates == base.ch_file_max_candidates
+
+
+def test_from_env_reads_sector_profile_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+    env = {
+        "SECTOR_PROFILE": "data/reference/scoring_profiles.json",
+        "SECTOR_NAME": "tech",
+    }
+
+    def fake_getenv(key: str, default: str = "") -> str:
+        return env.get(key, default)
+
+    def fake_load_dotenv(dotenv_path: str | None = None) -> bool:
+        _ = dotenv_path
+        return True
+
+    monkeypatch.setattr(config_module.os, "getenv", fake_getenv)
+    monkeypatch.setattr(config_module, "load_dotenv", fake_load_dotenv)
+
+    config = PipelineConfig.from_env()
+
+    assert config.sector_profile_path == "data/reference/scoring_profiles.json"
+    assert config.sector_name == "tech"
 
 
 def test_from_env_reads_geo_filter_region_variable(monkeypatch: pytest.MonkeyPatch) -> None:

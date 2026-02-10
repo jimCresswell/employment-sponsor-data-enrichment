@@ -31,11 +31,12 @@ from uk_sponsor_pipeline.exceptions import (
 )
 from uk_sponsor_pipeline.infrastructure import LocalFileSystem
 from uk_sponsor_pipeline.io_validation import validate_as
+from uk_sponsor_pipeline.protocols import FileSystem, HttpClient
 from uk_sponsor_pipeline.schemas import (
     TRANSFORM_ENRICH_CANDIDATES_COLUMNS,
     TRANSFORM_ENRICH_OUTPUT_COLUMNS,
 )
-from uk_sponsor_pipeline.types import SearchItem, TransformEnrichResumeReport
+from uk_sponsor_pipeline.types import CompanyProfile, SearchItem, TransformEnrichResumeReport
 
 
 class TestTransformEnrichAuthIntegration:
@@ -893,6 +894,90 @@ def test_transform_enrich_file_source_uses_local_payload(in_memory_fs: InMemoryF
     enriched_df = in_memory_fs.read_csv(outs["enriched"]).fillna("")
     assert enriched_df["Organisation Name"].tolist() == ["Acme Ltd"]
     assert enriched_df.loc[0, "ch_company_number"] == "12345678"
+
+
+def test_transform_enrich_memoises_search_queries_within_run(
+    in_memory_fs: InMemoryFileSystem,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    register_path = Path("data/interim/sponsor_register_filtered.csv")
+    out_dir = Path("data/processed")
+    in_memory_fs.write_csv(
+        pd.DataFrame(
+            [
+                {
+                    "Organisation Name": "Alpha Ltd",
+                    "org_name_normalised": "alpha",
+                    "has_multiple_towns": "False",
+                    "has_multiple_counties": "False",
+                    "Town/City": "London",
+                    "County": "Greater London",
+                    "Type & Rating": "A rating",
+                    "Route": "Skilled Worker",
+                    "raw_name_variants": "Alpha Ltd",
+                },
+                {
+                    "Organisation Name": "Beta Ltd",
+                    "org_name_normalised": "beta",
+                    "has_multiple_towns": "False",
+                    "has_multiple_counties": "False",
+                    "Town/City": "London",
+                    "County": "Greater London",
+                    "Type & Rating": "A rating",
+                    "Route": "Skilled Worker",
+                    "raw_name_variants": "Beta Ltd",
+                },
+            ]
+        ),
+        register_path,
+    )
+
+    class CountingSource:
+        def __init__(self) -> None:
+            self.search_calls: dict[str, int] = {}
+
+        def search(self, query: str) -> list[SearchItem]:
+            self.search_calls[query] = self.search_calls.get(query, 0) + 1
+            return []
+
+        def profile(self, company_number: str) -> CompanyProfile:
+            _ = company_number
+            raise AssertionError
+
+    source = CountingSource()
+
+    def fake_build_companies_house_source(
+        *,
+        config: PipelineConfig,
+        fs: FileSystem,
+        http_client: HttpClient | None,
+        token_set: set[str] | None = None,
+    ) -> s2.CompaniesHouseSource:
+        _ = (config, fs, http_client, token_set)
+        return source
+
+    def fake_variants(org: str) -> list[str]:
+        _ = org
+        return ["shared-query"]
+
+    monkeypatch.setattr(s2, "build_companies_house_source", fake_build_companies_house_source)
+    monkeypatch.setattr(s2, "generate_query_variants", fake_variants)
+
+    config = PipelineConfig(
+        ch_source_type="file",
+        ch_batch_size=2,
+        ch_min_match_score=0.99,
+    )
+
+    run_transform_enrich(
+        register_path=register_path,
+        out_dir=out_dir,
+        config=config,
+        resume=False,
+        fs=in_memory_fs,
+    )
+
+    assert source.search_calls == {"shared-query": 1}
 
 
 def test_transform_enrich_invalid_source_type_raises(in_memory_fs: InMemoryFileSystem) -> None:

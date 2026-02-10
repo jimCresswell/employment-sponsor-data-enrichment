@@ -499,10 +499,29 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
                 help="Directory for output files",
             ),
         ] = DEFAULT_PROCESSED_DIR,
+        sector_profile: Annotated[
+            Path | None,
+            typer.Option(
+                "--sector-profile",
+                help="Path to scoring profile catalogue JSON",
+            ),
+        ] = None,
+        sector: Annotated[
+            str | None,
+            typer.Option(
+                "--sector",
+                help="Profile name in the scoring profile catalogue",
+            ),
+        ] = None,
     ) -> None:
         """Transform score: score for tech-likelihood and write scored output."""
         state = _get_context(ctx)
         config = state.config
+        if sector_profile is not None or sector is not None:
+            config = config.with_overrides(
+                sector_profile_path=str(sector_profile) if sector_profile is not None else None,
+                sector_name=sector,
+            )
         deps = state.build_dependencies(
             cache_dir=DEFAULT_CACHE_DIR,
             build_http_client=False,

@@ -41,6 +41,8 @@ class PipelineConfig:
 
     # Scoring
     tech_score_threshold: float = 0.55
+    sector_profile_path: str = ""
+    sector_name: str = ""
 
     # Geographic filters (applied during usage)
     geo_filter_region: str | None = None
@@ -83,6 +85,8 @@ class PipelineConfig:
             ch_token_index_dir=os.getenv("CH_TOKEN_INDEX_DIR", "").strip(),
             ch_file_max_candidates=int(os.getenv("CH_FILE_MAX_CANDIDATES", "500")),
             tech_score_threshold=float(os.getenv("TECH_SCORE_THRESHOLD", "0.55")),
+            sector_profile_path=os.getenv("SECTOR_PROFILE", "").strip(),
+            sector_name=os.getenv("SECTOR_NAME", "").strip(),
             geo_filter_region=_parse_single_region(os.getenv("GEO_FILTER_REGION", "")),
             geo_filter_postcodes=_parse_list(os.getenv("GEO_FILTER_POSTCODES", "")),
             location_aliases_path=os.getenv(
@@ -95,6 +99,8 @@ class PipelineConfig:
         self,
         *,
         tech_score_threshold: float | None = None,
+        sector_profile_path: str | None = None,
+        sector_name: str | None = None,
         geo_filter_region: str | None = None,
         geo_filter_postcodes: tuple[str, ...] | None = None,
         location_aliases_path: str | None = None,
@@ -105,6 +111,10 @@ class PipelineConfig:
             tech_score_threshold=self.tech_score_threshold
             if tech_score_threshold is None
             else tech_score_threshold,
+            sector_profile_path=self.sector_profile_path
+            if sector_profile_path is None
+            else sector_profile_path.strip(),
+            sector_name=self.sector_name if sector_name is None else sector_name.strip(),
             geo_filter_region=self.geo_filter_region
             if geo_filter_region is None
             else geo_filter_region,

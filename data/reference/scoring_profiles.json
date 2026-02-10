@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "default_profile": "tech",
+  "profiles": [
+    {
+      "name": "tech",
+      "job_type": "software_engineering",
+      "sector_signals": {
+        "technology": 0.0
+      },
+      "location_signals": {},
+      "size_signals": {},
+      "sic_positive_prefixes": {
+        "620": 0.5,
+        "631": 0.4,
+        "582": 0.35,
+        "611": 0.25,
+        "612": 0.25,
+        "619": 0.2,
+        "721": 0.2,
+        "722": 0.15,
+        "711": 0.15
+      },
+      "sic_negative_prefixes": {
+        "861": -0.25,
+        "862": -0.2,
+        "869": -0.15,
+        "871": -0.25,
+        "872": -0.25,
+        "873": -0.25,
+        "879": -0.25,
+        "412": -0.15,
+        "411": -0.1,
+        "432": -0.1,
+        "439": -0.1,
+        "561": -0.2,
+        "562": -0.2,
+        "551": -0.15
+      },
+      "keyword_positive": [
+        "software",
+        "digital",
+        "tech",
+        "technology",
+        "data",
+        "ai",
+        "cloud",
+        "cyber",
+        "app",
+        "platform",
+        "saas",
+        "fintech",
+        "healthtech",
+        "edtech",
+        "devops",
+        "analytics",
+        "machine",
+        "learning",
+        "automation"
+      ],
+      "keyword_negative": [
+        "care",
+        "nursing",
+        "recruitment",
+        "staffing",
+        "construction",
+        "cleaning",
+        "security",
+        "catering",
+        "restaurant",
+        "hotel"
+      ],
+      "keyword_weights": {
+        "positive_per_match": 0.05,
+        "positive_cap": 0.15,
+        "negative_per_match": 0.05,
+        "negative_cap": 0.1
+      },
+      "company_status_scores": {
+        "active": 0.1,
+        "inactive": 0.0
+      },
+      "company_age_scores": {
+        "unknown": 0.05,
+        "bands": [
+          {
+            "min_years": 10.0,
+            "score": 0.12
+          },
+          {
+            "min_years": 5.0,
+            "score": 0.1
+          },
+          {
+            "min_years": 2.0,
+            "score": 0.07
+          },
+          {
+            "min_years": 1.0,
+            "score": 0.04
+          },
+          {
+            "min_years": 0.0,
+            "score": 0.02
+          }
+        ]
+      },
+      "company_type_weights": {
+        "ltd": 0.08,
+        "private-limited-company": 0.08,
+        "public limited company": 0.05,
+        "plc": 0.05,
+        "llp": 0.06,
+        "limited-partnership": 0.04,
+        "community-interest-company": 0.02,
+        "charitable-incorporated-organisation": 0.01
+      },
+      "bucket_thresholds": {
+        "strong": 0.55,
+        "possible": 0.35
+      }
+    }
+  ]
+}

@@ -42,3 +42,25 @@ Two optimisation paths were considered:
 - Preserves existing snapshot artefacts, validation scripts, and command contracts.
 - Keeps future headroom: offset-index architecture remains an explicit follow-on path
   with objective trigger criteria.
+
+## Decision Gate Review (`M3-P4`, 2026-02-10)
+
+### Trigger Evaluation
+
+1. Trigger: Step 4 runtime commands cannot complete unattended within 6 hours on
+   baseline live snapshot scale.
+   - Evidence: full live Step 4 baseline run completed in `44m52s` (`transform-enrich`
+     for `119,109` sponsor organisations, 2026-02-08 protocol record).
+   - Result: **not triggered**.
+2. Trigger: repeated enrich reruns on unchanged snapshots become a normal operational
+   need.
+   - Evidence: deterministic rerun capability is validated in fixture e2e flow, but no
+     operational requirement change has been recorded that makes repeated unchanged-input
+     reruns a standard workflow.
+   - Result: **not triggered**.
+
+### Outcome
+
+- Option 2 remains deferred after `M3-P4`.
+- Continue with profile externalisation batches (`M3-B1` onward) while preserving this
+  trigger-based re-entry rule for Option 2.

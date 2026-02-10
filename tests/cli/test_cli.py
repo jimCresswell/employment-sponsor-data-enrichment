@@ -112,6 +112,51 @@ def test_cli_usage_shortlist_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured["config"].geo_filter_postcodes == ("EC",)
 
 
+def test_cli_transform_score_overrides_profile_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, PipelineConfig] = {}
+
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig()
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    def fake_run_transform_score(
+        *,
+        enriched_path: str | Path,
+        out_dir: str | Path,
+        config: PipelineConfig,
+        fs: FileSystem,
+    ) -> dict[str, Path]:
+        _ = (enriched_path, out_dir, fs)
+        captured["config"] = config
+        return {"scored": Path("companies_scored.csv")}
+
+    monkeypatch.setattr(cli, "run_transform_score", fake_run_transform_score)
+
+    app = _build_app()
+    result = runner.invoke(
+        app,
+        [
+            "transform-score",
+            "--sector-profile",
+            "data/reference/scoring_profiles.json",
+            "--sector",
+            "tech",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["config"].sector_profile_path == "data/reference/scoring_profiles.json"
+    assert captured["config"].sector_name == "tech"
+
+
 def test_cli_usage_shortlist_rejects_multiple_regions(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
         return PipelineConfig()

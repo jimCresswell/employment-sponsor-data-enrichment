@@ -188,6 +188,30 @@ class InvalidMatchScoreError(PipelineError):
         super().__init__(f"Transform score: match_score must be numeric. Invalid values: {sample}")
 
 
+class ScoringProfileFileNotFoundError(PipelineError):
+    """Raised when a scoring profile catalogue file is missing."""
+
+    def __init__(self, path: str) -> None:
+        super().__init__(f"Scoring profile file not found: {path}.")
+
+
+class ScoringProfileValidationError(PipelineError):
+    """Raised when a scoring profile catalogue payload is invalid."""
+
+    def __init__(self, path: str, detail: str) -> None:
+        super().__init__(f"Scoring profile validation failed for {path}: {detail}")
+
+
+class ScoringProfileSelectionError(PipelineError):
+    """Raised when a requested scoring profile name does not exist."""
+
+    def __init__(self, profile_name: str, available_profiles: tuple[str, ...]) -> None:
+        available = ", ".join(available_profiles) if available_profiles else "<none>"
+        super().__init__(
+            f"Scoring profile '{profile_name}' was not found. Available profiles: {available}."
+        )
+
+
 class LocationAliasesNotFoundError(PipelineError):
     """Raised when the location aliases file is missing."""
 
