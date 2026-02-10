@@ -1,4 +1,4 @@
-"""Domain scoring rules for tech-likelihood classification.
+"""Domain scoring rules for role-likelihood classification.
 
 Usage example:
     from uk_sponsor_pipeline.domain.scoring import calculate_features
@@ -44,6 +44,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
 from ..types import TransformEnrichRow
+from .scoring_profiles import ScoringProfile
 
 # SIC code mappings for tech signals (prefix → score)
 TECH_SIC_PREFIXES = {
@@ -129,6 +130,16 @@ COMPANY_TYPE_WEIGHTS = {
     "charitable-incorporated-organisation": 0.01,
 }
 
+DEFAULT_ACTIVE_SCORE = 0.10
+DEFAULT_INACTIVE_SCORE = 0.0
+DEFAULT_UNKNOWN_AGE_SCORE = 0.05
+DEFAULT_UNKNOWN_COMPANY_TYPE_SCORE = 0.03
+DEFAULT_SIC_BASELINE = 0.10
+DEFAULT_SIC_SCORE_MIN = 0.0
+DEFAULT_SIC_SCORE_MAX = 0.5
+DEFAULT_STRONG_THRESHOLD = 0.55
+DEFAULT_POSSIBLE_THRESHOLD = 0.35
+
 
 @dataclass
 class ScoringFeatures:
@@ -139,6 +150,8 @@ class ScoringFeatures:
     company_age_score: float  # 0.0–0.15 based on years since creation
     company_type_score: float  # 0.0–0.10 based on company type
     name_keyword_score: float  # -0.10 to 0.15 based on name keywords
+    strong_threshold: float = DEFAULT_STRONG_THRESHOLD
+    possible_threshold: float = DEFAULT_POSSIBLE_THRESHOLD
 
     @property
     def total(self) -> float:
@@ -155,12 +168,11 @@ class ScoringFeatures:
     @property
     def bucket(self) -> str:
         """Classify into role-fit bucket."""
-        if self.total >= 0.55:
+        if self.total >= self.strong_threshold:
             return "strong"
-        elif self.total >= 0.35:
+        if self.total >= self.possible_threshold:
             return "possible"
-        else:
-            return "unlikely"
+        return "unlikely"
 
 
 def parse_sic_list(s: str) -> list[str]:
@@ -171,57 +183,72 @@ def parse_sic_list(s: str) -> list[str]:
     return [p for p in parts if p]
 
 
-def score_from_sic(sics: list[str]) -> float:
+def score_from_sic(sics: list[str], profile: ScoringProfile | None = None) -> float:
     """Calculate SIC-based tech score."""
     if not sics:
-        return 0.10  # Unknown: small baseline
+        return DEFAULT_SIC_BASELINE  # Unknown: small baseline
 
-    score = 0.10  # Baseline
+    positive_prefixes = profile.sic_positive_prefixes if profile is not None else TECH_SIC_PREFIXES
+    negative_prefixes = (
+        profile.sic_negative_prefixes if profile is not None else NEGATIVE_SIC_PREFIXES
+    )
+
+    score = DEFAULT_SIC_BASELINE
     for sic in sics:
-        pref3 = sic[:3]
         # Tech positive signals (take max)
-        for pref, val in TECH_SIC_PREFIXES.items():
-            if pref3.startswith(pref):
+        for pref, val in positive_prefixes.items():
+            if sic.startswith(pref):
                 score = max(score, val)
         # Negative signals (additive penalty)
-        for pref, val in NEGATIVE_SIC_PREFIXES.items():
-            if pref3.startswith(pref):
+        for pref, val in negative_prefixes.items():
+            if sic.startswith(pref):
                 score += val
 
-    return max(0.0, min(0.5, score))
+    return max(DEFAULT_SIC_SCORE_MIN, min(DEFAULT_SIC_SCORE_MAX, score))
 
 
-def score_company_age(date_of_creation: str) -> float:
+def score_company_age(date_of_creation: str, profile: ScoringProfile | None = None) -> float:
     """Score based on company age (established companies score higher)."""
+    default_unknown_score = (
+        profile.company_age_scores.unknown if profile is not None else DEFAULT_UNKNOWN_AGE_SCORE
+    )
     if not date_of_creation:
-        return 0.05  # Unknown: small baseline
+        return default_unknown_score
 
     try:
         created = date.fromisoformat(date_of_creation)
         today = datetime.now(UTC).date()
         years = (today - created).days / 365.25
 
+        if profile is not None:
+            for band in profile.company_age_scores.bands:
+                if years >= band.min_years:
+                    return band.score
+            return default_unknown_score
+
         if years >= 10:
             return 0.12
-        elif years >= 5:
+        if years >= 5:
             return 0.10
-        elif years >= 2:
+        if years >= 2:
             return 0.07
-        elif years >= 1:
+        if years >= 1:
             return 0.04
         else:
             return 0.02  # Very new
     except (TypeError, ValueError):
-        return 0.05
+        return default_unknown_score
 
 
-def score_company_type(company_type: str) -> float:
+def score_company_type(company_type: str, profile: ScoringProfile | None = None) -> float:
     """Score based on company type."""
     ct = (company_type or "").lower().strip()
+    if profile is not None:
+        return profile.company_type_weights.get(ct, DEFAULT_UNKNOWN_COMPANY_TYPE_SCORE)
     return COMPANY_TYPE_WEIGHTS.get(ct, 0.03)
 
 
-def score_name_keywords(name: str) -> float:
+def score_name_keywords(name: str, profile: ScoringProfile | None = None) -> float:
     """Score based on keywords in company name."""
     if not name:
         return 0.0
@@ -230,6 +257,23 @@ def score_name_keywords(name: str) -> float:
     words = set(re.findall(r"\w+", name_lower))
 
     score = 0.0
+    if profile is not None:
+        keyword_weights = profile.keyword_weights
+        positive_keywords = frozenset(profile.keyword_positive)
+        negative_keywords = frozenset(profile.keyword_negative)
+        positive_matches = words & positive_keywords
+        if positive_matches:
+            score += min(
+                keyword_weights.positive_cap,
+                len(positive_matches) * keyword_weights.positive_per_match,
+            )
+        negative_matches = words & negative_keywords
+        if negative_matches:
+            score -= min(
+                keyword_weights.negative_cap,
+                len(negative_matches) * keyword_weights.negative_per_match,
+            )
+        return score
 
     # Positive keywords
     tech_matches = words & TECH_KEYWORDS
@@ -244,18 +288,36 @@ def score_name_keywords(name: str) -> float:
     return score
 
 
-def calculate_features(row: TransformEnrichRow) -> ScoringFeatures:
+def calculate_features(
+    row: TransformEnrichRow,
+    profile: ScoringProfile | None = None,
+) -> ScoringFeatures:
     """Calculate all scoring features for a company row."""
     sics = parse_sic_list(row["ch_sic_codes"])
     status = row["ch_company_status"].lower()
     date_of_creation = row["ch_date_of_creation"]
     company_type = row["ch_company_type"]
     company_name = row["ch_company_name"] or row["Organisation Name"]
+    status_score = (
+        profile.company_status_scores.active
+        if profile is not None and status == "active"
+        else profile.company_status_scores.inactive
+        if profile is not None
+        else DEFAULT_ACTIVE_SCORE
+        if status == "active"
+        else DEFAULT_INACTIVE_SCORE
+    )
 
     return ScoringFeatures(
-        sic_tech_score=score_from_sic(sics),
-        is_active_score=0.10 if status == "active" else 0.0,
-        company_age_score=score_company_age(date_of_creation),
-        company_type_score=score_company_type(company_type),
-        name_keyword_score=score_name_keywords(company_name),
+        sic_tech_score=score_from_sic(sics, profile=profile),
+        is_active_score=status_score,
+        company_age_score=score_company_age(date_of_creation, profile=profile),
+        company_type_score=score_company_type(company_type, profile=profile),
+        name_keyword_score=score_name_keywords(company_name, profile=profile),
+        strong_threshold=profile.bucket_thresholds.strong
+        if profile is not None
+        else DEFAULT_STRONG_THRESHOLD,
+        possible_threshold=profile.bucket_thresholds.possible
+        if profile is not None
+        else DEFAULT_POSSIBLE_THRESHOLD,
     )

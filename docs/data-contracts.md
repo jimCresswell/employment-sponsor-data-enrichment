@@ -137,6 +137,31 @@ Validation and enforcement:
 - `scripts/validation_audit_enrichment.py` enforces structural partition checks.
 - `scripts/validation_e2e_fixture.py` enforces deterministic rerun checks.
 
+## Scoring Profile Catalogue Contract
+
+`transform-score` is profile-driven and resolves one active profile per run using:
+
+1. profile catalogue path:
+   - CLI `--sector-profile` or env `SECTOR_PROFILE` when supplied,
+   - otherwise default `data/reference/scoring_profiles.json`.
+1. profile name:
+   - CLI `--sector` or env `SECTOR_NAME` when supplied,
+   - otherwise the catalogue `default_profile`.
+
+Catalogue requirements:
+
+- JSON schema version must be `1`.
+- `default_profile` must reference an existing profile in `profiles`.
+- Profile names must be unique.
+- All scoring fields are strict and validated fail-fast (missing fields, unknown keys,
+  wrong types, or invalid ranges are errors).
+
+Runtime scoring requirements:
+
+- The resolved profile drives feature values and bucket thresholds for all rows in the run.
+- Scoring output column names and artefact paths remain unchanged.
+- Given identical input rows and the same resolved profile, score outputs are deterministic.
+
 ## Enrichment Audit CLI Contract
 
 Command:

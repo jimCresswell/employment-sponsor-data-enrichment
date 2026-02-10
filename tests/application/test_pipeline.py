@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from tests.fakes import FakeHttpClient, InMemoryFileSystem
+from tests.support.scoring_profiles import write_default_scoring_profile_catalog
 from uk_sponsor_pipeline.application.pipeline import run_pipeline
 from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.exceptions import DependencyMissingError
@@ -15,6 +16,10 @@ from uk_sponsor_pipeline.exceptions import DependencyMissingError
 
 def test_run_pipeline_cache_only_returns_outputs() -> None:
     fs = InMemoryFileSystem()
+    write_default_scoring_profile_catalog(
+        fs=fs,
+        path=Path("data/reference/scoring_profiles.json"),
+    )
     register_path = Path("data/cache/snapshots/sponsor/2026-02-01/clean.csv")
     register_df = pd.DataFrame(
         {

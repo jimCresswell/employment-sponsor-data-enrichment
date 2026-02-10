@@ -4,7 +4,7 @@ Status: Active
 Last updated: 2026-02-10
 Handoff readiness: Ready
 Current batch in progress: `none`
-Next batch to execute: `M3-B4`
+Next batch to execute: `M4-B1`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -26,7 +26,7 @@ Next batch to execute: `M3-B4`
 1. Re-read this file fully, then go directly to:
 1. `Execution Batch Protocol (Recorded Standard)`
 1. `Future Batch Index (Milestones 3-5)`
-1. Start the first non-complete batch in order (currently `M3-B4`).
+1. Start the first non-complete batch in order (currently `M4-B1`).
 1. Set that batch status to `In progress` before writing code.
 1. Execute using TDD and complete the full batch lifecycle.
 1. On batch completion:
@@ -723,14 +723,14 @@ The following batches are the approved execution slices for Milestone 3.
 
 1. Batch ID: `M3-B4`
 1. Objective: Custom profile deterministic output tests + docs.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M3-B3`
 
 ### Batch M3-B5
 
 1. Batch ID: `M3-B5`
 1. Objective: Milestone 3 closeout.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M3-B4`
 
 ## Batch Status Board
@@ -769,8 +769,8 @@ Use this as the canonical live tracker for batch execution state.
 1. `M3-B1`: Complete
 1. `M3-B2`: Complete
 1. `M3-B3`: Complete
-1. `M3-B4`: Planned
-1. `M3-B5`: Planned
+1. `M3-B4`: Complete
+1. `M3-B5`: Complete
 
 ### Milestone 4
 
@@ -791,8 +791,6 @@ Use the recorded protocol to define and execute the remaining batches in order.
 `M5-B1` is already complete (delivered in `R-B5`) and is excluded from remaining
 execution ordering.
 
-1. `M3-B4`: Custom profile deterministic output tests + docs.
-1. `M3-B5`: Milestone 3 closeout.
 1. `M4-B1`: Config-file schema/parser and fail-fast tests.
 1. `M4-B2`: Precedence implementation (CLI > config > env > defaults) + tests.
 1. `M4-B3`: CLI entry-point integration + docs.
@@ -1046,6 +1044,26 @@ Follow-ups: Execute M3-B4 (custom profile deterministic output tests and docs).
 
 ```text
 Date: 2026-02-10
+Batch ID: M3-B4
+Status: Complete
+Summary: Wired transform-score to always resolve one active scoring profile (default catalogue path + default profile fallback when no overrides), passed the resolved profile into domain scoring, and added deterministic tests proving custom profile selection changes score and bucket outputs without changing output artefact contracts.
+Quality gates: uv run pytest tests/domain/test_scoring.py tests/application/test_transform_score.py (pass); uv run pytest tests/application/test_scoring_profiles.py tests/cli/test_cli.py (pass); uv run check (pass)
+Docs updated: README.md, docs/data-contracts.md, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M3-B5 (Milestone 3 closeout).
+```
+
+```text
+Date: 2026-02-10
+Batch ID: M3-B5
+Status: Complete
+Summary: Closed Milestone 3 by reconciling batch statuses, closeout log records, future execution ordering, and milestone tracking to hand off cleanly into Milestone 4.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M4-B1 (config-file schema/parser and fail-fast tests).
+```
+
+```text
+Date: 2026-02-10
 Batch ID: M5-B1
 Status: Complete
 Summary: Reconciled roadmap state to mark CI workflow work complete because `.github/workflows/ci.yml` was already delivered in `R-B5` and is now treated as baseline.
@@ -1128,7 +1146,9 @@ Result: pass
 1. `docs/validation-protocol.md`
 1. `docs/troubleshooting.md`
 1. `docs/architectural-decision-records/README.md`
-1. Next active batch is `M3-B4`.
+1. `M3-B4` is now closed with profile-driven scoring integration and deterministic custom-profile output coverage in application and domain tests.
+1. `M3-B5` is now closed with milestone-state reconciliation and next-batch handoff updates.
+1. Next active batch is `M4-B1`.
 
 ## Session Completion Rules (Every Session)
 
@@ -1143,6 +1163,6 @@ Result: pass
 1. Milestone 0: Complete.
 1. Milestone 1: Complete.
 1. Milestone 2: Complete.
-1. Milestone 3: In progress.
+1. Milestone 3: Complete.
 1. Milestone 4: Not started.
 1. Milestone 5: In progress (`M5-B1` complete; `M5-B2` and `M5-B3` planned).

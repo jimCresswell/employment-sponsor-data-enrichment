@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+import uk_sponsor_pipeline.application.transform_score as transform_score_module
 from tests.support.transform_enrich_rows import make_enrich_row
 from uk_sponsor_pipeline.application.transform_score import run_transform_score
 from uk_sponsor_pipeline.config import PipelineConfig
@@ -53,6 +54,106 @@ def _write_scoring_profile_catalog(path: Path) -> None:
                 "company_type_weights": {"ltd": 0.08},
                 "bucket_thresholds": {"strong": 0.55, "possible": 0.35},
             }
+        ],
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _write_default_custom_scoring_profile_catalog(path: Path) -> None:
+    payload = {
+        "schema_version": 1,
+        "default_profile": "strict",
+        "profiles": [
+            {
+                "name": "strict",
+                "job_type": "software_engineering",
+                "sector_signals": {},
+                "location_signals": {},
+                "size_signals": {},
+                "sic_positive_prefixes": {},
+                "sic_negative_prefixes": {"620": -0.1},
+                "keyword_positive": [],
+                "keyword_negative": ["software"],
+                "keyword_weights": {
+                    "positive_per_match": 0.05,
+                    "positive_cap": 0.15,
+                    "negative_per_match": 0.3,
+                    "negative_cap": 0.3,
+                },
+                "company_status_scores": {"active": 0.0, "inactive": -0.2},
+                "company_age_scores": {
+                    "unknown": 0.0,
+                    "bands": [
+                        {"min_years": 0.0, "score": 0.0},
+                    ],
+                },
+                "company_type_weights": {"ltd": 0.0},
+                "bucket_thresholds": {"strong": 0.9, "possible": 0.8},
+            }
+        ],
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _write_contrast_scoring_profile_catalog(path: Path) -> None:
+    payload = {
+        "schema_version": 1,
+        "default_profile": "tech",
+        "profiles": [
+            {
+                "name": "tech",
+                "job_type": "software_engineering",
+                "sector_signals": {},
+                "location_signals": {},
+                "size_signals": {},
+                "sic_positive_prefixes": {"620": 0.5},
+                "sic_negative_prefixes": {"871": -0.25},
+                "keyword_positive": ["software"],
+                "keyword_negative": ["care"],
+                "keyword_weights": {
+                    "positive_per_match": 0.05,
+                    "positive_cap": 0.15,
+                    "negative_per_match": 0.05,
+                    "negative_cap": 0.1,
+                },
+                "company_status_scores": {"active": 0.1, "inactive": 0.0},
+                "company_age_scores": {
+                    "unknown": 0.05,
+                    "bands": [
+                        {"min_years": 10.0, "score": 0.12},
+                        {"min_years": 0.0, "score": 0.02},
+                    ],
+                },
+                "company_type_weights": {"ltd": 0.08},
+                "bucket_thresholds": {"strong": 0.55, "possible": 0.35},
+            },
+            {
+                "name": "strict_custom",
+                "job_type": "software_engineering",
+                "sector_signals": {},
+                "location_signals": {},
+                "size_signals": {},
+                "sic_positive_prefixes": {"620": 0.05},
+                "sic_negative_prefixes": {"620": -0.1},
+                "keyword_positive": ["care"],
+                "keyword_negative": ["software"],
+                "keyword_weights": {
+                    "positive_per_match": 0.01,
+                    "positive_cap": 0.01,
+                    "negative_per_match": 0.2,
+                    "negative_cap": 0.2,
+                },
+                "company_status_scores": {"active": 0.0, "inactive": -0.1},
+                "company_age_scores": {
+                    "unknown": 0.0,
+                    "bands": [
+                        {"min_years": 10.0, "score": 0.02},
+                        {"min_years": 0.0, "score": 0.01},
+                    ],
+                },
+                "company_type_weights": {"ltd": 0.0},
+                "bucket_thresholds": {"strong": 0.8, "possible": 0.6},
+            },
         ],
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
@@ -318,3 +419,109 @@ def test_transform_score_fails_for_unknown_selected_profile(tmp_path: Path) -> N
         )
 
     assert "nonexistent" in str(exc_info.value)
+
+
+def test_transform_score_uses_default_profile_catalog_without_overrides(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fs = LocalFileSystem()
+    default_profile_path = tmp_path / "default_scoring_profiles.json"
+    _write_default_custom_scoring_profile_catalog(default_profile_path)
+    monkeypatch.setattr(
+        transform_score_module, "DEFAULT_SCORING_PROFILE_PATH", default_profile_path
+    )
+
+    rows = [
+        make_enrich_row(
+            **{
+                "Organisation Name": "Default Profile Company",
+                "ch_company_name": "Software Platform Ltd",
+                "ch_sic_codes": "62020",
+                "ch_company_status": "active",
+                "ch_date_of_creation": "2010-01-01",
+                "ch_company_type": "ltd",
+                "match_score": "0.8",
+            }
+        )
+    ]
+    enriched_path = tmp_path / "enriched.csv"
+    pd.DataFrame(rows).to_csv(enriched_path, index=False)
+
+    outs = run_transform_score(
+        enriched_path=enriched_path,
+        out_dir=tmp_path,
+        config=PipelineConfig(),
+        fs=fs,
+    )
+
+    scored_df = pd.read_csv(outs["scored"], dtype=str).fillna("")
+    assert scored_df.loc[0, "role_fit_bucket"] == "unlikely"
+    assert float(str(scored_df.loc[0, "role_fit_score"])) == 0.0
+
+
+def test_transform_score_custom_profile_changes_output_deterministically(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    profile_catalog_path = tmp_path / "scoring_profiles.json"
+    _write_contrast_scoring_profile_catalog(profile_catalog_path)
+
+    rows = [
+        make_enrich_row(
+            **{
+                "Organisation Name": "Profile Switch Company",
+                "ch_company_name": "Software Platform Ltd",
+                "ch_sic_codes": "62020",
+                "ch_company_status": "active",
+                "ch_date_of_creation": "2010-01-01",
+                "ch_company_type": "ltd",
+                "match_score": "0.85",
+            }
+        )
+    ]
+    enriched_path = tmp_path / "enriched.csv"
+    pd.DataFrame(rows).to_csv(enriched_path, index=False)
+
+    tech_out = run_transform_score(
+        enriched_path=enriched_path,
+        out_dir=tmp_path / "tech_out",
+        config=PipelineConfig(
+            sector_profile_path=str(profile_catalog_path),
+            sector_name="tech",
+        ),
+        fs=fs,
+    )
+    custom_out_first = run_transform_score(
+        enriched_path=enriched_path,
+        out_dir=tmp_path / "custom_out_first",
+        config=PipelineConfig(
+            sector_profile_path=str(profile_catalog_path),
+            sector_name="strict_custom",
+        ),
+        fs=fs,
+    )
+    custom_out_second = run_transform_score(
+        enriched_path=enriched_path,
+        out_dir=tmp_path / "custom_out_second",
+        config=PipelineConfig(
+            sector_profile_path=str(profile_catalog_path),
+            sector_name="strict_custom",
+        ),
+        fs=fs,
+    )
+
+    tech_df = pd.read_csv(tech_out["scored"], dtype=str).fillna("")
+    custom_df_first = pd.read_csv(custom_out_first["scored"], dtype=str).fillna("")
+    custom_df_second = pd.read_csv(custom_out_second["scored"], dtype=str).fillna("")
+
+    tech_score = float(str(tech_df.loc[0, "role_fit_score"]))
+    custom_score_first = float(str(custom_df_first.loc[0, "role_fit_score"]))
+    custom_score_second = float(str(custom_df_second.loc[0, "role_fit_score"]))
+    tech_bucket = str(tech_df.loc[0, "role_fit_bucket"])
+    custom_bucket_first = str(custom_df_first.loc[0, "role_fit_bucket"])
+    custom_bucket_second = str(custom_df_second.loc[0, "role_fit_bucket"])
+
+    assert tech_score > custom_score_first
+    assert tech_bucket == "strong"
+    assert custom_bucket_first == "unlikely"
+    assert custom_score_first == custom_score_second
+    assert custom_bucket_first == custom_bucket_second

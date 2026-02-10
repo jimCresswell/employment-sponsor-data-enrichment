@@ -152,6 +152,9 @@ uv run uk-sponsor transform-score \
   --sector tech
 ```
 
+By default, `transform-score` always loads `data/reference/scoring_profiles.json` and resolves
+the catalogue `default_profile` when no profile override is supplied.
+
 `run-all` supports `--only`:
 
 - `all` (default)

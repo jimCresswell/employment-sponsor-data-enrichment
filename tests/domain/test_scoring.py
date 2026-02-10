@@ -1,5 +1,7 @@
 """Tests for domain scoring logic."""
 
+from types import MappingProxyType
+
 from tests.support.transform_enrich_rows import make_enrich_row
 from uk_sponsor_pipeline.domain.scoring import (
     ScoringFeatures,
@@ -10,6 +12,64 @@ from uk_sponsor_pipeline.domain.scoring import (
     score_from_sic,
     score_name_keywords,
 )
+from uk_sponsor_pipeline.domain.scoring_profiles import (
+    BucketThresholds,
+    CompanyAgeBand,
+    CompanyAgeScores,
+    CompanyStatusScores,
+    KeywordWeights,
+    ScoringProfile,
+)
+
+
+def _make_profile(
+    *,
+    sic_positive_prefixes: dict[str, float] | None = None,
+    sic_negative_prefixes: dict[str, float] | None = None,
+    keyword_positive: tuple[str, ...] = (),
+    keyword_negative: tuple[str, ...] = (),
+    keyword_weights: KeywordWeights | None = None,
+    company_status_scores: CompanyStatusScores | None = None,
+    company_age_scores: CompanyAgeScores | None = None,
+    company_type_weights: dict[str, float] | None = None,
+    bucket_thresholds: BucketThresholds | None = None,
+) -> ScoringProfile:
+    return ScoringProfile(
+        name="custom",
+        job_type="custom_job_type",
+        sector_signals=MappingProxyType({}),
+        location_signals=MappingProxyType({}),
+        size_signals=MappingProxyType({}),
+        sic_positive_prefixes=MappingProxyType(dict(sic_positive_prefixes or {})),
+        sic_negative_prefixes=MappingProxyType(dict(sic_negative_prefixes or {})),
+        keyword_positive=keyword_positive,
+        keyword_negative=keyword_negative,
+        keyword_weights=keyword_weights
+        or KeywordWeights(
+            positive_per_match=0.05,
+            positive_cap=0.15,
+            negative_per_match=0.05,
+            negative_cap=0.1,
+        ),
+        company_status_scores=company_status_scores
+        or CompanyStatusScores(
+            active=0.1,
+            inactive=0.0,
+        ),
+        company_age_scores=company_age_scores
+        or CompanyAgeScores(
+            unknown=0.05,
+            bands=(
+                CompanyAgeBand(min_years=10.0, score=0.12),
+                CompanyAgeBand(min_years=5.0, score=0.1),
+                CompanyAgeBand(min_years=2.0, score=0.07),
+                CompanyAgeBand(min_years=1.0, score=0.04),
+                CompanyAgeBand(min_years=0.0, score=0.02),
+            ),
+        ),
+        company_type_weights=MappingProxyType(dict(company_type_weights or {})),
+        bucket_thresholds=bucket_thresholds or BucketThresholds(strong=0.55, possible=0.35),
+    )
 
 
 class TestParseSicList:
@@ -120,6 +180,83 @@ class TestCalculateFeatures:
         )
         features = calculate_features(row)
         assert features.bucket == "unlikely"
+
+    def test_profile_drives_sic_status_age_and_type_features(self) -> None:
+        profile = _make_profile(
+            sic_negative_prefixes={"620": -0.3},
+            company_status_scores=CompanyStatusScores(active=0.2, inactive=-0.25),
+            company_age_scores=CompanyAgeScores(
+                unknown=-0.2,
+                bands=(
+                    CompanyAgeBand(min_years=2.0, score=0.35),
+                    CompanyAgeBand(min_years=0.0, score=0.05),
+                ),
+            ),
+            company_type_weights={"charity": 0.45},
+        )
+        row = make_enrich_row(
+            **{
+                "ch_sic_codes": "62020",
+                "ch_company_status": "inactive",
+                "ch_date_of_creation": "2020-01-01",
+                "ch_company_type": "charity",
+                "ch_company_name": "Neutral Name",
+            }
+        )
+
+        features = calculate_features(row, profile=profile)
+
+        assert features.sic_tech_score == 0.0
+        assert features.is_active_score == -0.25
+        assert features.company_age_score == 0.35
+        assert features.company_type_score == 0.45
+
+    def test_profile_drives_keyword_weighting(self) -> None:
+        profile = _make_profile(
+            keyword_positive=("banana",),
+            keyword_negative=("software",),
+            keyword_weights=KeywordWeights(
+                positive_per_match=0.4,
+                positive_cap=0.4,
+                negative_per_match=0.2,
+                negative_cap=0.2,
+            ),
+        )
+        row = make_enrich_row(
+            **{
+                "ch_company_name": "Software Banana Ltd",
+            }
+        )
+
+        features = calculate_features(row, profile=profile)
+
+        assert features.name_keyword_score == 0.2
+
+    def test_profile_drives_bucket_thresholds(self) -> None:
+        profile = _make_profile(
+            sic_positive_prefixes={"999": 0.1},
+            company_status_scores=CompanyStatusScores(active=0.2, inactive=0.0),
+            company_age_scores=CompanyAgeScores(
+                unknown=0.0,
+                bands=(CompanyAgeBand(min_years=0.0, score=0.2),),
+            ),
+            company_type_weights={"ltd": 0.2},
+            bucket_thresholds=BucketThresholds(strong=0.8, possible=0.6),
+        )
+        row = make_enrich_row(
+            **{
+                "ch_sic_codes": "99999",
+                "ch_company_status": "active",
+                "ch_date_of_creation": "2025-01-01",
+                "ch_company_type": "ltd",
+                "ch_company_name": "Neutral Name",
+            }
+        )
+
+        features = calculate_features(row, profile=profile)
+
+        assert features.total == 0.7
+        assert features.bucket == "possible"
 
 
 class TestScoringFeatures:

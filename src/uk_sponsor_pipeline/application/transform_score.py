@@ -14,6 +14,7 @@ import pandas as pd
 
 from ..config import PipelineConfig
 from ..domain.scoring import ScoringFeatures, calculate_features
+from ..domain.scoring_profiles import ScoringProfile
 from ..exceptions import (
     DependencyMissingError,
     InvalidMatchScoreError,
@@ -65,16 +66,12 @@ def _parse_match_score(values: pd.Series) -> pd.Series:
     return numeric
 
 
-def _resolve_configured_profile_name(config: PipelineConfig, fs: FileSystem) -> str | None:
+def _resolve_active_profile(config: PipelineConfig, fs: FileSystem) -> ScoringProfile:
     profile_path_text = config.sector_profile_path.strip()
     profile_name = config.sector_name.strip()
-    if not profile_path_text and not profile_name:
-        return None
-
     profile_path = Path(profile_path_text) if profile_path_text else DEFAULT_SCORING_PROFILE_PATH
     catalog = load_scoring_profile_catalog(path=profile_path, fs=fs)
-    profile = resolve_scoring_profile(catalog, profile_name=profile_name or None)
-    return profile.name
+    return resolve_scoring_profile(catalog, profile_name=profile_name or None)
 
 
 def run_transform_score(
@@ -114,16 +111,20 @@ def run_transform_score(
     # Ensure match_score is numeric for correct sorting
     df["match_score"] = _parse_match_score(df["match_score"])
 
-    selected_profile_name = _resolve_configured_profile_name(config, fs)
-    if selected_profile_name is not None:
-        logger.info("Using scoring profile: %s", selected_profile_name)
+    active_profile = _resolve_active_profile(config, fs)
+    logger.info("Using scoring profile: %s", active_profile.name)
 
     logger.info("Scoring: %s companies", len(df))
 
     # Calculate features for each row
     features_list: list[ScoringFeatures] = []
     for _, row in df.iterrows():
-        features_list.append(calculate_features(validate_as(TransformEnrichRow, row.to_dict())))
+        features_list.append(
+            calculate_features(
+                validate_as(TransformEnrichRow, row.to_dict()),
+                profile=active_profile,
+            )
+        )
 
     # Add feature columns to DataFrame
     df["sic_tech_score"] = [f.sic_tech_score for f in features_list]

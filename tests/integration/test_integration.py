@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from tests.fakes import FakeHttpClient, InMemoryFileSystem
+from tests.support.scoring_profiles import write_default_scoring_profile_catalog
 from uk_sponsor_pipeline.application.transform_enrich import run_transform_enrich
 from uk_sponsor_pipeline.application.transform_register import run_transform_register
 from uk_sponsor_pipeline.application.transform_score import run_transform_score
@@ -15,6 +16,10 @@ from uk_sponsor_pipeline.config import PipelineConfig
 def test_pipeline_end_to_end_in_memory(
     in_memory_fs: InMemoryFileSystem, fake_http_client: FakeHttpClient
 ) -> None:
+    write_default_scoring_profile_catalog(
+        fs=in_memory_fs,
+        path=Path("data/reference/scoring_profiles.json"),
+    )
     raw_dir = Path("raw")
     raw_path = raw_dir / "register.csv"
     raw_df = pd.DataFrame(
