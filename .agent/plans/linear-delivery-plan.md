@@ -4,7 +4,7 @@ Status: Active
 Last updated: 2026-02-11
 Handoff readiness: Ready
 Current batch in progress: `none`
-Next batch to execute: `M6-B2`
+Next batch to execute: `M6-B3`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -30,6 +30,7 @@ Next batch to execute: `M6-B2`
 1. If any batch is `In progress`, resume that batch first.
 1. If no batch is `In progress` and at least one batch is `Planned`, start the earliest planned batch.
 1. If no batches are `In progress` or `Planned`, treat roadmap execution as complete and only start new work by first adding a new batch record in this file.
+1. Treat `Next batch to execute` as the authoritative start point when it is set.
 1. Use TDD and complete the full batch lifecycle for any new batch.
 1. On batch completion:
 1. Set batch status to `Complete`.
@@ -45,6 +46,20 @@ When starting any new session, choose work using this deterministic rule:
 1. If no batches are `In progress` or `Planned`, roadmap execution is complete; only start new work after recording a new batch in this file.
 1. Do not start a later dependent batch while an earlier one is incomplete.
 1. If blocked, set status to `Blocked`, record blocker + unblock action, then stop or resolve blocker explicitly.
+1. Do not start implementation work unless the target batch is explicitly recorded as `In progress` or `Planned` in this file.
+
+## Batch-First Discipline Lock (M6-B2, 2026-02-11)
+
+1. Use `.agent/plans/linear-delivery-plan.md` as the sole execution queue.
+1. Start only the batch identified by `Next batch to execute`, unless a batch is already `In progress`.
+1. Keep exactly one `In progress` batch at a time.
+1. On completion, update this file in the same change:
+1. batch status
+1. batch status board
+1. closeout log
+1. next batch pointer
+1. If blocked, mark `Blocked` with blocker details and an explicit unblock action before stopping.
+1. Do not execute `.agent/plans/deferred-features.md` or `.agent/plans/archive/` items directly.
 
 ## Current Baseline (Already Delivered)
 
@@ -275,7 +290,7 @@ Source: user-confirmed next-step order from roadmap continuation review.
 ### Acceptance Criteria
 
 1. Repository docs and plan state are explicit that `data/processed` artefacts are allowed in git when intentional.
-1. Next-session entry path is explicit: execute `M6-B2` then `M6-B3`.
+1. Next-session entry path is explicit: execute `M6-B3` then `M6-B4`.
 1. Default scoring behaviour remains unchanged with no profile override.
 1. Custom/non-tech profile selection is deterministic and documented.
 1. Validation evidence guidance defines cadence, commands, and canonical record location.
@@ -283,8 +298,8 @@ Source: user-confirmed next-step order from roadmap continuation review.
 
 ### Next Session Scope Lock
 
-1. Execute `M6-B2` then `M6-B3` in the next session.
-1. Do not start `M6-B4` until `M6-B2` and `M6-B3` are complete.
+1. Execute `M6-B3` then `M6-B4` in the next session.
+1. Do not start work beyond `M6-B4` until `M6-B3` and `M6-B4` are complete.
 
 ## Detailed TODO List (Next Steps)
 
@@ -806,7 +821,7 @@ The following batches implement the post-roadmap continuation priority lock (`3 
 
 1. Batch ID: `M6-B2`
 1. Objective: Harden post-roadmap batch-first execution discipline in active planning docs.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M6-B1`
 1. Scope (in): active plan/runbook clarity, next-session execution constraints.
 1. Scope (out): scoring profile implementation and validation cadence rollout.
@@ -911,7 +926,7 @@ Use this as the canonical live tracker for batch execution state.
 ### Milestone 6
 
 1. `M6-B1`: Complete
-1. `M6-B2`: Planned
+1. `M6-B2`: Complete
 1. `M6-B3`: Planned
 1. `M6-B4`: Planned
 
@@ -1279,6 +1294,16 @@ Follow-ups: Execute M6-B2 (post-roadmap batch-first execution discipline hardeni
 ```
 
 ```text
+Date: 2026-02-11
+Batch ID: M6-B2
+Status: Complete
+Summary: Hardened batch-first execution discipline across active planning docs and README by locking the session-entry sequence, clarifying `Next batch to execute` as authoritative, and documenting mandatory status/closeout updates on batch completion.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md, .agent/plans/README.md, README.md
+Follow-ups: Execute M6-B3 (non-tech starter scoring profile coverage).
+```
+
+```text
 Validation Run
 Date: 2026-02-08
 Operator: Codex
@@ -1368,7 +1393,8 @@ Result: pass
 
 1. `M6-B1` is now closed with explicit repository policy that `data/processed` artefacts are commit-allowed when intentional.
 1. Contributor-facing docs now include an artefact-diff review expectation before committing generated processed outputs.
-1. Next active batch is `M6-B2`; milestone execution order remains locked (`M6-B2` -> `M6-B3` -> `M6-B4`).
+1. `M6-B2` is now closed with explicit batch-first execution lock rules in both planning docs and contributor workflow guidance.
+1. Next active batch is `M6-B3`; milestone execution order remains locked (`M6-B3` -> `M6-B4`).
 
 ## Session Completion Rules (Every Session)
 

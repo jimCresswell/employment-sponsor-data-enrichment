@@ -360,6 +360,14 @@ Contributions are expected to improve either:
 5. Run full gates before commit: `uv run check`.
 6. Use conventional commits.
 
+### Batch-First Execution Discipline
+
+1. Treat `.agent/plans/linear-delivery-plan.md` as the single execution queue.
+2. Start only the batch shown as `Next batch to execute` unless a batch is already `In progress`.
+3. Keep exactly one batch `In progress` at a time.
+4. Do not skip forward to later dependent batches.
+5. On batch completion, update the plan status board and closeout log in the same change.
+
 ### Definition of Done for a Change
 
 - Behaviour implemented with strict typing.
