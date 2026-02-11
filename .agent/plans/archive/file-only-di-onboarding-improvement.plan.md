@@ -1,3 +1,8 @@
+> Archived Plan Notice (2026-02-11): this file is historical reference only.
+> Do not execute this plan directly.
+> Active execution queue: `.agent/plans/linear-delivery-plan.md`.
+> Durable contracts and operational guidance live in `README.md`, `docs/`, and `docs/architectural-decision-records/`.
+
 # Plan: File-Only Runtime, DI IO Boundaries, and Onboarding Hardening
 
 Status: Promoted (mapped to Milestone 0 in `.agent/plans/linear-delivery-plan.md`)

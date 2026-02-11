@@ -35,3 +35,13 @@ This directory contains the ADRs for the UK Sponsor → Hiring Signals Pipeline.
 
 - `docs/data-contracts.md` (schema and deterministic validation contracts)
 - `docs/validation-protocol.md` (operational runbook and verification commands)
+
+## Plan-Derived Durable References
+
+The active queue and archived planning notes are operational artefacts under `.agent/plans/`.
+Durable guidance promoted from completed plans is kept in permanent docs:
+
+- `README.md` (contributor workflow, batch-first execution expectations, command usage)
+- `docs/data-contracts.md` (stable schema and artefact contracts)
+- `docs/validation-protocol.md` (validation command flow, evidence cadence, canonical run-log location)
+- `docs/troubleshooting.md` (failure-mode recovery playbooks)

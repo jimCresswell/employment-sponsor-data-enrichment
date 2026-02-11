@@ -111,7 +111,7 @@ When starting any new session, choose work using this deterministic rule:
 
 ## Milestone 0: File-Only Runtime, DI IO Boundaries, and Onboarding Hardening
 
-Source: `.agent/plans/file-only-di-onboarding-improvement.plan.md`
+Source: `.agent/plans/archive/file-only-di-onboarding-improvement.plan.md`
 
 ### Requirements
 

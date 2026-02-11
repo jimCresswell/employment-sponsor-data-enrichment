@@ -360,10 +360,11 @@ Contributions are expected to improve either:
 
 1. Read `.agent/directives/AGENT.md`, `.agent/directives/rules.md`, `.agent/directives/project.md`, and `.agent/directives/python3.practice.md`.
 2. Choose work from `.agent/plans/linear-delivery-plan.md` (current execution roadmap).
-3. Follow strict TDD: tests first, implementation second, refactor third.
-4. Keep behaviour, tests, and docs aligned in the same change.
-5. Run full gates before commit: `uv run check`.
-6. Use conventional commits.
+3. Treat `.agent/plans/archive/` plans as historical reference only; do not execute them directly.
+4. Follow strict TDD: tests first, implementation second, refactor third.
+5. Keep behaviour, tests, and docs aligned in the same change.
+6. Run full gates before commit: `uv run check`.
+7. Use conventional commits.
 
 ### Batch-First Execution Discipline
 

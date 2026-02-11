@@ -1,3 +1,8 @@
+> Archived Plan Notice (2026-02-11): this file is historical reference only.
+> Do not execute this plan directly.
+> Active execution queue: `.agent/plans/linear-delivery-plan.md`.
+> Durable contracts and operational guidance live in `README.md`, `docs/`, and `docs/architectural-decision-records/`.
+
 # Strict mypy → strict Pyright migration (uv repo)
 
 This doc complements the general `uv + hatchling` blueprint and focuses only on migrating from **strict mypy** to **strict Pyright**, with the project rule:

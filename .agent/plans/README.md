@@ -6,20 +6,21 @@ This directory contains planning documents for active and historical work.
 
 | File | Purpose | Status | Owner | Last Updated |
 | --- | --- | --- | --- | --- |
-| `.agent/plans/linear-delivery-plan.md` | Single ordered execution path with milestone requirements and acceptance criteria. | Active (Milestone 6 in progress; next batch `M6-B3`) | Jim + Codex | 2026-02-11 |
+| `.agent/plans/linear-delivery-plan.md` | Single ordered execution path with milestone requirements and acceptance criteria. | Active (roadmap queue complete; `Next batch to execute: none`) | Jim + Codex | 2026-02-11 |
 | `.agent/plans/deferred-features.md` | Backlog items not in the active linear path. | Active backlog (currently empty) | Jim + Codex | 2026-02-10 |
 
-## Promoted Improvement Plans
+## Archived Completed Plans
 
 | File | Purpose | Status | Owner | Last Updated |
 | --- | --- | --- | --- | --- |
-| `.agent/plans/file-only-di-onboarding-improvement.plan.md` | Source proposal now mapped into Milestone 0 execution batches in the linear plan. | Promoted | Jim + Codex | 2026-02-06 |
+| `.agent/plans/archive/file-only-di-onboarding-improvement.plan.md` | Source proposal mapped into Milestone 0 execution batches in the linear plan. | Archived (completed/promotion finished) | Jim + Codex | 2026-02-06 |
 
 ## Archived Reference Plans
 
 Legacy or completed planning artefacts live in `.agent/plans/archive/` and are reference-only.
 Do not execute directly without explicitly promoting requirements into
 `.agent/plans/linear-delivery-plan.md`.
+Each archived file carries an explicit archive banner.
 
 ## Operating Rule
 

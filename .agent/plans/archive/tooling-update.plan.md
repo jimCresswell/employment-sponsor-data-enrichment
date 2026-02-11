@@ -1,3 +1,8 @@
+> Archived Plan Notice (2026-02-11): this file is historical reference only.
+> Do not execute this plan directly.
+> Active execution queue: `.agent/plans/linear-delivery-plan.md`.
+> Durable contracts and operational guidance live in `README.md`, `docs/`, and `docs/architectural-decision-records/`.
+
 # Tooling Update Plan (Python 3.14+) — `uv` + Hatchling (Entry Point)
 
 This is the **entry-point plan** for updating tooling in this repository.
@@ -33,7 +38,7 @@ No `setup.py`. No `setup.cfg`.
 
 1. Confirm Python is **3.14+** and `uv` is installed.
 2. Read this plan end-to-end.
-3. Read `.agent/plans/tooling-update-mypy-to-pyright.plan.md` (type checker migration details).
+3. Read `.agent/plans/archive/tooling-update-mypy-to-pyright.plan.md` (type checker migration details).
 4. Run current quality gates (expect failures during migration):
    - `uv sync --group dev`
    - `uv run check`
