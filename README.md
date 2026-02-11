@@ -44,7 +44,7 @@ Snapshots -> transform-enrich -> transform-score -> usage-shortlist
 | `refresh-sponsor` | Sponsor CSV URL | `data/cache/snapshots/sponsor/<YYYY-MM-DD>/...` | Discover, download, clean, snapshot sponsor data |
 | `refresh-companies-house` | Companies House ZIP/CSV URL | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/...` | Discover, download/extract, clean, index, snapshot CH data |
 | `transform-enrich` | Clean snapshots | `data/processed/sponsor_*.csv` | Match sponsor organisations to CH entities |
-| `transform-score` | Enriched CSV | `data/processed/companies_scored.csv` | Apply default role-likelihood scoring profile (currently tech-focused) |
+| `transform-score` | Enriched CSV | `data/processed/companies_scored.csv` | Apply active role-likelihood scoring profile (`tech` default; starter profiles include `care_support`) |
 | `usage-shortlist` | Scored CSV | `data/processed/companies_shortlist.csv`, `data/processed/companies_explain.csv` | Apply thresholds and geo filters for final shortlist |
 
 ## Quick Start (First Successful Run)
@@ -156,10 +156,15 @@ Optional scoring profile selection:
 uv run uk-sponsor transform-score \
   --sector-profile data/reference/scoring_profiles.json \
   --sector tech
+
+uv run uk-sponsor transform-score \
+  --sector-profile data/reference/scoring_profiles.json \
+  --sector care_support
 ```
 
 By default, `transform-score` always loads `data/reference/scoring_profiles.json` and resolves
-the catalogue `default_profile` when no profile override is supplied.
+the catalogue `default_profile` (`tech`) when no profile override is supplied.
+The starter catalogue currently includes `tech` and `care_support`.
 
 `run-all` supports `--only`:
 
@@ -242,7 +247,7 @@ CH_SEARCH_LIMIT=10
 
 TECH_SCORE_THRESHOLD=0.55
 SECTOR_PROFILE=
-SECTOR_NAME=
+SECTOR_NAME=  # optional profile override, e.g. care_support
 GEO_FILTER_REGION=
 GEO_FILTER_POSTCODES=
 LOCATION_ALIASES_PATH=data/reference/location_aliases.json
@@ -278,7 +283,7 @@ tech_score_threshold = 0.55
 geo_filter_region = "London"
 geo_filter_postcodes = ["EC", "SW"]
 sector_profile_path = "data/reference/scoring_profiles.json"
-sector_name = "tech"
+sector_name = "care_support"
 location_aliases_path = "data/reference/location_aliases.json"
 ```
 

@@ -175,6 +175,8 @@ Catalogue requirements:
 - JSON schema version must be `1`.
 - `default_profile` must reference an existing profile in `profiles`.
 - Profile names must be unique.
+- Starter profiles in `data/reference/scoring_profiles.json` are currently `tech` (default) and
+  `care_support`.
 - All scoring fields are strict and validated fail-fast (missing fields, unknown keys,
   wrong types, or invalid ranges are errors).
 
@@ -183,6 +185,12 @@ Runtime scoring requirements:
 - The resolved profile drives feature values and bucket thresholds for all rows in the run.
 - Scoring output column names and artefact paths remain unchanged.
 - Given identical input rows and the same resolved profile, score outputs are deterministic.
+
+Example selection:
+
+```bash
+uv run uk-sponsor transform-score --sector care_support
+```
 
 ## Enrichment Audit CLI Contract
 

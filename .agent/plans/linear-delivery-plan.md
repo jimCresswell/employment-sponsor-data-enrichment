@@ -4,7 +4,7 @@ Status: Active
 Last updated: 2026-02-11
 Handoff readiness: Ready
 Current batch in progress: `none`
-Next batch to execute: `M6-B3`
+Next batch to execute: `M6-B4`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -290,7 +290,7 @@ Source: user-confirmed next-step order from roadmap continuation review.
 ### Acceptance Criteria
 
 1. Repository docs and plan state are explicit that `data/processed` artefacts are allowed in git when intentional.
-1. Next-session entry path is explicit: execute `M6-B3` then `M6-B4`.
+1. Next-session entry path is explicit: execute `M6-B4` after `M6-B3` completion.
 1. Default scoring behaviour remains unchanged with no profile override.
 1. Custom/non-tech profile selection is deterministic and documented.
 1. Validation evidence guidance defines cadence, commands, and canonical record location.
@@ -298,8 +298,8 @@ Source: user-confirmed next-step order from roadmap continuation review.
 
 ### Next Session Scope Lock
 
-1. Execute `M6-B3` then `M6-B4` in the next session.
-1. Do not start work beyond `M6-B4` until `M6-B3` and `M6-B4` are complete.
+1. Execute `M6-B4` in the next session.
+1. Do not start work beyond `M6-B4` until `M6-B4` is complete.
 
 ## Detailed TODO List (Next Steps)
 
@@ -838,7 +838,7 @@ The following batches implement the post-roadmap continuation priority lock (`3 
 
 1. Batch ID: `M6-B3`
 1. Objective: Add and document non-tech starter scoring profile coverage.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M6-B2`
 1. Scope (in): profile catalogue expansion, deterministic selection tests, docs updates.
 1. Scope (out): validation evidence cadence execution.
@@ -927,7 +927,7 @@ Use this as the canonical live tracker for batch execution state.
 
 1. `M6-B1`: Complete
 1. `M6-B2`: Complete
-1. `M6-B3`: Planned
+1. `M6-B3`: Complete
 1. `M6-B4`: Planned
 
 ## Future Batch Index (Milestones 3-6)
@@ -1304,6 +1304,16 @@ Follow-ups: Execute M6-B3 (non-tech starter scoring profile coverage).
 ```
 
 ```text
+Date: 2026-02-11
+Batch ID: M6-B3
+Status: Complete
+Summary: Added `care_support` as a non-tech starter scoring profile in the default catalogue, added deterministic profile-selection coverage in scoring tests, and updated permanent docs with starter-profile usage and selection examples.
+Quality gates: uv run pytest tests/application/test_scoring_profiles.py tests/application/test_transform_score.py (pass); uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md, README.md, docs/data-contracts.md
+Follow-ups: Execute M6-B4 (validation evidence cadence and canonical run-log location guidance).
+```
+
+```text
 Validation Run
 Date: 2026-02-08
 Operator: Codex
@@ -1394,7 +1404,8 @@ Result: pass
 1. `M6-B1` is now closed with explicit repository policy that `data/processed` artefacts are commit-allowed when intentional.
 1. Contributor-facing docs now include an artefact-diff review expectation before committing generated processed outputs.
 1. `M6-B2` is now closed with explicit batch-first execution lock rules in both planning docs and contributor workflow guidance.
-1. Next active batch is `M6-B3`; milestone execution order remains locked (`M6-B3` -> `M6-B4`).
+1. `M6-B3` is now closed with a new non-tech starter profile (`care_support`) in the default scoring catalogue, deterministic selection coverage, and updated profile-selection docs.
+1. Next active batch is `M6-B4`; milestone execution order remains locked (`M6-B4` only).
 
 ## Session Completion Rules (Every Session)
 

@@ -119,6 +119,100 @@
         "strong": 0.55,
         "possible": 0.35
       }
+    },
+    {
+      "name": "care_support",
+      "job_type": "care_support",
+      "sector_signals": {
+        "health_and_social_care": 0.0
+      },
+      "location_signals": {},
+      "size_signals": {},
+      "sic_positive_prefixes": {
+        "861": 0.4,
+        "862": 0.4,
+        "869": 0.35,
+        "871": 0.5,
+        "872": 0.5,
+        "873": 0.5,
+        "879": 0.4,
+        "881": 0.35
+      },
+      "sic_negative_prefixes": {
+        "620": -0.25,
+        "631": -0.2,
+        "582": -0.2,
+        "611": -0.15,
+        "612": -0.15,
+        "619": -0.15
+      },
+      "keyword_positive": [
+        "care",
+        "nursing",
+        "health",
+        "support",
+        "homecare",
+        "clinic",
+        "medical"
+      ],
+      "keyword_negative": [
+        "software",
+        "digital",
+        "tech",
+        "technology",
+        "cloud",
+        "platform",
+        "saas"
+      ],
+      "keyword_weights": {
+        "positive_per_match": 0.05,
+        "positive_cap": 0.15,
+        "negative_per_match": 0.05,
+        "negative_cap": 0.1
+      },
+      "company_status_scores": {
+        "active": 0.1,
+        "inactive": 0.0
+      },
+      "company_age_scores": {
+        "unknown": 0.05,
+        "bands": [
+          {
+            "min_years": 10.0,
+            "score": 0.12
+          },
+          {
+            "min_years": 5.0,
+            "score": 0.1
+          },
+          {
+            "min_years": 2.0,
+            "score": 0.07
+          },
+          {
+            "min_years": 1.0,
+            "score": 0.04
+          },
+          {
+            "min_years": 0.0,
+            "score": 0.02
+          }
+        ]
+      },
+      "company_type_weights": {
+        "ltd": 0.08,
+        "private-limited-company": 0.08,
+        "public limited company": 0.05,
+        "plc": 0.05,
+        "llp": 0.06,
+        "limited-partnership": 0.04,
+        "community-interest-company": 0.02,
+        "charitable-incorporated-organisation": 0.01
+      },
+      "bucket_thresholds": {
+        "strong": 0.55,
+        "possible": 0.35
+      }
     }
   ]
 }

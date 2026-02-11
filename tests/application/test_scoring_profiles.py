@@ -17,6 +17,7 @@ from uk_sponsor_pipeline.exceptions import (
     ScoringProfileSelectionError,
     ScoringProfileValidationError,
 )
+from uk_sponsor_pipeline.infrastructure import LocalFileSystem
 from uk_sponsor_pipeline.io_validation import validate_as
 
 
@@ -165,3 +166,20 @@ def test_resolve_scoring_profile_fails_for_unknown_profile_name() -> None:
         resolve_scoring_profile(catalog, profile_name="nonexistent")
 
     assert "nonexistent" in str(exc_info.value)
+
+
+def test_default_catalog_includes_non_tech_starter_profile() -> None:
+    fs = LocalFileSystem()
+    catalog = load_scoring_profile_catalog(
+        path=Path("data/reference/scoring_profiles.json"),
+        fs=fs,
+    )
+
+    non_tech_profiles = [
+        profile for profile in catalog.profiles if profile.job_type != "software_engineering"
+    ]
+    assert non_tech_profiles
+
+    starter_profile = resolve_scoring_profile(catalog, profile_name="care_support")
+    assert starter_profile.name == "care_support"
+    assert starter_profile.job_type == "care_support"

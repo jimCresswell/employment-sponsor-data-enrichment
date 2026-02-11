@@ -525,3 +525,60 @@ def test_transform_score_custom_profile_changes_output_deterministically(tmp_pat
     assert custom_bucket_first == "unlikely"
     assert custom_score_first == custom_score_second
     assert custom_bucket_first == custom_bucket_second
+
+
+def test_transform_score_non_tech_starter_profile_is_selectable_and_deterministic(
+    tmp_path: Path,
+) -> None:
+    fs = LocalFileSystem()
+    rows = [
+        make_enrich_row(
+            **{
+                "Organisation Name": "Care Starter Company",
+                "ch_company_name": "Care Nursing Services Ltd",
+                "ch_sic_codes": "87100",
+                "ch_company_status": "active",
+                "ch_date_of_creation": "2010-01-01",
+                "ch_company_type": "ltd",
+                "match_score": "0.85",
+            }
+        )
+    ]
+    enriched_path = tmp_path / "enriched.csv"
+    pd.DataFrame(rows).to_csv(enriched_path, index=False)
+
+    tech_out = run_transform_score(
+        enriched_path=enriched_path,
+        out_dir=tmp_path / "tech_out",
+        config=PipelineConfig(sector_name="tech"),
+        fs=fs,
+    )
+    care_out_first = run_transform_score(
+        enriched_path=enriched_path,
+        out_dir=tmp_path / "care_out_first",
+        config=PipelineConfig(sector_name="care_support"),
+        fs=fs,
+    )
+    care_out_second = run_transform_score(
+        enriched_path=enriched_path,
+        out_dir=tmp_path / "care_out_second",
+        config=PipelineConfig(sector_name="care_support"),
+        fs=fs,
+    )
+
+    tech_df = pd.read_csv(tech_out["scored"], dtype=str).fillna("")
+    care_df_first = pd.read_csv(care_out_first["scored"], dtype=str).fillna("")
+    care_df_second = pd.read_csv(care_out_second["scored"], dtype=str).fillna("")
+
+    tech_score = float(str(tech_df.loc[0, "role_fit_score"]))
+    care_score_first = float(str(care_df_first.loc[0, "role_fit_score"]))
+    care_score_second = float(str(care_df_second.loc[0, "role_fit_score"]))
+    tech_bucket = str(tech_df.loc[0, "role_fit_bucket"])
+    care_bucket_first = str(care_df_first.loc[0, "role_fit_bucket"])
+    care_bucket_second = str(care_df_second.loc[0, "role_fit_bucket"])
+
+    assert tech_bucket == "unlikely"
+    assert care_bucket_first == "strong"
+    assert care_score_first > tech_score
+    assert care_score_first == care_score_second
+    assert care_bucket_first == care_bucket_second
