@@ -4,7 +4,7 @@ Status: Active
 Last updated: 2026-02-11
 Handoff readiness: Ready
 Current batch in progress: `none`
-Next batch to execute: `M6-B4`
+Next batch to execute: `none`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -290,7 +290,7 @@ Source: user-confirmed next-step order from roadmap continuation review.
 ### Acceptance Criteria
 
 1. Repository docs and plan state are explicit that `data/processed` artefacts are allowed in git when intentional.
-1. Next-session entry path is explicit: execute `M6-B4` after `M6-B3` completion.
+1. Post-roadmap queue state is explicit when no planned batches remain.
 1. Default scoring behaviour remains unchanged with no profile override.
 1. Custom/non-tech profile selection is deterministic and documented.
 1. Validation evidence guidance defines cadence, commands, and canonical record location.
@@ -298,8 +298,8 @@ Source: user-confirmed next-step order from roadmap continuation review.
 
 ### Next Session Scope Lock
 
-1. Execute `M6-B4` in the next session.
-1. Do not start work beyond `M6-B4` until `M6-B4` is complete.
+1. Milestone 6 queue is complete.
+1. Start additional implementation only after adding a new planned batch record in this file.
 
 ## Detailed TODO List (Next Steps)
 
@@ -857,7 +857,7 @@ The following batches implement the post-roadmap continuation priority lock (`3 
 
 1. Batch ID: `M6-B4`
 1. Objective: Define recurring validation evidence capture cadence and canonical run-log location.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M6-B3`
 1. Scope (in): validation cadence documentation and operational record location guidance.
 1. Scope (out): new scoring model behaviour changes.
@@ -928,7 +928,7 @@ Use this as the canonical live tracker for batch execution state.
 1. `M6-B1`: Complete
 1. `M6-B2`: Complete
 1. `M6-B3`: Complete
-1. `M6-B4`: Planned
+1. `M6-B4`: Complete
 
 ## Future Batch Index (Milestones 3-6)
 
@@ -1314,6 +1314,16 @@ Follow-ups: Execute M6-B4 (validation evidence cadence and canonical run-log loc
 ```
 
 ```text
+Date: 2026-02-11
+Batch ID: M6-B4
+Status: Complete
+Summary: Defined recurring validation evidence cadence and canonical run-log location, added copy-paste command sets for weekly and periodic deterministic evidence capture, and reconciled active plan status to mark Milestone 6 complete.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md, docs/validation-protocol.md, docs/troubleshooting.md
+Follow-ups: none.
+```
+
+```text
 Validation Run
 Date: 2026-02-08
 Operator: Codex
@@ -1405,7 +1415,8 @@ Result: pass
 1. Contributor-facing docs now include an artefact-diff review expectation before committing generated processed outputs.
 1. `M6-B2` is now closed with explicit batch-first execution lock rules in both planning docs and contributor workflow guidance.
 1. `M6-B3` is now closed with a new non-tech starter profile (`care_support`) in the default scoring catalogue, deterministic selection coverage, and updated profile-selection docs.
-1. Next active batch is `M6-B4`; milestone execution order remains locked (`M6-B4` only).
+1. `M6-B4` is now closed with explicit recurring validation-evidence cadence, command set, and canonical run-log location guidance.
+1. No planned post-roadmap batches remain; add a new batch record before additional implementation work.
 
 ## Session Completion Rules (Every Session)
 
@@ -1423,4 +1434,4 @@ Result: pass
 1. Milestone 3: Complete.
 1. Milestone 4: Complete.
 1. Milestone 5: Complete.
-1. Milestone 6: In progress.
+1. Milestone 6: Complete.

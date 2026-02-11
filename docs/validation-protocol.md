@@ -247,6 +247,35 @@ Recovery actions:
 Result: pass | fail
 ```
 
+## Recurring Evidence Cadence and Canonical Log Location
+
+Canonical location:
+
+- Append each live validation record as a `Validation Run` block in
+  `.agent/plans/linear-delivery-plan.md` under `Batch Closeout Log`.
+
+Minimum cadence:
+
+1. Weekly (every 7 days) while pipeline-affecting work is active.
+1. Immediately after snapshot-date changes used for shared validation baselines.
+1. Before merging changes that affect refresh, transform, usage, config precedence, or
+   validation contracts/scripts.
+
+Copy-paste weekly evidence command set:
+
+```bash
+uv run uk-sponsor run-all
+uv run python scripts/validation_check_snapshots.py --snapshot-root data/cache/snapshots
+uv run python scripts/validation_check_outputs.py --out-dir data/processed
+uv run python scripts/validation_audit_enrichment.py --out-dir data/processed --strict
+```
+
+Periodic deterministic check (at least monthly, and before release candidates):
+
+```bash
+uv run python scripts/validation_e2e_fixture.py
+```
+
 ## Notes for Contributors
 
 - Keep this protocol aligned with actual CLI behaviour and artefact contracts.

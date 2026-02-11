@@ -324,3 +324,34 @@ Review checklist:
 2. Review row-count and content diffs for `data/processed/*.csv` and
    `data/processed/sponsor_enrich_resume_report.json`.
 3. Confirm observed changes are expected for the snapshot dates and config used in the run.
+
+## 16) Validation Evidence Missing or Stale
+
+Symptom:
+
+- No recent `Validation Run` entry exists for current work.
+- Latest recorded run predates current snapshot dates or recent pipeline-affecting changes.
+
+Canonical log location:
+
+- `.agent/plans/linear-delivery-plan.md` under `Batch Closeout Log` (`Validation Run` blocks).
+
+Recovery:
+
+1. Run the recurring evidence command set:
+
+```bash
+uv run uk-sponsor run-all
+uv run python scripts/validation_check_snapshots.py --snapshot-root data/cache/snapshots
+uv run python scripts/validation_check_outputs.py --out-dir data/processed
+uv run python scripts/validation_audit_enrichment.py --out-dir data/processed --strict
+```
+
+2. Run deterministic fixture validation when due (monthly minimum or before release candidates):
+
+```bash
+uv run python scripts/validation_e2e_fixture.py
+```
+
+3. Append a new `Validation Run` block using the template in `docs/validation-protocol.md`.
+4. If any command fails, fix the underlying contract/artefact issue and rerun before recording pass.
