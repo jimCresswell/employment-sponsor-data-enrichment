@@ -304,3 +304,23 @@ Recovery:
 2. Confirm TOML syntax is valid (`schema_version = 1`, then `[pipeline]`).
 3. Remove unknown keys and fix invalid values (for example multi-region `geo_filter_region`).
 4. Rerun command with the same `--config` path.
+
+## 15) Reviewing Generated `data/processed` Artefacts Before Commit
+
+Policy:
+
+- `data/processed` artefacts may be committed when intentional.
+
+Recommended pre-commit checks:
+
+```bash
+uv run python scripts/validation_check_outputs.py --out-dir data/processed
+uv run python scripts/validation_audit_enrichment.py --out-dir data/processed
+```
+
+Review checklist:
+
+1. Confirm validation commands pass.
+2. Review row-count and content diffs for `data/processed/*.csv` and
+   `data/processed/sponsor_enrich_resume_report.json`.
+3. Confirm observed changes are expected for the snapshot dates and config used in the run.

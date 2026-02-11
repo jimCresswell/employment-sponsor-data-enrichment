@@ -1,10 +1,10 @@
 # Linear Delivery Plan (Standalone Session Entry Point)
 
 Status: Active  
-Last updated: 2026-02-10
+Last updated: 2026-02-11
 Handoff readiness: Ready
 Current batch in progress: `none`
-Next batch to execute: `none`
+Next batch to execute: `M6-B2`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -29,7 +29,7 @@ Next batch to execute: `none`
 1. `Status Tracking`
 1. If any batch is `In progress`, resume that batch first.
 1. If no batch is `In progress` and at least one batch is `Planned`, start the earliest planned batch.
-1. If no batches are `In progress` or `Planned` (current state), treat roadmap execution as complete and only start new work by first adding a new batch record in this file.
+1. If no batches are `In progress` or `Planned`, treat roadmap execution as complete and only start new work by first adding a new batch record in this file.
 1. Use TDD and complete the full batch lifecycle for any new batch.
 1. On batch completion:
 1. Set batch status to `Complete`.
@@ -92,6 +92,7 @@ When starting any new session, choose work using this deterministic rule:
 1. Milestone 3: Performance hardening and sector profile externalisation.
 1. Milestone 4: Config-file support.
 1. Milestone 5: Developer ergonomics (optional).
+1. Milestone 6: Post-roadmap continuation (priority lock: `3 -> 1 -> 2 -> 4`).
 
 ## Milestone 0: File-Only Runtime, DI IO Boundaries, and Onboarding Hardening
 
@@ -253,6 +254,38 @@ Source: `.agent/plans/deferred-features.md`
 1. `uk-sponsor --version` returns tool version and exits `0`.
 1. `uv run check` passes.
 
+## Milestone 6: Post-Roadmap Continuation (Priority Lock 2026-02-10)
+
+Source: user-confirmed next-step order from roadmap continuation review.
+
+### Priority Lock (Do Not Reorder)
+
+1. Priority 3: repository policy alignment for `data/processed` artefact commits.
+1. Priority 1: post-roadmap batch-first execution discipline hardening.
+1. Priority 2: broaden scoring-profile catalogue beyond the starter tech profile.
+1. Priority 4: recurring live validation evidence capture and freshness guidance.
+
+### Requirements
+
+1. Keep repository policy explicit that `data/processed` artefacts may be committed when intentional.
+1. Keep the active plan and contributor guidance explicit that implementation starts only from a planned batch.
+1. Add at least one non-tech starter scoring profile with deterministic behaviour and coverage.
+1. Define where validation run evidence is recorded and the expected refresh cadence.
+
+### Acceptance Criteria
+
+1. Repository docs and plan state are explicit that `data/processed` artefacts are allowed in git when intentional.
+1. Next-session entry path is explicit: execute `M6-B2` then `M6-B3`.
+1. Default scoring behaviour remains unchanged with no profile override.
+1. Custom/non-tech profile selection is deterministic and documented.
+1. Validation evidence guidance defines cadence, commands, and canonical record location.
+1. `uv run check` passes for each completed batch.
+
+### Next Session Scope Lock
+
+1. Execute `M6-B2` then `M6-B3` in the next session.
+1. Do not start `M6-B4` until `M6-B2` and `M6-B3` are complete.
+
 ## Detailed TODO List (Next Steps)
 
 This checklist expands the delivery milestones into concrete implementation tasks.
@@ -379,6 +412,19 @@ Follow in order. Do not reorder milestones.
 1. Update docs for CI behaviour and version command usage.
 1. Run `uv run check`.
 1. Mark Milestone 5 status as in progress or complete in this file based on outcome.
+
+### Milestone 6 TODO (Post-Roadmap Continuation: `3 -> 1 -> 2 -> 4`)
+
+1. Reconcile plan/docs language so `data/processed` artefacts are allowed in git when intentional.
+1. Remove or avoid introducing guardrails that block staged changes under `data/processed/`.
+1. Add contributor guidance for reviewing generated artefact diffs before committing.
+1. Reconcile plan/runbook language to keep batch-first execution explicit for post-roadmap work.
+1. Add at least one non-tech starter scoring profile to `data/reference/scoring_profiles.json`.
+1. Add deterministic tests proving new profile selection behaviour without changing default profile output.
+1. Update profile schema/docs examples in `README.md` and `docs/data-contracts.md`.
+1. Define recurring validation evidence cadence, commands, and canonical log location in docs.
+1. Run `uv run check`.
+1. Update batch statuses, closeout log entries, and status tracking in this file.
 
 ### Session-Level Execution Checklist
 
@@ -736,6 +782,79 @@ The following batches are the approved execution slices for Milestone 3.
 1. Status: `Complete`
 1. Depends on: `M3-B4`
 
+## Execution Batches (Milestone 6)
+
+The following batches implement the post-roadmap continuation priority lock (`3 -> 1 -> 2 -> 4`).
+
+### Batch M6-B1
+
+1. Batch ID: `M6-B1`
+1. Objective: Reconcile repository policy so `data/processed` artefacts are intentionally commit-allowed.
+1. Status: `Complete`
+1. Depends on: none
+1. Scope (in): plan/docs policy alignment and contributor guidance for reviewing generated artefact diffs.
+1. Scope (out): scoring profile expansion and recurring validation cadence.
+1. Primary files:
+1. `.agent/plans/linear-delivery-plan.md`
+1. `README.md`
+1. `docs/troubleshooting.md`
+1. Exit criteria:
+1. Repository docs and plan clearly state that `data/processed` artefacts may be committed when intentional.
+1. `uv run check` passes.
+
+### Batch M6-B2
+
+1. Batch ID: `M6-B2`
+1. Objective: Harden post-roadmap batch-first execution discipline in active planning docs.
+1. Status: `Planned`
+1. Depends on: `M6-B1`
+1. Scope (in): active plan/runbook clarity, next-session execution constraints.
+1. Scope (out): scoring profile implementation and validation cadence rollout.
+1. Primary files:
+1. `.agent/plans/linear-delivery-plan.md`
+1. `.agent/plans/README.md`
+1. `README.md`
+1. Exit criteria:
+1. Next-session flow remains explicit and unambiguous.
+1. Batch protocol and ordering constraints are documented and consistent.
+1. `uv run check` passes.
+
+### Batch M6-B3
+
+1. Batch ID: `M6-B3`
+1. Objective: Add and document non-tech starter scoring profile coverage.
+1. Status: `Planned`
+1. Depends on: `M6-B2`
+1. Scope (in): profile catalogue expansion, deterministic selection tests, docs updates.
+1. Scope (out): validation evidence cadence execution.
+1. Primary files:
+1. `data/reference/scoring_profiles.json`
+1. `tests/application/test_transform_score.py`
+1. `tests/application/test_scoring_profiles.py`
+1. `README.md`
+1. `docs/data-contracts.md`
+1. Exit criteria:
+1. At least one non-tech starter profile is selectable and deterministic.
+1. Default output remains unchanged without overrides.
+1. `uv run check` passes.
+
+### Batch M6-B4
+
+1. Batch ID: `M6-B4`
+1. Objective: Define recurring validation evidence capture cadence and canonical run-log location.
+1. Status: `Planned`
+1. Depends on: `M6-B3`
+1. Scope (in): validation cadence documentation and operational record location guidance.
+1. Scope (out): new scoring model behaviour changes.
+1. Primary files:
+1. `docs/validation-protocol.md`
+1. `docs/troubleshooting.md`
+1. `.agent/plans/linear-delivery-plan.md`
+1. Exit criteria:
+1. Cadence expectations and evidence location are explicit and copy-paste actionable.
+1. Protocol/troubleshooting guidance remains consistent.
+1. `uv run check` passes.
+
 ## Batch Status Board
 
 Use this as the canonical live tracker for batch execution state.
@@ -787,12 +906,20 @@ Use this as the canonical live tracker for batch execution state.
 1. `M5-B1`: Complete
 1. `M5-B2`: Complete
 1. `M5-B3`: Complete
+1. `M5-B4`: Complete
 
-## Future Batch Index (Milestones 3-5)
+### Milestone 6
 
-All recorded batches are complete.
-No pending execution batches remain in milestones 3-5.
-If new work is approved, append new batches after `M5-B3` using the recorded batch protocol.
+1. `M6-B1`: Complete
+1. `M6-B2`: Planned
+1. `M6-B3`: Planned
+1. `M6-B4`: Planned
+
+## Future Batch Index (Milestones 3-6)
+
+Planned continuation batches are recorded for Milestone 6.
+If new work is approved beyond this queue, append new batches after `M6-B4` using the recorded
+batch protocol.
 
 ## Batch Closeout Log
 
@@ -1129,6 +1256,29 @@ Follow-ups: none.
 ```
 
 ```text
+Date: 2026-02-10
+Batch ID: M5-B4
+Status: Complete
+Summary: Reconciled active plan state and promoted durable operational findings from the linear
+plan into permanent docs, including Companies House clean-schema URI/date rules, snapshot
+validation artefact contracts, run-all resume semantics, and processed-output handling guidance.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md, docs/data-contracts.md,
+docs/validation-protocol.md, README.md
+Follow-ups: none.
+```
+
+```text
+Date: 2026-02-11
+Batch ID: M6-B1
+Status: Complete
+Summary: Reconciled repository policy so `data/processed` artefacts are explicitly commit-allowed when intentional, added contributor guidance for reviewing generated artefact diffs, and updated active planning metadata to promote `M6-B2` as the next batch.
+Quality gates: uv run check (pass)
+Docs updated: .agent/plans/linear-delivery-plan.md, .agent/plans/README.md, README.md, docs/troubleshooting.md
+Follow-ups: Execute M6-B2 (post-roadmap batch-first execution discipline hardening).
+```
+
+```text
 Validation Run
 Date: 2026-02-08
 Operator: Codex
@@ -1181,7 +1331,7 @@ Result: pass
 1. Added deterministic enrichment audit tooling (`scripts/validation_audit_enrichment.py`) with structural fail-fast checks and threshold-based warning metrics; strict mode returns non-zero on threshold breaches.
 1. Added comprehensive fixture matrix for enrichment audit scenarios in `tests/support/enrichment_audit_fixtures.py` and coverage in `tests/devtools/test_enrichment_audit.py` plus script tests.
 1. Live audit on current processed outputs passed with baseline metrics: enriched rows `100,849`, unmatched rows `18,260`, low-similarity matches `247`, non-active matched companies `2,307`, shared-company-number rows `1,566`, near-threshold unmatched rows `1,299`.
-1. Processed artefact footprint currently measured at approximately `108M` under `data/processed`; default project stance remains to avoid committing processed outputs.
+1. Processed artefact footprint currently measured at approximately `108M` under `data/processed`; artefacts are commit-allowed when intentional and reviewable.
 1. Added `docs/performance-improvement-plan.md` capturing incremental and high-impact optimisation tracks, deterministic guardrails, and acceptance metrics for future throughput work.
 
 ## Operational Discoveries (2026-02-10)
@@ -1204,7 +1354,21 @@ Result: pass
 1. `docs/architectural-decision-records/README.md`
 1. `M3-B4` is now closed with profile-driven scoring integration and deterministic custom-profile output coverage in application and domain tests.
 1. `M3-B5` is now closed with milestone-state reconciliation and next-batch handoff updates.
-1. Next active batch is `none` (all recorded batches complete).
+1. Durable-docs reconciliation is now closed: `docs/data-contracts.md` reflects current
+   Companies House URI/date cleaning contracts and snapshot validation artefact-key rules
+   (including live companies-house manifests without `artefacts.manifest`).
+1. Validation and onboarding docs now explicitly state resume-mode expectations for repeated
+   `run-all` executions on unchanged inputs.
+1. README now records the project stance that `data/processed` outputs are reproducible run
+   artefacts and may be committed when intentional.
+1. Post-roadmap continuation is now queued with priority lock `3 -> 1 -> 2 -> 4`.
+1. Next active batch is `M6-B1`; next-session execution lock is `M6-B1` then `M6-B2`.
+
+## Operational Discoveries (2026-02-11)
+
+1. `M6-B1` is now closed with explicit repository policy that `data/processed` artefacts are commit-allowed when intentional.
+1. Contributor-facing docs now include an artefact-diff review expectation before committing generated processed outputs.
+1. Next active batch is `M6-B2`; milestone execution order remains locked (`M6-B2` -> `M6-B3` -> `M6-B4`).
 
 ## Session Completion Rules (Every Session)
 
@@ -1222,3 +1386,4 @@ Result: pass
 1. Milestone 3: Complete.
 1. Milestone 4: Complete.
 1. Milestone 5: Complete.
+1. Milestone 6: In progress.

@@ -188,6 +188,8 @@ Resume artefacts:
 
 When running with `--no-resume`, outputs are written to a timestamped subdirectory under the
 selected output directory.
+`run-all` uses resume mode for enrich by default, so repeated unchanged-input runs may report
+zero additional processed organisations.
 
 ### Geographic Filtering (Single Region Contract)
 
@@ -466,4 +468,7 @@ If you hit issues, start with `docs/troubleshooting.md`. Common causes are:
 
 - Never commit `.env` (already gitignored).
 - Treat cached payloads as potentially sensitive operational data.
+- `data/processed` outputs are reproducible run artefacts and may be committed when intentional.
+- Before committing generated processed artefacts, run validation commands and review row-count
+  and content diffs for unexpected changes.
 - Rotate API keys immediately if exposed.

@@ -96,10 +96,12 @@ uri
   - Lower-case, replace any non-alphanumeric with space, collapse whitespace to single
     hyphen, collapse repeated hyphens, trim leading/trailing hyphens.
 - `date_of_creation`: parse `IncorporationDate` into ISO `YYYY-MM-DD`.
+  - accepted incoming forms are ISO (`YYYY-MM-DD`) and slash format (`DD/MM/YYYY`).
 - `sic_codes`: extract code prefixes from `SICCode.SicText_1..4` by splitting on `" - "`,
   then join with `;`.
 - Address fields are trimmed only (no additional normalisation).
-- `uri`: must match `http://data.companieshouse.gov.uk/doc/company/{CompanyNumber}`.
+- `uri`: must be an absolute URL whose path ends with `/company/{CompanyNumber}`.
+  - host/path variants are accepted as long as the company-number path match holds.
 
 ### Raw → Canonical Mapping
 
@@ -114,13 +116,33 @@ uri
 | `address_locality` | `RegAddress.PostTown` | Trim only. |
 | `address_region` | `RegAddress.County` | Trim only. |
 | `address_postcode` | `RegAddress.PostCode` | Trim only. |
-| `uri` | `URI` | Validate against canonical mapping. |
+| `uri` | `URI` | Validate absolute URL with `/company/{CompanyNumber}` suffix. |
 
 ## Versioning Policy
 
 - `schema_version` is recorded in snapshot manifests.
 - Bump `ch_clean_v1` only when canonical columns or normalisation rules change.
 - Raw CSV headers are treated as a strict contract; missing columns are errors.
+
+## Snapshot Validation Contract
+
+`scripts/validation_check_snapshots.py` and `validation_snapshots` enforce these contracts:
+
+- required snapshot datasets:
+  - `sponsor`
+  - `companies_house`
+- required artefacts in latest dated snapshot:
+  - sponsor: `raw.csv`, `clean.csv`, `register_stats.json`, `manifest.json`
+  - companies_house: `raw.csv`, `clean.csv`, `manifest.json`, plus at least one
+    `index_tokens_<bucket>.csv` and one `profiles_<bucket>.csv`
+- required manifest fields:
+  - `dataset`, `snapshot_date`, `source_url`, `downloaded_at_utc`, `last_updated_at_utc`,
+    `schema_version`, `sha256_hash_raw`, `sha256_hash_clean`, `bytes_raw`, `row_counts`,
+    `artefacts`, `git_sha`, `tool_version`, `command_line`
+- required manifest `artefacts` keys:
+  - sponsor: `raw`, `clean`, `register_stats`, `manifest`
+  - companies_house: `raw`, `clean`
+  - note: companies-house manifests do not require `artefacts.manifest`
 
 ## Transform Enrich Output Partition Contract
 

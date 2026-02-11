@@ -150,6 +150,8 @@ Acceptance checks:
 - CLI reports final shortlist and explain outputs.
 - Reported output paths exist.
 - No runtime source-mode errors occur.
+- If enrich outputs are already complete, `run-all` may reuse resume state and report
+  zero additional processed organisations; this is expected.
 
 ## Step 6: Run Validation Scripts
 
