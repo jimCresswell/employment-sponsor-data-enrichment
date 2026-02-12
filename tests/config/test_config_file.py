@@ -44,6 +44,8 @@ sector_name = "tech"
 geo_filter_region = "London"
 geo_filter_postcodes = ["EC", " SW ", "", "N1"]
 location_aliases_path = "data/reference/location_aliases.json"
+min_employee_count = 1000
+include_unknown_employee_count = true
 """.strip(),
     )
 
@@ -67,6 +69,8 @@ location_aliases_path = "data/reference/location_aliases.json"
     assert parsed.geo_filter_region == "London"
     assert parsed.geo_filter_postcodes == ("EC", "SW", "N1")
     assert parsed.location_aliases_path == "data/reference/location_aliases.json"
+    assert parsed.min_employee_count == 1000
+    assert parsed.include_unknown_employee_count is True
 
 
 def test_load_pipeline_config_file_fails_when_file_missing() -> None:
@@ -189,3 +193,41 @@ ch_batch_size = 0
         load_pipeline_config_file(path=path, fs=fs)
 
     assert "ch_batch_size" in str(exc_info.value)
+
+
+def test_load_pipeline_config_file_fails_for_non_positive_min_employee_count() -> None:
+    fs = InMemoryFileSystem()
+    path = Path("config/pipeline.toml")
+    _write(
+        fs,
+        path,
+        """
+schema_version = 1
+[pipeline]
+min_employee_count = 0
+""".strip(),
+    )
+
+    with pytest.raises(ConfigFileValidationError) as exc_info:
+        load_pipeline_config_file(path=path, fs=fs)
+
+    assert "min_employee_count" in str(exc_info.value)
+
+
+def test_load_pipeline_config_file_fails_for_invalid_include_unknown_value() -> None:
+    fs = InMemoryFileSystem()
+    path = Path("config/pipeline.toml")
+    _write(
+        fs,
+        path,
+        """
+schema_version = 1
+[pipeline]
+include_unknown_employee_count = "sometimes"
+""".strip(),
+    )
+
+    with pytest.raises(ConfigFileValidationError) as exc_info:
+        load_pipeline_config_file(path=path, fs=fs)
+
+    assert "include_unknown_employee_count" in str(exc_info.value)

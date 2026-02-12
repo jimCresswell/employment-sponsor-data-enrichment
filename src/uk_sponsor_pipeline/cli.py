@@ -152,6 +152,13 @@ class RunAllOnly(StrEnum):
     USAGE_SHORTLIST = "usage-shortlist"
 
 
+class UnknownEmployeeCountMode(StrEnum):
+    """Allowed unknown-size handling modes."""
+
+    INCLUDE = "include"
+    EXCLUDE = "exclude"
+
+
 def _version_callback(value: bool) -> None:
     if value:
         rprint(f"uk-sponsor {__version__}")
@@ -164,6 +171,14 @@ def _single_region(region: list[str] | None) -> str | None:
     if len(region) > 1:
         raise SingleRegionError()
     return region[0]
+
+
+def _unknown_employee_count_to_bool(
+    mode: UnknownEmployeeCountMode | None,
+) -> bool | None:
+    if mode is None:
+        return None
+    return mode == UnknownEmployeeCountMode.INCLUDE
 
 
 def _get_context(ctx: typer.Context) -> CliContext:
@@ -632,15 +647,40 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
                 ),
             ),
         ] = None,
+        min_employee_count: Annotated[
+            int | None,
+            typer.Option(
+                "--min-employee-count",
+                min=1,
+                help="Filter by minimum employee count (for example 1000).",
+            ),
+        ] = None,
+        unknown_employee_count: Annotated[
+            UnknownEmployeeCountMode | None,
+            typer.Option(
+                "--unknown-employee-count",
+                help="How to handle rows with unknown employee count: include or exclude.",
+            ),
+        ] = None,
     ) -> None:
         """Usage shortlist: filter scored output into shortlist and explainability."""
         state = _get_context(ctx)
         config = state.config
-        if threshold is not None or region or postcode_prefix:
+        if (
+            threshold is not None
+            or region
+            or postcode_prefix
+            or min_employee_count is not None
+            or unknown_employee_count is not None
+        ):
             config = config.with_overrides(
                 tech_score_threshold=threshold,
                 geo_filter_region=_single_region(region),
                 geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
+                min_employee_count=min_employee_count,
+                include_unknown_employee_count=_unknown_employee_count_to_bool(
+                    unknown_employee_count
+                ),
             )
 
         deps = state.build_dependencies(
@@ -692,6 +732,21 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
                 help="Override tech score threshold for scoring",
             ),
         ] = None,
+        min_employee_count: Annotated[
+            int | None,
+            typer.Option(
+                "--min-employee-count",
+                min=1,
+                help="Filter final shortlist by minimum employee count.",
+            ),
+        ] = None,
+        unknown_employee_count: Annotated[
+            UnknownEmployeeCountMode | None,
+            typer.Option(
+                "--unknown-employee-count",
+                help="How to handle rows with unknown employee count: include or exclude.",
+            ),
+        ] = None,
         only: Annotated[
             RunAllOnly,
             typer.Option(
@@ -708,11 +763,21 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
         state = _get_context(ctx)
         config = state.config
         _require_file_runtime_source(config, command_name="run-all")
-        if threshold is not None or region or postcode_prefix:
+        if (
+            threshold is not None
+            or region
+            or postcode_prefix
+            or min_employee_count is not None
+            or unknown_employee_count is not None
+        ):
             config = config.with_overrides(
                 tech_score_threshold=threshold,
                 geo_filter_region=_single_region(region),
                 geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
+                min_employee_count=min_employee_count,
+                include_unknown_employee_count=_unknown_employee_count_to_bool(
+                    unknown_employee_count
+                ),
             )
 
         deps = state.build_dependencies(

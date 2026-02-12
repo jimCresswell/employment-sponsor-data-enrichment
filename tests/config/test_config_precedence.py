@@ -19,6 +19,8 @@ def test_with_file_overrides_applies_config_file_values() -> None:
         sector_profile_path="env/profiles.json",
         sector_name="env-sector",
         location_aliases_path="env/aliases.json",
+        min_employee_count=750,
+        include_unknown_employee_count=False,
     )
     file_config = PipelineConfigFile(
         ch_source_type="file",
@@ -32,6 +34,8 @@ def test_with_file_overrides_applies_config_file_values() -> None:
         sector_profile_path="file/profiles.json",
         sector_name="file-sector",
         location_aliases_path="file/aliases.json",
+        min_employee_count=1000,
+        include_unknown_employee_count=True,
     )
 
     resolved = env_config.with_file_overrides(file_config)
@@ -47,6 +51,8 @@ def test_with_file_overrides_applies_config_file_values() -> None:
     assert resolved.sector_profile_path == "file/profiles.json"
     assert resolved.sector_name == "file-sector"
     assert resolved.location_aliases_path == "file/aliases.json"
+    assert resolved.min_employee_count == 1000
+    assert resolved.include_unknown_employee_count is True
 
 
 def test_with_file_overrides_keeps_env_when_file_value_missing() -> None:
@@ -54,6 +60,8 @@ def test_with_file_overrides_keeps_env_when_file_value_missing() -> None:
         snapshot_root="env/snapshots",
         ch_batch_size=250,
         tech_score_threshold=0.55,
+        min_employee_count=900,
+        include_unknown_employee_count=True,
     )
     file_config = PipelineConfigFile(snapshot_root="file/snapshots")
 
@@ -62,6 +70,8 @@ def test_with_file_overrides_keeps_env_when_file_value_missing() -> None:
     assert resolved.snapshot_root == "file/snapshots"
     assert resolved.ch_batch_size == 250
     assert resolved.tech_score_threshold == 0.55
+    assert resolved.min_employee_count == 900
+    assert resolved.include_unknown_employee_count is True
 
 
 def test_precedence_cli_over_config_file_over_env_over_defaults() -> None:
@@ -72,6 +82,8 @@ def test_precedence_cli_over_config_file_over_env_over_defaults() -> None:
         geo_filter_postcodes=("EC",),
         sector_profile_path="env/profiles.json",
         sector_name="env-sector",
+        min_employee_count=800,
+        include_unknown_employee_count=False,
     )
     file_config = PipelineConfigFile(
         snapshot_root="file/snapshots",
@@ -80,6 +92,8 @@ def test_precedence_cli_over_config_file_over_env_over_defaults() -> None:
         geo_filter_postcodes=("M",),
         sector_profile_path="file/profiles.json",
         sector_name="file-sector",
+        min_employee_count=1000,
+        include_unknown_employee_count=True,
     )
 
     resolved = base.with_file_overrides(file_config).with_overrides(
@@ -87,6 +101,8 @@ def test_precedence_cli_over_config_file_over_env_over_defaults() -> None:
         geo_filter_region="Bristol",
         geo_filter_postcodes=("BS",),
         sector_name="cli-sector",
+        min_employee_count=1200,
+        include_unknown_employee_count=False,
     )
 
     # CLI wins
@@ -94,6 +110,8 @@ def test_precedence_cli_over_config_file_over_env_over_defaults() -> None:
     assert resolved.geo_filter_region == "Bristol"
     assert resolved.geo_filter_postcodes == ("BS",)
     assert resolved.sector_name == "cli-sector"
+    assert resolved.min_employee_count == 1200
+    assert resolved.include_unknown_employee_count is False
 
     # Config file wins over env/default
     assert resolved.snapshot_root == "file/snapshots"

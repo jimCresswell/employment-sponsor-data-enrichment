@@ -102,6 +102,30 @@ def test_from_env_reads_geo_filter_region_variable(monkeypatch: pytest.MonkeyPat
     assert config.geo_filter_region == "London"
 
 
+def test_from_env_reads_employee_count_filter_variables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env = {
+        "MIN_EMPLOYEE_COUNT": "1000",
+        "INCLUDE_UNKNOWN_EMPLOYEE_COUNT": "true",
+    }
+
+    def fake_getenv(key: str, default: str = "") -> str:
+        return env.get(key, default)
+
+    def fake_load_dotenv(dotenv_path: str | None = None) -> bool:
+        _ = dotenv_path
+        return True
+
+    monkeypatch.setattr(config_module.os, "getenv", fake_getenv)
+    monkeypatch.setattr(config_module, "load_dotenv", fake_load_dotenv)
+
+    config = PipelineConfig.from_env()
+
+    assert config.min_employee_count == 1000
+    assert config.include_unknown_employee_count is True
+
+
 def test_from_env_rejects_multi_region_geo_filter_region(monkeypatch: pytest.MonkeyPatch) -> None:
     env = {"GEO_FILTER_REGION": "London,Leeds"}
 
@@ -116,6 +140,44 @@ def test_from_env_rejects_multi_region_geo_filter_region(monkeypatch: pytest.Mon
     monkeypatch.setattr(config_module, "load_dotenv", fake_load_dotenv)
 
     with pytest.raises(GeoFilterRegionError):
+        PipelineConfig.from_env()
+
+
+def test_from_env_rejects_non_positive_min_employee_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env = {"MIN_EMPLOYEE_COUNT": "0"}
+
+    def fake_getenv(key: str, default: str = "") -> str:
+        return env.get(key, default)
+
+    def fake_load_dotenv(dotenv_path: str | None = None) -> bool:
+        _ = dotenv_path
+        return True
+
+    monkeypatch.setattr(config_module.os, "getenv", fake_getenv)
+    monkeypatch.setattr(config_module, "load_dotenv", fake_load_dotenv)
+
+    with pytest.raises(ValueError, match="MIN_EMPLOYEE_COUNT"):
+        PipelineConfig.from_env()
+
+
+def test_from_env_rejects_invalid_include_unknown_employee_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env = {"INCLUDE_UNKNOWN_EMPLOYEE_COUNT": "maybe"}
+
+    def fake_getenv(key: str, default: str = "") -> str:
+        return env.get(key, default)
+
+    def fake_load_dotenv(dotenv_path: str | None = None) -> bool:
+        _ = dotenv_path
+        return True
+
+    monkeypatch.setattr(config_module.os, "getenv", fake_getenv)
+    monkeypatch.setattr(config_module, "load_dotenv", fake_load_dotenv)
+
+    with pytest.raises(ValueError, match="INCLUDE_UNKNOWN_EMPLOYEE_COUNT"):
         PipelineConfig.from_env()
 
 

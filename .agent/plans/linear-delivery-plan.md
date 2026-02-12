@@ -1,10 +1,10 @@
 # Linear Delivery Plan (Standalone Session Entry Point)
 
 Status: Active  
-Last updated: 2026-02-11
+Last updated: 2026-02-12
 Handoff readiness: Ready
 Current batch in progress: `none`
-Next batch to execute: `none`
+Next batch to execute: `M7-B3`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -108,6 +108,7 @@ When starting any new session, choose work using this deterministic rule:
 1. Milestone 4: Config-file support.
 1. Milestone 5: Developer ergonomics (optional).
 1. Milestone 6: Post-roadmap continuation (priority lock: `3 -> 1 -> 2 -> 4`).
+1. Milestone 7: Value-focused user stories and size-aware shortlist targeting.
 
 ## Milestone 0: File-Only Runtime, DI IO Boundaries, and Onboarding Hardening
 
@@ -299,7 +300,31 @@ Source: user-confirmed next-step order from roadmap continuation review.
 ### Next Session Scope Lock
 
 1. Milestone 6 queue is complete.
-1. Start additional implementation only after adding a new planned batch record in this file.
+1. Milestone 7 queue is active.
+1. Start next implementation from `M7-B2`.
+
+## Milestone 7: Value-Focused User Stories and Size-Aware Targeting (Priority 2026-02-12)
+
+Source:
+
+- `docs/user-stories/us-m7-value-focused-shortlists.md`
+- `docs/requirements/m7-value-focused-shortlists.md`
+
+### Requirements
+
+1. Keep a minimal value-story portfolio in permanent docs with explicit coverage status.
+1. Support tech-job targeting by area as a first-class, repeatable workflow.
+1. Add an explicit, deterministic large-employer targeting contract (`>= 1000` employees).
+1. Add durable employee-count data provenance and fail-fast handling for unknown-size logic.
+1. Preserve deterministic behaviour, validation evidence capture, and existing file-only runtime boundaries.
+
+### Acceptance Criteria
+
+1. User-story and requirement docs are present, cross-referenced, and traceable to the active plan.
+1. Milestone 7 batches are queued with deterministic execution order and one active next step.
+1. Large-employer targeting requirements are explicit, testable, and mapped to concrete implementation batches.
+1. Existing deterministic and validation contracts remain unchanged unless explicitly updated with tests/docs.
+1. `uv run check` passes for each completed Milestone 7 batch.
 
 ## Detailed TODO List (Next Steps)
 
@@ -438,6 +463,20 @@ Follow in order. Do not reorder milestones.
 1. Add deterministic tests proving new profile selection behaviour without changing default profile output.
 1. Update profile schema/docs examples in `README.md` and `docs/data-contracts.md`.
 1. Define recurring validation evidence cadence, commands, and canonical log location in docs.
+1. Run `uv run check`.
+1. Update batch statuses, closeout log entries, and status tracking in this file.
+
+### Milestone 7 TODO (Value Stories + Size-Aware Targeting)
+
+1. Publish and maintain a minimal value-story set in permanent docs (`docs/user-stories/`).
+1. Publish and maintain implementation requirements with explicit traceability (`docs/requirements/`).
+1. Define employee-count filtering contract (`min_employee_count`) and unknown-size semantics.
+1. Define snapshot and manifest contract for any new employee-count input dataset.
+1. Add config/CLI surface for size filtering with fail-fast validation.
+1. Add deterministic tests for known-size and unknown-size shortlist filtering paths.
+1. Extend validation scripts/contracts for new required columns and artefacts.
+1. Reconcile README and data-contract docs with implemented behaviour.
+1. Capture one auditable validation run after implementation completes.
 1. Run `uv run check`.
 1. Update batch statuses, closeout log entries, and status tracking in this file.
 
@@ -870,6 +909,105 @@ The following batches implement the post-roadmap continuation priority lock (`3 
 1. Protocol/troubleshooting guidance remains consistent.
 1. `uv run check` passes.
 
+## Execution Batches (Milestone 7)
+
+The following batches implement value-focused targeting outcomes from the new user-story set.
+
+### Batch M7-B1
+
+1. Batch ID: `M7-B1`
+1. Objective: Define and publish a minimal, traceable value-story and requirement baseline.
+1. Status: `Complete`
+1. Depends on: `M6-B4`
+1. Scope (in): permanent user-story and requirement docs, active plan queue creation, documentation traceability updates.
+1. Scope (out): implementation of employee-count data ingestion and shortlist filtering behaviour.
+1. Primary files:
+1. `docs/user-stories/us-m7-value-focused-shortlists.md`
+1. `docs/requirements/m7-value-focused-shortlists.md`
+1. `.agent/plans/linear-delivery-plan.md`
+1. `.agent/plans/README.md`
+1. `README.md`
+1. Exit criteria:
+1. Story/requirement baseline exists in permanent docs with explicit traceability.
+1. Milestone 7 execution queue is defined and `Next batch to execute` points to implementation.
+1. `uv run check` passes.
+
+### Batch M7-B2
+
+1. Batch ID: `M7-B2`
+1. Objective: Add employee-count filter contracts (config/CLI/schema) with fail-fast validation.
+1. Status: `Complete`
+1. Depends on: `M7-B1`
+1. Scope (in): config-file + CLI parsing, typed contracts, error messages, tests for invalid and valid filter inputs.
+1. Scope (out): external employee-count dataset ingestion and shortlist filtering execution.
+1. Primary files:
+1. `src/uk_sponsor_pipeline/config.py`
+1. `src/uk_sponsor_pipeline/config_file.py`
+1. `src/uk_sponsor_pipeline/cli.py`
+1. `docs/data-contracts.md`
+1. `tests/config/`
+1. `tests/cli/`
+1. Exit criteria:
+1. Size-filter input contracts are explicit and fail-fast.
+1. Existing behaviour remains unchanged when size filters are not supplied.
+1. `uv run check` passes.
+
+### Batch M7-B3
+
+1. Batch ID: `M7-B3`
+1. Objective: Add snapshot-backed employee-count input boundary and deterministic company-number join.
+1. Status: `Planned`
+1. Depends on: `M7-B2`
+1. Scope (in): new dataset contract, manifest checks, protocol-backed loading, deterministic join semantics.
+1. Scope (out): shortlist filtering and explain output changes.
+1. Primary files:
+1. `src/uk_sponsor_pipeline/application/` (new boundary module as needed)
+1. `src/uk_sponsor_pipeline/devtools/validation_snapshots.py`
+1. `scripts/validation_check_snapshots.py`
+1. `tests/`
+1. `docs/data-contracts.md`
+1. Exit criteria:
+1. Employee-count input artefacts are validated and auditable.
+1. Joined size signal is deterministic and keyed by company number.
+1. `uv run check` passes.
+
+### Batch M7-B4
+
+1. Batch ID: `M7-B4`
+1. Objective: Apply large-employer filtering in usage shortlist and expose explainability fields.
+1. Status: `Planned`
+1. Depends on: `M7-B3`
+1. Scope (in): usage filtering logic, unknown-size handling, explain output contract updates, deterministic tests.
+1. Scope (out): new scoring-model features beyond shortlist filtering.
+1. Primary files:
+1. `src/uk_sponsor_pipeline/application/usage.py`
+1. `src/uk_sponsor_pipeline/schemas.py`
+1. `tests/application/`
+1. `docs/data-contracts.md`
+1. `docs/troubleshooting.md`
+1. Exit criteria:
+1. `US-2` large-employer targeting scenario is executable and deterministic.
+1. Unknown-size behaviour is explicit and tested.
+1. `uv run check` passes.
+
+### Batch M7-B5
+
+1. Batch ID: `M7-B5`
+1. Objective: Milestone 7 closeout with validation evidence and docs reconciliation.
+1. Status: `Planned`
+1. Depends on: `M7-B4`
+1. Scope (in): run-log evidence capture, docs/plan closeout, final status reconciliation.
+1. Scope (out): additional feature work beyond Milestone 7.
+1. Primary files:
+1. `docs/validation-protocol.md`
+1. `docs/user-stories/us-m7-value-focused-shortlists.md`
+1. `docs/requirements/m7-value-focused-shortlists.md`
+1. `.agent/plans/linear-delivery-plan.md`
+1. Exit criteria:
+1. Milestone 7 acceptance criteria are fully evidenced and documented.
+1. Batch status board and closeout log are reconciled.
+1. `uv run check` passes.
+
 ## Batch Status Board
 
 Use this as the canonical live tracker for batch execution state.
@@ -930,10 +1068,18 @@ Use this as the canonical live tracker for batch execution state.
 1. `M6-B3`: Complete
 1. `M6-B4`: Complete
 
-## Future Batch Index (Milestones 3-6)
+### Milestone 7
 
-Planned continuation batches are recorded for Milestone 6.
-If new work is approved beyond this queue, append new batches after `M6-B4` using the recorded
+1. `M7-B1`: Complete
+1. `M7-B2`: Complete
+1. `M7-B3`: Planned
+1. `M7-B4`: Planned
+1. `M7-B5`: Planned
+
+## Future Batch Index (Milestones 3-7)
+
+Planned continuation batches are recorded for Milestones 6 and 7.
+If new work is approved beyond this queue, append new batches after `M7-B5` using the recorded
 batch protocol.
 
 ## Batch Closeout Log
@@ -1324,6 +1470,26 @@ Follow-ups: none.
 ```
 
 ```text
+Date: 2026-02-12
+Batch ID: M7-B1
+Status: Complete
+Summary: Added a minimal value-focused user-story portfolio and requirement set, including explicit area-targeted tech-search and large-employer (`>= 1000` employees) targeting contracts, then queued Milestone 7 implementation batches.
+Quality gates: uv run check (pass)
+Docs updated: docs/user-stories/us-m7-value-focused-shortlists.md, docs/requirements/m7-value-focused-shortlists.md, docs/user-stories/README.md, docs/requirements/README.md, docs/data-contracts.md, README.md, .agent/plans/README.md, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M7-B2 (employee-count filter contracts in config/CLI/schema with fail-fast validation).
+```
+
+```text
+Date: 2026-02-12
+Batch ID: M7-B2
+Status: Complete
+Summary: Added size-filter config contracts across env, config-file schema, and CLI (`--min-employee-count`, `--unknown-employee-count`), with fail-fast validation and precedence wiring; documented the contract stage and queued execution work for shortlist filtering.
+Quality gates: uv run check (pass)
+Docs updated: src/uk_sponsor_pipeline/config.py, src/uk_sponsor_pipeline/config_file.py, src/uk_sponsor_pipeline/cli.py, tests/config/test_config.py, tests/config/test_config_file.py, tests/config/test_config_precedence.py, tests/cli/test_cli.py, README.md, docs/data-contracts.md, .env.example, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M7-B3 (snapshot-backed employee-count input boundary and deterministic company-number join).
+```
+
+```text
 Validation Run
 Date: 2026-02-08
 Operator: Codex
@@ -1416,7 +1582,16 @@ Result: pass
 1. `M6-B2` is now closed with explicit batch-first execution lock rules in both planning docs and contributor workflow guidance.
 1. `M6-B3` is now closed with a new non-tech starter profile (`care_support`) in the default scoring catalogue, deterministic selection coverage, and updated profile-selection docs.
 1. `M6-B4` is now closed with explicit recurring validation-evidence cadence, command set, and canonical run-log location guidance.
-1. No planned post-roadmap batches remain; add a new batch record before additional implementation work.
+1. Milestone 6 queue is complete.
+
+## Operational Discoveries (2026-02-12)
+
+1. Value-evaluation requirements are now captured in permanent docs (`docs/user-stories/` and `docs/requirements/`), not ephemeral planning notes.
+1. The user story "tech jobs in my area" is now explicitly represented as a first-class story and traced to implementation requirements.
+1. `M7-B2` is now closed with employee-count filter contracts wired through env, config-file schema, and CLI parsing plus fail-fast validation coverage.
+1. Large-employer targeting (`>= 1000` employees) now has explicit config/CLI contracts but shortlist filtering execution remains queued.
+1. Current scoring runtime does not yet consume profile `size_signals`; this is now documented as an explicit contract limitation.
+1. Next executable batch is `M7-B3`; Milestone 7 implementation queue remains active.
 
 ## Session Completion Rules (Every Session)
 
@@ -1435,3 +1610,4 @@ Result: pass
 1. Milestone 4: Complete.
 1. Milestone 5: Complete.
 1. Milestone 6: Complete.
+1. Milestone 7: In progress (`M7-B1`, `M7-B2` complete; `M7-B3` planned).

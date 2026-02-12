@@ -136,6 +136,10 @@ def test_cli_usage_shortlist_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
             "London",
             "--postcode-prefix",
             "EC",
+            "--min-employee-count",
+            "1000",
+            "--unknown-employee-count",
+            "include",
         ],
     )
 
@@ -143,6 +147,8 @@ def test_cli_usage_shortlist_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured["config"].tech_score_threshold == 0.4
     assert captured["config"].geo_filter_region == "London"
     assert captured["config"].geo_filter_postcodes == ("EC",)
+    assert captured["config"].min_employee_count == 1000
+    assert captured["config"].include_unknown_employee_count is True
 
 
 def test_cli_transform_score_overrides_profile_selection(
@@ -200,6 +206,8 @@ schema_version = 1
 tech_score_threshold = 0.4
 geo_filter_region = "Manchester"
 geo_filter_postcodes = ["M"]
+min_employee_count = 1200
+include_unknown_employee_count = true
 """.strip(),
         Path("config/pipeline.toml"),
     )
@@ -243,6 +251,8 @@ geo_filter_postcodes = ["M"]
     assert captured["config"].tech_score_threshold == 0.4
     assert captured["config"].geo_filter_region == "Manchester"
     assert captured["config"].geo_filter_postcodes == ("M",)
+    assert captured["config"].min_employee_count == 1200
+    assert captured["config"].include_unknown_employee_count is True
 
 
 def test_cli_global_config_file_values_can_be_overridden_by_cli(
@@ -257,6 +267,8 @@ schema_version = 1
 tech_score_threshold = 0.4
 geo_filter_region = "Manchester"
 geo_filter_postcodes = ["M"]
+min_employee_count = 1200
+include_unknown_employee_count = true
 """.strip(),
         Path("config/pipeline.toml"),
     )
@@ -303,6 +315,10 @@ geo_filter_postcodes = ["M"]
             "Bristol",
             "--postcode-prefix",
             "BS",
+            "--min-employee-count",
+            "1500",
+            "--unknown-employee-count",
+            "exclude",
         ],
     )
 
@@ -310,6 +326,8 @@ geo_filter_postcodes = ["M"]
     assert captured["config"].tech_score_threshold == 0.3
     assert captured["config"].geo_filter_region == "Bristol"
     assert captured["config"].geo_filter_postcodes == ("BS",)
+    assert captured["config"].min_employee_count == 1500
+    assert captured["config"].include_unknown_employee_count is False
 
 
 def test_cli_global_config_file_missing_fails_fast(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -361,6 +379,54 @@ def test_cli_usage_shortlist_rejects_multiple_regions(monkeypatch: pytest.Monkey
     assert "Only one" in plain_output
     assert "region" in plain_output
     assert "value is supported." in plain_output
+
+
+def test_cli_usage_shortlist_rejects_non_positive_min_employee_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig()
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    app = _build_app()
+    result = runner.invoke(
+        app,
+        ["usage-shortlist", "--min-employee-count", "0"],
+    )
+
+    assert result.exit_code != 0
+    plain_output = _strip_ansi(result.output)
+    assert "min-employee-count" in plain_output
+
+
+def test_cli_usage_shortlist_rejects_unknown_employee_count_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig()
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    app = _build_app()
+    result = runner.invoke(
+        app,
+        ["usage-shortlist", "--unknown-employee-count", "sometimes"],
+    )
+
+    assert result.exit_code != 0
+    plain_output = _strip_ansi(result.output)
+    assert "unknown-employee-count" in plain_output
 
 
 def test_cli_run_all_rejects_multiple_regions(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -800,6 +866,8 @@ def test_cli_run_all_only_usage_shortlist(monkeypatch: pytest.MonkeyPatch) -> No
         _ = (out_dir, config, fs)
         usage_called = True
         assert Path(scored_path) == cli.DEFAULT_SCORED_IN
+        assert config.min_employee_count == 1100
+        assert config.include_unknown_employee_count is True
         return {"shortlist": Path("short.csv"), "explain": Path("explain.csv")}
 
     monkeypatch.setattr(cli, "run_transform_enrich", fake_run_transform_enrich)
@@ -807,7 +875,18 @@ def test_cli_run_all_only_usage_shortlist(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(cli, "run_usage_shortlist", fake_run_usage_shortlist)
 
     app = _build_app()
-    result = runner.invoke(app, ["run-all", "--only", "usage-shortlist"])
+    result = runner.invoke(
+        app,
+        [
+            "run-all",
+            "--only",
+            "usage-shortlist",
+            "--min-employee-count",
+            "1100",
+            "--unknown-employee-count",
+            "include",
+        ],
+    )
 
     assert result.exit_code == 0
     assert enrich_called is False

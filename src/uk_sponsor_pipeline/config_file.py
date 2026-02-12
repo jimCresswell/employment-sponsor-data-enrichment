@@ -33,6 +33,8 @@ class PipelineConfigFile:
     geo_filter_region: str | None = None
     geo_filter_postcodes: tuple[str, ...] | None = None
     location_aliases_path: str | None = None
+    min_employee_count: int | None = None
+    include_unknown_employee_count: bool | None = None
 
 
 class _PipelineSectionModel(BaseModel):
@@ -53,6 +55,8 @@ class _PipelineSectionModel(BaseModel):
     geo_filter_region: str | None = None
     geo_filter_postcodes: tuple[str, ...] | None = None
     location_aliases_path: str | None = None
+    min_employee_count: int | None = None
+    include_unknown_employee_count: bool | None = None
 
     @field_validator("ch_source_type")
     @classmethod
@@ -104,7 +108,12 @@ class _PipelineSectionModel(BaseModel):
             raise ValueError
         return cleaned
 
-    @field_validator("ch_file_max_candidates", "ch_batch_size", "ch_search_limit")
+    @field_validator(
+        "ch_file_max_candidates",
+        "ch_batch_size",
+        "ch_search_limit",
+        "min_employee_count",
+    )
     @classmethod
     def _validate_positive_int(cls, value: int | None) -> int | None:
         if value is None:
@@ -177,4 +186,6 @@ def load_pipeline_config_file(*, path: Path, fs: FileSystem) -> PipelineConfigFi
         geo_filter_region=section.geo_filter_region,
         geo_filter_postcodes=section.geo_filter_postcodes,
         location_aliases_path=section.location_aliases_path,
+        min_employee_count=section.min_employee_count,
+        include_unknown_employee_count=section.include_unknown_employee_count,
     )

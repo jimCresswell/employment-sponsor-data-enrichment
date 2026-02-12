@@ -12,6 +12,20 @@ from .config_file import PipelineConfigFile
 from .exceptions import GeoFilterRegionError
 
 
+class PositiveIntegerEnvVarError(ValueError):
+    """Raised when an environment variable must be a positive integer."""
+
+    def __init__(self, env_name: str) -> None:
+        super().__init__(f"{env_name} must be a positive integer.")
+
+
+class BooleanEnvVarError(ValueError):
+    """Raised when an environment variable must be a supported boolean."""
+
+    def __init__(self, env_name: str) -> None:
+        super().__init__(f"{env_name} must be a boolean value (true/false, 1/0, yes/no, on/off).")
+
+
 @dataclass(frozen=True)
 class PipelineConfig:
     """Immutable configuration object for all pipeline steps.
@@ -49,6 +63,10 @@ class PipelineConfig:
     geo_filter_region: str | None = None
     geo_filter_postcodes: tuple[str, ...] = field(default_factory=tuple)
     location_aliases_path: str = "data/reference/location_aliases.json"
+
+    # Size filters (applied during usage)
+    min_employee_count: int | None = None
+    include_unknown_employee_count: bool = False
 
     @classmethod
     def from_env(cls, dotenv_path: str | None = None) -> Self:
@@ -94,6 +112,15 @@ class PipelineConfig:
                 "LOCATION_ALIASES_PATH", "data/reference/location_aliases.json"
             ).strip()
             or "data/reference/location_aliases.json",
+            min_employee_count=_parse_optional_positive_int(
+                os.getenv("MIN_EMPLOYEE_COUNT", ""),
+                env_name="MIN_EMPLOYEE_COUNT",
+            ),
+            include_unknown_employee_count=_parse_optional_bool(
+                os.getenv("INCLUDE_UNKNOWN_EMPLOYEE_COUNT", ""),
+                env_name="INCLUDE_UNKNOWN_EMPLOYEE_COUNT",
+            )
+            or False,
         )
 
     def with_overrides(
@@ -105,6 +132,8 @@ class PipelineConfig:
         geo_filter_region: str | None = None,
         geo_filter_postcodes: tuple[str, ...] | None = None,
         location_aliases_path: str | None = None,
+        min_employee_count: int | None = None,
+        include_unknown_employee_count: bool | None = None,
     ) -> Self:
         """Return a new config with specified overrides (for CLI options)."""
         return replace(
@@ -125,6 +154,12 @@ class PipelineConfig:
             location_aliases_path=self.location_aliases_path
             if location_aliases_path is None
             else location_aliases_path,
+            min_employee_count=self.min_employee_count
+            if min_employee_count is None
+            else min_employee_count,
+            include_unknown_employee_count=self.include_unknown_employee_count
+            if include_unknown_employee_count is None
+            else include_unknown_employee_count,
         )
 
     def with_file_overrides(self, file_config: PipelineConfigFile) -> Self:
@@ -176,6 +211,12 @@ class PipelineConfig:
             location_aliases_path=self.location_aliases_path
             if file_config.location_aliases_path is None
             else file_config.location_aliases_path,
+            min_employee_count=self.min_employee_count
+            if file_config.min_employee_count is None
+            else file_config.min_employee_count,
+            include_unknown_employee_count=self.include_unknown_employee_count
+            if file_config.include_unknown_employee_count is None
+            else file_config.include_unknown_employee_count,
         )
 
 
@@ -193,3 +234,29 @@ def _parse_single_region(s: str) -> str | None:
     if "," in item:
         raise GeoFilterRegionError()
     return item
+
+
+def _parse_optional_positive_int(value: str, *, env_name: str) -> int | None:
+    """Parse an optional positive integer from an environment variable."""
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        parsed = int(text)
+    except ValueError as exc:
+        raise PositiveIntegerEnvVarError(env_name) from exc
+    if parsed < 1:
+        raise PositiveIntegerEnvVarError(env_name)
+    return parsed
+
+
+def _parse_optional_bool(value: str, *, env_name: str) -> bool | None:
+    """Parse an optional boolean from an environment variable."""
+    text = value.strip().lower()
+    if not text:
+        return None
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    raise BooleanEnvVarError(env_name)

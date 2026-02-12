@@ -185,12 +185,35 @@ Runtime scoring requirements:
 - The resolved profile drives feature values and bucket thresholds for all rows in the run.
 - Scoring output column names and artefact paths remain unchanged.
 - Given identical input rows and the same resolved profile, score outputs are deterministic.
+- `sector_signals`, `location_signals`, and `size_signals` are schema-required profile fields, but
+  runtime score calculation currently uses SIC, status, age, company type, and keyword signals.
 
 Example selection:
 
 ```bash
 uv run uk-sponsor transform-score --sector care_support
 ```
+
+## Size Filter Configuration Contract (M7-B2)
+
+Usage commands (`usage-shortlist`, `run-all`) accept these size-filter controls:
+
+- CLI:
+  - `--min-employee-count` (positive integer)
+  - `--unknown-employee-count` (`include` or `exclude`)
+- environment:
+  - `MIN_EMPLOYEE_COUNT` (optional positive integer)
+  - `INCLUDE_UNKNOWN_EMPLOYEE_COUNT` (optional strict boolean: `true/false`, `1/0`,
+    `yes/no`, `on/off`)
+- config file (`[pipeline]`):
+  - `min_employee_count`
+  - `include_unknown_employee_count`
+
+Contract notes:
+
+- Invalid values fail fast during config/CLI parsing.
+- These controls are now part of `PipelineConfig` precedence and validation contracts.
+- Shortlist output filtering by employee count is scheduled for Milestone 7 batch `M7-B4`.
 
 ## Enrichment Audit CLI Contract
 

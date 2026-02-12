@@ -24,6 +24,16 @@ We are building a pipeline that is:
 - Data practitioners who want to refine matching/scoring quality.
 - Contributors who care about improving hiring access and transparency.
 
+## Value Stories and Requirements
+
+The current value-focused user stories and requirement contracts live in:
+
+- `docs/user-stories/us-m7-value-focused-shortlists.md`
+- `docs/requirements/m7-value-focused-shortlists.md`
+
+These include the area-targeted tech-search story and the planned large-employer targeting
+(`>= 1000` employees) requirement.
+
 ## Runtime Model (Important)
 
 - Runtime commands are **file-only** for Companies House (`CH_SOURCE_TYPE=file`).
@@ -219,6 +229,29 @@ Notes:
 - `GEO_FILTER_REGION` accepts one value only.
 - Comma-separated region values fail fast.
 
+### Size Filtering (Contract Stage)
+
+CLI examples:
+
+```bash
+uv run uk-sponsor usage-shortlist --min-employee-count 1000 --unknown-employee-count exclude
+uv run uk-sponsor run-all --min-employee-count 1000 --unknown-employee-count include
+```
+
+Environment variables:
+
+```bash
+MIN_EMPLOYEE_COUNT=1000
+INCLUDE_UNKNOWN_EMPLOYEE_COUNT=false
+```
+
+Notes:
+
+- `--min-employee-count` must be a positive integer.
+- `--unknown-employee-count` accepts `include` or `exclude`.
+- `INCLUDE_UNKNOWN_EMPLOYEE_COUNT` accepts strict boolean values (`true/false`, `1/0`, `yes/no`, `on/off`).
+- These options are currently contract-wired for config/CLI validation; shortlist filtering execution is queued for Milestone 7 batch `M7-B4`.
+
 ## Configuration Reference
 
 Set via `.env` or environment variables:
@@ -251,6 +284,8 @@ SECTOR_NAME=  # optional profile override, e.g. care_support
 GEO_FILTER_REGION=
 GEO_FILTER_POSTCODES=
 LOCATION_ALIASES_PATH=data/reference/location_aliases.json
+MIN_EMPLOYEE_COUNT=
+INCLUDE_UNKNOWN_EMPLOYEE_COUNT=false
 ```
 
 ## Config File Support
@@ -285,6 +320,8 @@ geo_filter_postcodes = ["EC", "SW"]
 sector_profile_path = "data/reference/scoring_profiles.json"
 sector_name = "care_support"
 location_aliases_path = "data/reference/location_aliases.json"
+min_employee_count = 1000
+include_unknown_employee_count = false
 ```
 
 Supported `[pipeline]` keys:
@@ -304,6 +341,8 @@ Supported `[pipeline]` keys:
 - `geo_filter_region`
 - `geo_filter_postcodes`
 - `location_aliases_path`
+- `min_employee_count`
+- `include_unknown_employee_count`
 
 ## Programmatic Usage
 
