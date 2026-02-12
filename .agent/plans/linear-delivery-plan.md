@@ -111,6 +111,7 @@ When starting any new session, choose work using this deterministic rule:
 1. Milestone 5: Developer ergonomics (optional).
 1. Milestone 6: Post-roadmap continuation (priority lock: `3 -> 1 -> 2 -> 4`).
 1. Milestone 7: Value-focused user stories and size-aware shortlist targeting.
+1. Milestone 8: Search-first CLI with admin/search sub-tools and denormalised views.
 
 ## Milestone 0: File-Only Runtime, DI IO Boundaries, and Onboarding Hardening
 
@@ -328,6 +329,32 @@ Source:
 1. Existing deterministic and validation contracts remain unchanged unless explicitly updated with tests/docs.
 1. `uv run check` passes for each completed Milestone 7 batch.
 
+## Milestone 8: Search CLI and Denormalised Read Views (Planned)
+
+Source:
+
+- `docs/user-stories/us-m7-value-focused-shortlists.md`
+- `docs/requirements/m7-value-focused-shortlists.md`
+
+### Requirements
+
+1. Deliver a grouped CLI surface with administrative and search-oriented sub-tools.
+1. Administrative sub-tools must support refresh/build/validate flows for search-ready artefacts.
+1. Search sub-tools must support filter-driven lookup by sector, organisation size, and area.
+1. Generate denormalised search-read views from processed pipeline outputs to reduce query latency.
+1. Keep denormalised views deterministic, auditable, and rebuildable from source artefacts.
+1. Ensure search commands read denormalised views only (no on-demand enrich/score execution).
+
+### Acceptance Criteria
+
+1. CLI grouped-command contract is explicit and documented, including target examples such as:
+1. `uk-sponsor admin refresh` (or final alias equivalent, e.g. `uship admin refresh`)
+1. `uk-sponsor search --sector tech --size large` (or final alias equivalent)
+1. Admin build commands generate versioned denormalised search artefacts in a documented location.
+1. Search commands fail fast with clear errors when denormalised views are missing, stale, or invalid.
+1. Deterministic tests cover view generation, search filtering semantics, and grouped CLI behaviour.
+1. `uv run check` passes for each completed Milestone 8 batch.
+
 ## Detailed TODO List (Next Steps)
 
 This checklist expands the delivery milestones into concrete implementation tasks.
@@ -479,6 +506,21 @@ Follow in order. Do not reorder milestones.
 1. Extend validation scripts/contracts for new required columns and artefacts.
 1. Reconcile README and data-contract docs with implemented behaviour.
 1. Capture one auditable validation run after implementation completes.
+1. Run `uv run check`.
+1. Update batch statuses, closeout log entries, and status tracking in this file.
+
+### Milestone 8 TODO (Search CLI + Denormalised Views)
+
+1. Define canonical grouped CLI contract for `admin` and `search` sub-tools.
+1. Lock executable naming and alias policy in docs (`uk-sponsor` and/or `uship`).
+1. Define denormalised search-view schema and artefact layout.
+1. Implement deterministic denormalised view builder from processed outputs.
+1. Add admin sub-tools for refresh/build/validate search-view workflows.
+1. Add search sub-tool filters (`--sector`, `--size`, `--region`, optional keyword input).
+1. Enforce fail-fast behaviour for missing/stale denormalised views.
+1. Add unit, contract, and CLI tests for view generation and search semantics.
+1. Update `README.md`, `docs/data-contracts.md`, and `docs/troubleshooting.md` for grouped CLI and search-view operations.
+1. Capture validation evidence including a baseline search-runtime measurement on representative local data.
 1. Run `uv run check`.
 1. Update batch statuses, closeout log entries, and status tracking in this file.
 
@@ -1010,6 +1052,101 @@ The following batches implement value-focused targeting outcomes from the new us
 1. Batch status board and closeout log are reconciled.
 1. `uv run check` passes.
 
+## Execution Batches (Milestone 8)
+
+The following batches deliver grouped admin/search CLI workflows and denormalised search views.
+
+### Batch M8-B1
+
+1. Batch ID: `M8-B1`
+1. Objective: Define grouped CLI contract for `admin` and `search` sub-tools with command examples.
+1. Status: `Planned`
+1. Depends on: `M7-B5`
+1. Scope (in): command taxonomy, argument contracts, docs updates, and CLI contract tests.
+1. Scope (out): denormalised view materialisation and runtime search execution.
+1. Primary files:
+1. `src/uk_sponsor_pipeline/cli.py`
+1. `tests/cli/`
+1. `README.md`
+1. `docs/requirements/m7-value-focused-shortlists.md`
+1. `.agent/plans/linear-delivery-plan.md`
+1. Exit criteria:
+1. Grouped CLI contract and examples are explicit (`admin`, `search`) and test-backed.
+1. `uv run check` passes.
+
+### Batch M8-B2
+
+1. Batch ID: `M8-B2`
+1. Objective: Build deterministic denormalised search-read artefacts from processed outputs.
+1. Status: `Planned`
+1. Depends on: `M8-B1`
+1. Scope (in): read-model schema, builder flow, manifest metadata, and fail-fast upstream contract checks.
+1. Scope (out): user-facing search query command behaviour.
+1. Primary files:
+1. `src/uk_sponsor_pipeline/application/` (new search-view module as needed)
+1. `src/uk_sponsor_pipeline/schemas.py`
+1. `tests/application/`
+1. `docs/data-contracts.md`
+1. Exit criteria:
+1. Denormalised view generation is deterministic and auditable.
+1. Required source columns/contracts are validated with clear fail-fast errors.
+1. `uv run check` passes.
+
+### Batch M8-B3
+
+1. Batch ID: `M8-B3`
+1. Objective: Implement `admin` sub-tools for refresh/build/validate search-ready artefacts.
+1. Status: `Planned`
+1. Depends on: `M8-B2`
+1. Scope (in): grouped admin CLI wiring and end-to-end command coverage.
+1. Scope (out): search query command implementation.
+1. Primary files:
+1. `src/uk_sponsor_pipeline/cli.py`
+1. `src/uk_sponsor_pipeline/composition.py`
+1. `tests/cli/`
+1. `README.md`
+1. `docs/troubleshooting.md`
+1. Exit criteria:
+1. Admin commands run refresh/build/validate flows and fail fast on invalid state.
+1. `uv run check` passes.
+
+### Batch M8-B4
+
+1. Batch ID: `M8-B4`
+1. Objective: Implement `search` sub-tool over denormalised views with deterministic filtering.
+1. Status: `Planned`
+1. Depends on: `M8-B3`
+1. Scope (in): search query logic, filter semantics (`sector`, `size`, `region`), and deterministic output ordering.
+1. Scope (out): ranking-model redesign beyond current scoring baseline.
+1. Primary files:
+1. `src/uk_sponsor_pipeline/application/` (search query module as needed)
+1. `src/uk_sponsor_pipeline/cli.py`
+1. `tests/application/`
+1. `tests/cli/`
+1. `docs/user-stories/us-m7-value-focused-shortlists.md`
+1. Exit criteria:
+1. Search command examples execute on denormalised views with deterministic results.
+1. Unknown-size handling remains explicit and consistent with existing contracts.
+1. `uv run check` passes.
+
+### Batch M8-B5
+
+1. Batch ID: `M8-B5`
+1. Objective: Milestone 8 closeout with performance evidence and docs/plan reconciliation.
+1. Status: `Planned`
+1. Depends on: `M8-B4`
+1. Scope (in): validation evidence capture, search-runtime baseline capture, and status reconciliation.
+1. Scope (out): feature expansion beyond grouped CLI + denormalised-search scope.
+1. Primary files:
+1. `docs/validation-run-evidence.md`
+1. `docs/operational-discoveries.md`
+1. `README.md`
+1. `.agent/plans/linear-delivery-plan.md`
+1. Exit criteria:
+1. Milestone 8 acceptance criteria are evidenced in durable docs.
+1. Batch status board and closeout log are reconciled.
+1. `uv run check` passes.
+
 ## Batch Status Board
 
 Use this as the canonical live tracker for batch execution state.
@@ -1078,10 +1215,18 @@ Use this as the canonical live tracker for batch execution state.
 1. `M7-B4`: Planned
 1. `M7-B5`: Planned
 
-## Future Batch Index (Milestones 3-7)
+### Milestone 8
 
-Planned continuation batches are recorded for Milestones 6 and 7.
-If new work is approved beyond this queue, append new batches after `M7-B5` using the recorded
+1. `M8-B1`: Planned
+1. `M8-B2`: Planned
+1. `M8-B3`: Planned
+1. `M8-B4`: Planned
+1. `M8-B5`: Planned
+
+## Future Batch Index (Milestones 3-8)
+
+Planned continuation batches are recorded for Milestones 6, 7, and 8.
+If new work is approved beyond this queue, append new batches after `M8-B5` using the recorded
 batch protocol.
 
 ## Batch Closeout Log
@@ -1515,3 +1660,4 @@ Follow-ups: Execute M7-B3 (snapshot-backed employee-count input boundary and det
 1. Milestone 5: Complete.
 1. Milestone 6: Complete.
 1. Milestone 7: In progress (`M7-B1`, `M7-B2` complete; `M7-B3` planned).
+1. Milestone 8: Not started (planned queue `M8-B1` to `M8-B5`, begins after `M7-B5`).
