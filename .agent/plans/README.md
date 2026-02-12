@@ -27,6 +27,8 @@ Each archived file carries an explicit archive banner.
 1. Start from `.agent/plans/linear-delivery-plan.md` for current implementation.
 1. Use `.agent/plans/deferred-features.md` for backlog capture only.
 1. Keep archived plans immutable except for historical clarification notes.
+1. Keep durable operational records in `docs/validation-run-evidence.md` and
+   `docs/operational-discoveries.md` rather than active plans.
 
 ## Batch-First Discipline
 

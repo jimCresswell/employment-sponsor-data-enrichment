@@ -90,6 +90,8 @@ When starting any new session, choose work using this deterministic rule:
 1. Validation/troubleshooting:
 1. `docs/data-contracts.md`
 1. `docs/validation-protocol.md`
+1. `docs/validation-run-evidence.md`
+1. `docs/operational-discoveries.md`
 1. `docs/troubleshooting.md`
 1. Performance roadmap:
 1. `docs/performance-improvement-plan.md`
@@ -301,7 +303,7 @@ Source: user-confirmed next-step order from roadmap continuation review.
 
 1. Milestone 6 queue is complete.
 1. Milestone 7 queue is active.
-1. Start next implementation from `M7-B2`.
+1. Start next implementation from `M7-B3`.
 
 ## Milestone 7: Value-Focused User Stories and Size-Aware Targeting (Priority 2026-02-12)
 
@@ -1489,109 +1491,11 @@ Docs updated: src/uk_sponsor_pipeline/config.py, src/uk_sponsor_pipeline/config_
 Follow-ups: Execute M7-B3 (snapshot-backed employee-count input boundary and deterministic company-number join).
 ```
 
-```text
-Validation Run
-Date: 2026-02-08
-Operator: Codex
-Environment: Local macOS; uv 0.9.28; Python 3.14.2
-CH_SOURCE_TYPE: file (shell export fallback used because .env lacked explicit value)
-Sponsor CSV URL: https://assets.publishing.service.gov.uk/media/6985be6985bc7d6ba0fbc725/2026-02-06_-_Worker_and_Temporary_Worker.csv
-Companies House ZIP URL: https://download.companieshouse.gov.uk/BasicCompanyDataAsOneFile-2026-02-01.zip
-Sponsor snapshot date: 2026-02-06
-Companies House snapshot date: 2026-02-01
-Runtime commands executed:
-  CH_SOURCE_TYPE=file uv run uk-sponsor transform-enrich
-  CH_SOURCE_TYPE=file uv run uk-sponsor transform-score
-  CH_SOURCE_TYPE=file uv run uk-sponsor usage-shortlist
-  CH_SOURCE_TYPE=file uv run uk-sponsor run-all
-Output artefact locations:
-  data/processed/sponsor_enriched.csv (100,850 lines incl header)
-  data/processed/sponsor_unmatched.csv (18,261 lines incl header)
-  data/processed/sponsor_match_candidates_top3.csv (254,716 lines incl header)
-  data/processed/sponsor_enrich_checkpoint.csv (119,110 lines incl header)
-  data/processed/companies_scored.csv (100,850 lines incl header)
-  data/processed/companies_shortlist.csv (11,062 lines incl header)
-  data/processed/companies_explain.csv (11,062 lines incl header)
-Observed issues:
-  Snapshot validation initially failed: Companies House live manifest did not include `artefacts.manifest`.
-Recovery actions:
-  Added characterisation test and aligned `validation_snapshots` required artefact keys to live Companies House manifest contract.
-  Updated docs to include explicit shell export fallback for `CH_SOURCE_TYPE`.
-Result: pass
-```
+## Durable Operational Records
 
-## Operational Discoveries (2026-02-08)
-
-1. Pipeline automation: CLI orchestration is non-interactive (`run-all`), but strict reproducibility requires controlling output state because `transform-enrich` defaults to resume mode.
-1. Matching contract: sponsor organisations without a qualifying Companies House match are excluded from `data/processed/sponsor_enriched.csv` and retained in `data/processed/sponsor_unmatched.csv` for analysis.
-1. Live-data compatibility drift observed and fixed: Companies House URI host/path variants and `DD/MM/YYYY` incorporation dates now parse in cleaning.
-1. Primary runtime blocker is algorithmic, not just data volume: `FileCompaniesHouseSource._load_profiles_for_numbers` repeatedly scans full `profiles_<bucket>.csv` artefacts, which does not scale to the current bulk snapshot size.
-1. Decision locked: prioritise Option 1 (single-pass bucket profile loading) for this use case; defer Option 2 unless trigger thresholds are reached.
-1. Product direction clarified: tech/London/large are early proof-of-concept defaults; target capability is user-selectable filtering and ranking by job type first, then sector/location/size.
-1. Throughput probe result after Option 1: 250 enrich organisations completed in ~25 seconds in file mode (`--batch-count 1`), confirming large improvement versus prior projected runtime.
-1. Initial conservative projection from the bounded probe was ~3.31 hours for full enrich; full live run evidence superseded this with an actual 44m52 completion.
-1. Fixture-driven end-to-end flow remains unattended and deterministic in practice: `scripts/validation_e2e_fixture.py` passed on 2026-02-08.
-1. Full live Step 4 runtime completed unattended: `transform-enrich` finished 119,109 organisations in 44m52s with 100,849 matched and 18,260 unmatched.
-1. `run-all` sanity check confirms deterministic resume behaviour after full completion: 0 unprocessed organisations and no source-mode errors.
-1. Live protocol surfaced a manifest-validation contract drift (Companies House `artefacts.manifest` absent); fixed in `validation_snapshots` with matching test coverage.
-1. Milestone 2 closeout transitioned execution focus to `M3-P1`.
-
-## Operational Discoveries (2026-02-09)
-
-1. Enrichment intent confirmed in live behaviour: sponsor organisations with qualifying Companies House matches are written to `data/processed/sponsor_enriched.csv`; non-matches are excluded from enriched output and retained in `data/processed/sponsor_unmatched.csv` for analysis.
-1. Added deterministic enrichment audit tooling (`scripts/validation_audit_enrichment.py`) with structural fail-fast checks and threshold-based warning metrics; strict mode returns non-zero on threshold breaches.
-1. Added comprehensive fixture matrix for enrichment audit scenarios in `tests/support/enrichment_audit_fixtures.py` and coverage in `tests/devtools/test_enrichment_audit.py` plus script tests.
-1. Live audit on current processed outputs passed with baseline metrics: enriched rows `100,849`, unmatched rows `18,260`, low-similarity matches `247`, non-active matched companies `2,307`, shared-company-number rows `1,566`, near-threshold unmatched rows `1,299`.
-1. Processed artefact footprint currently measured at approximately `108M` under `data/processed`; artefacts are commit-allowed when intentional and reviewable.
-1. Added `docs/performance-improvement-plan.md` capturing incremental and high-impact optimisation tracks, deterministic guardrails, and acceptance metrics for future throughput work.
-
-## Operational Discoveries (2026-02-10)
-
-1. `M3-P1` is now closed with explicit CLI-level proof for enrichment audit structural failures and strict/non-strict threshold behaviour.
-1. Fixture e2e validation now executes deterministic rerun checks by running `transform-enrich --no-resume` twice on unchanged snapshots and asserting byte-identical enrich outputs.
-1. Resume-mode rerun invariants are now contract-checked in e2e validation (`status=complete`, `processed_in_run=0`, `remaining=0`) before score and shortlist steps run.
-1. Validation protocol Step 6 now documents deterministic rerun pass criteria and resume-zero expectations.
-1. `M3-P3` is now closed with Track A runtime changes in enrich query memoisation, scoring normalisation reuse, and empty-batch write-path reductions.
-1. Bounded live throughput probe for `M3-P3` recorded `38.634s` and `41.804s` for 250 organisations using `CH_SOURCE_TYPE=file uv run uk-sponsor transform-enrich --batch-count 1 --no-resume --output-dir /tmp/m3_p3_enrich_probe`.
-1. `M3-P4` decision gate completed: Option 2 remains deferred because trigger criteria were not met at current operational baseline.
-1. `M3-B1` is now closed with deterministic characterisation tests that lock the existing scoring baseline outputs.
-1. `M3-B2` is now closed with strict profile schema/loader validation and a canonical default scoring-profile catalogue.
-1. `M3-B3` is now closed with CLI/env profile selection wiring and transform-score profile-selection validation hooks.
-1. Durable contracts promoted to permanent docs:
-1. `README.md`
-1. `docs/data-contracts.md`
-1. `docs/validation-protocol.md`
-1. `docs/troubleshooting.md`
-1. `docs/architectural-decision-records/README.md`
-1. `M3-B4` is now closed with profile-driven scoring integration and deterministic custom-profile output coverage in application and domain tests.
-1. `M3-B5` is now closed with milestone-state reconciliation and next-batch handoff updates.
-1. Durable-docs reconciliation is now closed: `docs/data-contracts.md` reflects current
-   Companies House URI/date cleaning contracts and snapshot validation artefact-key rules
-   (including live companies-house manifests without `artefacts.manifest`).
-1. Validation and onboarding docs now explicitly state resume-mode expectations for repeated
-   `run-all` executions on unchanged inputs.
-1. README now records the project stance that `data/processed` outputs are reproducible run
-   artefacts and may be committed when intentional.
-1. Post-roadmap continuation is now queued with priority lock `3 -> 1 -> 2 -> 4`.
-1. Next active batch is `M6-B1`; next-session execution lock is `M6-B1` then `M6-B2`.
-
-## Operational Discoveries (2026-02-11)
-
-1. `M6-B1` is now closed with explicit repository policy that `data/processed` artefacts are commit-allowed when intentional.
-1. Contributor-facing docs now include an artefact-diff review expectation before committing generated processed outputs.
-1. `M6-B2` is now closed with explicit batch-first execution lock rules in both planning docs and contributor workflow guidance.
-1. `M6-B3` is now closed with a new non-tech starter profile (`care_support`) in the default scoring catalogue, deterministic selection coverage, and updated profile-selection docs.
-1. `M6-B4` is now closed with explicit recurring validation-evidence cadence, command set, and canonical run-log location guidance.
-1. Milestone 6 queue is complete.
-
-## Operational Discoveries (2026-02-12)
-
-1. Value-evaluation requirements are now captured in permanent docs (`docs/user-stories/` and `docs/requirements/`), not ephemeral planning notes.
-1. The user story "tech jobs in my area" is now explicitly represented as a first-class story and traced to implementation requirements.
-1. `M7-B2` is now closed with employee-count filter contracts wired through env, config-file schema, and CLI parsing plus fail-fast validation coverage.
-1. Large-employer targeting (`>= 1000` employees) now has explicit config/CLI contracts but shortlist filtering execution remains queued.
-1. Current scoring runtime does not yet consume profile `size_signals`; this is now documented as an explicit contract limitation.
-1. Next executable batch is `M7-B3`; Milestone 7 implementation queue remains active.
+1. Validation run evidence is recorded in `docs/validation-run-evidence.md`.
+1. Operational discoveries are recorded in `docs/operational-discoveries.md`.
+1. Do not add long-form operational narratives or validation run blocks to this plan.
 
 ## Session Completion Rules (Every Session)
 

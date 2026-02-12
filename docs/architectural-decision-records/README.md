@@ -44,4 +44,6 @@ Durable guidance promoted from completed plans is kept in permanent docs:
 - `README.md` (contributor workflow, batch-first execution expectations, command usage)
 - `docs/data-contracts.md` (stable schema and artefact contracts)
 - `docs/validation-protocol.md` (validation command flow, evidence cadence, canonical run-log location)
+- `docs/validation-run-evidence.md` (durable live validation-run records)
+- `docs/operational-discoveries.md` (durable plan-derived operational findings)
 - `docs/troubleshooting.md` (failure-mode recovery playbooks)

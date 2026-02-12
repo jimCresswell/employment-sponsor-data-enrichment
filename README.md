@@ -30,6 +30,8 @@ The current value-focused user stories and requirement contracts live in:
 
 - `docs/user-stories/us-m7-value-focused-shortlists.md`
 - `docs/requirements/m7-value-focused-shortlists.md`
+- `docs/validation-run-evidence.md`
+- `docs/operational-discoveries.md`
 
 These include the area-targeted tech-search story and the planned large-employer targeting
 (`>= 1000` employees) requirement.

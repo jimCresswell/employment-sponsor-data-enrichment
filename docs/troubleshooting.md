@@ -334,7 +334,7 @@ Symptom:
 
 Canonical log location:
 
-- `.agent/plans/linear-delivery-plan.md` under `Batch Closeout Log` (`Validation Run` blocks).
+- `docs/validation-run-evidence.md` (`Validation Run` blocks).
 
 Recovery:
 
@@ -353,5 +353,7 @@ uv run python scripts/validation_audit_enrichment.py --out-dir data/processed --
 uv run python scripts/validation_e2e_fixture.py
 ```
 
-3. Append a new `Validation Run` block using the template in `docs/validation-protocol.md`.
+3. Append a new `Validation Run` block to `docs/validation-run-evidence.md`
+   (template available in both `docs/validation-run-evidence.md` and
+   `docs/validation-protocol.md`).
 4. If any command fails, fix the underlying contract/artefact issue and rerun before recording pass.

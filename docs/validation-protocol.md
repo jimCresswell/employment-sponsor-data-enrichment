@@ -252,7 +252,7 @@ Result: pass | fail
 Canonical location:
 
 - Append each live validation record as a `Validation Run` block in
-  `.agent/plans/linear-delivery-plan.md` under `Batch Closeout Log`.
+  `docs/validation-run-evidence.md`.
 
 Minimum cadence:
 
