@@ -1,6 +1,7 @@
 """Tests for Transform score scoring."""
 
 import json
+from dataclasses import replace
 from datetime import datetime, tzinfo
 from pathlib import Path
 
@@ -14,9 +15,11 @@ from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.domain import scoring as scoring_domain
 from uk_sponsor_pipeline.exceptions import (
     DependencyMissingError,
+    EmployeeCountSnapshotError,
     InvalidMatchScoreError,
     PipelineConfigMissingError,
     ScoringProfileSelectionError,
+    SnapshotNotFoundError,
 )
 from uk_sponsor_pipeline.infrastructure import LocalFileSystem
 from uk_sponsor_pipeline.schemas import TRANSFORM_SCORE_OUTPUT_COLUMNS
@@ -159,6 +162,59 @@ def _write_contrast_scoring_profile_catalog(path: Path) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _write_employee_count_snapshot(
+    *,
+    snapshot_root: Path,
+    rows: list[dict[str, str]] | None = None,
+    snapshot_date: str = "2026-02-06",
+) -> Path:
+    snapshot_dir = snapshot_root / "employee_count" / snapshot_date
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    clean_rows = rows or [
+        {
+            "company_number": "12345678",
+            "employee_count": "1200",
+            "employee_count_source": "ons_business_register",
+            "employee_count_snapshot_date": snapshot_date,
+        }
+    ]
+    pd.DataFrame(clean_rows).to_csv(snapshot_dir / "clean.csv", index=False)
+    pd.DataFrame(
+        [
+            {"company_number": row["company_number"], "employees": row["employee_count"]}
+            for row in clean_rows
+        ]
+    ).to_csv(snapshot_dir / "raw.csv", index=False)
+    manifest = {
+        "dataset": "employee_count",
+        "snapshot_date": snapshot_date,
+        "source_url": "https://example.com/employee_count.csv",
+        "downloaded_at_utc": "2026-02-06T12:00:00+00:00",
+        "last_updated_at_utc": "2026-02-06T12:05:00+00:00",
+        "schema_version": "employee_count_v1",
+        "sha256_hash_raw": "rawhash",
+        "sha256_hash_clean": "cleanhash",
+        "bytes_raw": 128,
+        "row_counts": {"raw": len(clean_rows), "clean": len(clean_rows)},
+        "artefacts": {"raw": "raw.csv", "clean": "clean.csv", "manifest": "manifest.json"},
+        "git_sha": "abc123",
+        "tool_version": "0.1.0",
+        "command_line": "uk-sponsor refresh-employee-count",
+    }
+    (snapshot_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    return snapshot_root
+
+
+def _config_with_employee_count_snapshot(
+    *,
+    tmp_path: Path,
+    base: PipelineConfig | None = None,
+) -> PipelineConfig:
+    snapshot_root = _write_employee_count_snapshot(snapshot_root=tmp_path / "snapshots")
+    config = base or PipelineConfig()
+    return replace(config, snapshot_root=str(snapshot_root))
+
+
 def test_transform_score_sorting_uses_numeric_match_score(tmp_path: Path) -> None:
     fs = LocalFileSystem()
     rows = [
@@ -179,9 +235,8 @@ def test_transform_score_sorting_uses_numeric_match_score(tmp_path: Path) -> Non
     enriched_path = tmp_path / "enriched.csv"
     df.to_csv(enriched_path, index=False)
 
-    outs = run_transform_score(
-        enriched_path=enriched_path, out_dir=tmp_path, config=PipelineConfig(), fs=fs
-    )
+    config = _config_with_employee_count_snapshot(tmp_path=tmp_path)
+    outs = run_transform_score(enriched_path=enriched_path, out_dir=tmp_path, config=config, fs=fs)
     scored_df = pd.read_csv(outs["scored"], dtype=str).fillna("")
 
     assert scored_df.loc[0, "Organisation Name"] == "HighMatch"
@@ -195,10 +250,9 @@ def test_transform_score_raises_on_non_numeric_match_score(tmp_path: Path) -> No
     enriched_path = tmp_path / "enriched.csv"
     df.to_csv(enriched_path, index=False)
 
+    config = _config_with_employee_count_snapshot(tmp_path=tmp_path)
     with pytest.raises(InvalidMatchScoreError) as exc_info:
-        run_transform_score(
-            enriched_path=enriched_path, out_dir=tmp_path, config=PipelineConfig(), fs=fs
-        )
+        run_transform_score(enriched_path=enriched_path, out_dir=tmp_path, config=config, fs=fs)
 
     message = str(exc_info.value)
     assert "match_score" in message
@@ -235,9 +289,8 @@ def test_transform_score_returns_scored_only(tmp_path: Path) -> None:
     enriched_path = tmp_path / "enriched.csv"
     df.to_csv(enriched_path, index=False)
 
-    outs = run_transform_score(
-        enriched_path=enriched_path, out_dir=tmp_path, config=PipelineConfig(), fs=fs
-    )
+    config = _config_with_employee_count_snapshot(tmp_path=tmp_path)
+    outs = run_transform_score(enriched_path=enriched_path, out_dir=tmp_path, config=config, fs=fs)
 
     assert set(outs.keys()) == {"scored"}
 
@@ -267,9 +320,8 @@ def test_transform_score_outputs_columns_and_sorting(tmp_path: Path) -> None:
     enriched_path = tmp_path / "enriched.csv"
     df.to_csv(enriched_path, index=False)
 
-    outs = run_transform_score(
-        enriched_path=enriched_path, out_dir=tmp_path, config=PipelineConfig(), fs=fs
-    )
+    config = _config_with_employee_count_snapshot(tmp_path=tmp_path)
+    outs = run_transform_score(enriched_path=enriched_path, out_dir=tmp_path, config=config, fs=fs)
     scored_df = pd.read_csv(outs["scored"], dtype=str).fillna("")
 
     assert list(scored_df.columns) == list(TRANSFORM_SCORE_OUTPUT_COLUMNS)
@@ -327,9 +379,8 @@ def test_transform_score_characterises_current_scoring_baseline(
     enriched_path = tmp_path / "enriched.csv"
     pd.DataFrame(rows).to_csv(enriched_path, index=False)
 
-    outs = run_transform_score(
-        enriched_path=enriched_path, out_dir=tmp_path, config=PipelineConfig(), fs=fs
-    )
+    config = _config_with_employee_count_snapshot(tmp_path=tmp_path)
+    outs = run_transform_score(enriched_path=enriched_path, out_dir=tmp_path, config=config, fs=fs)
     scored_df = pd.read_csv(outs["scored"], dtype=str).fillna("")
 
     assert scored_df["Organisation Name"].tolist() == [
@@ -384,13 +435,15 @@ def test_transform_score_supports_profile_selection_config(tmp_path: Path) -> No
     enriched_path = tmp_path / "enriched.csv"
     pd.DataFrame(rows).to_csv(enriched_path, index=False)
 
+    base_config = PipelineConfig(
+        sector_profile_path=str(profile_catalog_path),
+        sector_name="tech",
+    )
+    config = _config_with_employee_count_snapshot(tmp_path=tmp_path, base=base_config)
     outs = run_transform_score(
         enriched_path=enriched_path,
         out_dir=tmp_path,
-        config=PipelineConfig(
-            sector_profile_path=str(profile_catalog_path),
-            sector_name="tech",
-        ),
+        config=config,
         fs=fs,
     )
 
@@ -407,14 +460,16 @@ def test_transform_score_fails_for_unknown_selected_profile(tmp_path: Path) -> N
     enriched_path = tmp_path / "enriched.csv"
     pd.DataFrame(rows).to_csv(enriched_path, index=False)
 
+    base_config = PipelineConfig(
+        sector_profile_path=str(profile_catalog_path),
+        sector_name="nonexistent",
+    )
+    config = _config_with_employee_count_snapshot(tmp_path=tmp_path, base=base_config)
     with pytest.raises(ScoringProfileSelectionError) as exc_info:
         run_transform_score(
             enriched_path=enriched_path,
             out_dir=tmp_path,
-            config=PipelineConfig(
-                sector_profile_path=str(profile_catalog_path),
-                sector_name="nonexistent",
-            ),
+            config=config,
             fs=fs,
         )
 
@@ -448,10 +503,11 @@ def test_transform_score_uses_default_profile_catalog_without_overrides(
     enriched_path = tmp_path / "enriched.csv"
     pd.DataFrame(rows).to_csv(enriched_path, index=False)
 
+    config = _config_with_employee_count_snapshot(tmp_path=tmp_path)
     outs = run_transform_score(
         enriched_path=enriched_path,
         out_dir=tmp_path,
-        config=PipelineConfig(),
+        config=config,
         fs=fs,
     )
 
@@ -481,31 +537,36 @@ def test_transform_score_custom_profile_changes_output_deterministically(tmp_pat
     enriched_path = tmp_path / "enriched.csv"
     pd.DataFrame(rows).to_csv(enriched_path, index=False)
 
-    tech_out = run_transform_score(
-        enriched_path=enriched_path,
-        out_dir=tmp_path / "tech_out",
-        config=PipelineConfig(
+    tech_config = _config_with_employee_count_snapshot(
+        tmp_path=tmp_path / "tech",
+        base=PipelineConfig(
             sector_profile_path=str(profile_catalog_path),
             sector_name="tech",
         ),
+    )
+    custom_config = _config_with_employee_count_snapshot(
+        tmp_path=tmp_path / "custom",
+        base=PipelineConfig(
+            sector_profile_path=str(profile_catalog_path),
+            sector_name="strict_custom",
+        ),
+    )
+    tech_out = run_transform_score(
+        enriched_path=enriched_path,
+        out_dir=tmp_path / "tech_out",
+        config=tech_config,
         fs=fs,
     )
     custom_out_first = run_transform_score(
         enriched_path=enriched_path,
         out_dir=tmp_path / "custom_out_first",
-        config=PipelineConfig(
-            sector_profile_path=str(profile_catalog_path),
-            sector_name="strict_custom",
-        ),
+        config=custom_config,
         fs=fs,
     )
     custom_out_second = run_transform_score(
         enriched_path=enriched_path,
         out_dir=tmp_path / "custom_out_second",
-        config=PipelineConfig(
-            sector_profile_path=str(profile_catalog_path),
-            sector_name="strict_custom",
-        ),
+        config=custom_config,
         fs=fs,
     )
 
@@ -547,22 +608,30 @@ def test_transform_score_non_tech_starter_profile_is_selectable_and_deterministi
     enriched_path = tmp_path / "enriched.csv"
     pd.DataFrame(rows).to_csv(enriched_path, index=False)
 
+    tech_config = _config_with_employee_count_snapshot(
+        tmp_path=tmp_path / "tech",
+        base=PipelineConfig(sector_name="tech"),
+    )
+    care_config = _config_with_employee_count_snapshot(
+        tmp_path=tmp_path / "care",
+        base=PipelineConfig(sector_name="care_support"),
+    )
     tech_out = run_transform_score(
         enriched_path=enriched_path,
         out_dir=tmp_path / "tech_out",
-        config=PipelineConfig(sector_name="tech"),
+        config=tech_config,
         fs=fs,
     )
     care_out_first = run_transform_score(
         enriched_path=enriched_path,
         out_dir=tmp_path / "care_out_first",
-        config=PipelineConfig(sector_name="care_support"),
+        config=care_config,
         fs=fs,
     )
     care_out_second = run_transform_score(
         enriched_path=enriched_path,
         out_dir=tmp_path / "care_out_second",
-        config=PipelineConfig(sector_name="care_support"),
+        config=care_config,
         fs=fs,
     )
 
@@ -582,3 +651,117 @@ def test_transform_score_non_tech_starter_profile_is_selectable_and_deterministi
     assert care_score_first > tech_score
     assert care_score_first == care_score_second
     assert care_bucket_first == care_bucket_second
+
+
+def test_transform_score_joins_employee_count_fields_by_company_number(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    snapshot_root = _write_employee_count_snapshot(
+        snapshot_root=tmp_path / "snapshots",
+        rows=[
+            {
+                "company_number": "12345678",
+                "employee_count": "1200",
+                "employee_count_source": "ons_business_register",
+                "employee_count_snapshot_date": "2026-02-06",
+            }
+        ],
+    )
+    enriched_path = tmp_path / "enriched.csv"
+    pd.DataFrame(
+        [
+            make_enrich_row(
+                **{"Organisation Name": "Matched Company", "ch_company_number": "12345678"}
+            ),
+            make_enrich_row(
+                **{"Organisation Name": "Unknown Company", "ch_company_number": "99999999"}
+            ),
+        ]
+    ).to_csv(enriched_path, index=False)
+
+    outs = run_transform_score(
+        enriched_path=enriched_path,
+        out_dir=tmp_path,
+        config=PipelineConfig(snapshot_root=str(snapshot_root)),
+        fs=fs,
+    )
+    scored_df = pd.read_csv(outs["scored"], dtype=str).fillna("")
+    by_name = {
+        str(row["Organisation Name"]): {column: str(row[column]) for column in scored_df.columns}
+        for _, row in scored_df.iterrows()
+    }
+
+    matched = by_name["Matched Company"]
+    assert matched["employee_count"] == "1200"
+    assert matched["employee_count_source"] == "ons_business_register"
+    assert matched["employee_count_snapshot_date"] == "2026-02-06"
+
+    unknown = by_name["Unknown Company"]
+    assert unknown["employee_count"] == ""
+    assert unknown["employee_count_source"] == ""
+    assert unknown["employee_count_snapshot_date"] == ""
+
+
+def test_transform_score_employee_count_join_is_deterministic(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    snapshot_root = _write_employee_count_snapshot(snapshot_root=tmp_path / "snapshots")
+    enriched_path = tmp_path / "enriched.csv"
+    pd.DataFrame([make_enrich_row()]).to_csv(enriched_path, index=False)
+    config = PipelineConfig(snapshot_root=str(snapshot_root))
+
+    first_out = run_transform_score(
+        enriched_path=enriched_path,
+        out_dir=tmp_path / "first",
+        config=config,
+        fs=fs,
+    )
+    second_out = run_transform_score(
+        enriched_path=enriched_path,
+        out_dir=tmp_path / "second",
+        config=config,
+        fs=fs,
+    )
+
+    first_text = Path(first_out["scored"]).read_text(encoding="utf-8")
+    second_text = Path(second_out["scored"]).read_text(encoding="utf-8")
+    assert first_text == second_text
+
+
+def test_transform_score_fails_fast_when_employee_count_snapshot_missing(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    enriched_path = tmp_path / "enriched.csv"
+    pd.DataFrame([make_enrich_row()]).to_csv(enriched_path, index=False)
+    config = PipelineConfig(snapshot_root=str(tmp_path / "missing_snapshots"))
+
+    with pytest.raises(SnapshotNotFoundError):
+        run_transform_score(
+            enriched_path=enriched_path,
+            out_dir=tmp_path,
+            config=config,
+            fs=fs,
+        )
+
+
+def test_transform_score_fails_fast_for_invalid_employee_count_value(tmp_path: Path) -> None:
+    fs = LocalFileSystem()
+    _write_employee_count_snapshot(
+        snapshot_root=tmp_path / "snapshots",
+        rows=[
+            {
+                "company_number": "12345678",
+                "employee_count": "not-a-number",
+                "employee_count_source": "ons_business_register",
+                "employee_count_snapshot_date": "2026-02-06",
+            }
+        ],
+    )
+    enriched_path = tmp_path / "enriched.csv"
+    pd.DataFrame([make_enrich_row()]).to_csv(enriched_path, index=False)
+    config = PipelineConfig(snapshot_root=str(tmp_path / "snapshots"))
+
+    with pytest.raises(EmployeeCountSnapshotError, match="employee_count"):
+        run_transform_score(
+            enriched_path=enriched_path,
+            out_dir=tmp_path,
+            config=config,
+            fs=fs,
+        )

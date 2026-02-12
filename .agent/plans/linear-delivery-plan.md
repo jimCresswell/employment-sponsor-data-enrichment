@@ -4,7 +4,7 @@ Status: Active
 Last updated: 2026-02-12
 Handoff readiness: Ready
 Current batch in progress: `none`
-Next batch to execute: `M7-B3`
+Next batch to execute: `M7-B4`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -304,7 +304,7 @@ Source: user-confirmed next-step order from roadmap continuation review.
 
 1. Milestone 6 queue is complete.
 1. Milestone 7 queue is active.
-1. Start next implementation from `M7-B3`.
+1. Start next implementation from `M7-B4`.
 
 ## Milestone 7: Value-Focused User Stories and Size-Aware Targeting (Priority 2026-02-12)
 
@@ -497,17 +497,34 @@ Follow in order. Do not reorder milestones.
 
 ### Milestone 7 TODO (Value Stories + Size-Aware Targeting)
 
-1. Publish and maintain a minimal value-story set in permanent docs (`docs/user-stories/`).
-1. Publish and maintain implementation requirements with explicit traceability (`docs/requirements/`).
-1. Define employee-count filtering contract (`min_employee_count`) and unknown-size semantics.
-1. Define snapshot and manifest contract for any new employee-count input dataset.
-1. Add config/CLI surface for size filtering with fail-fast validation.
-1. Add deterministic tests for known-size and unknown-size shortlist filtering paths.
-1. Extend validation scripts/contracts for new required columns and artefacts.
-1. Reconcile README and data-contract docs with implemented behaviour.
-1. Capture one auditable validation run after implementation completes.
-1. Run `uv run check`.
-1. Update batch statuses, closeout log entries, and status tracking in this file.
+1. `M7-B1`, `M7-B2`, and `M7-B3` are complete and locked.
+1. `M7-B4` is the next planned implementation batch and is the only in-scope feature work.
+1. Do not start `M7-B5` until all `M7-B4` exit criteria are met and recorded.
+1. Keep `M7-B5` as closeout-only work after `M7-B4` completion.
+
+#### Current Piece of Work TODO (`M7-B4`)
+
+1. TDD first: add failing usage-shortlist tests for large-employer filtering semantics.
+1. Extend `tests/application/test_usage_shortlist.py` to cover:
+1. inclusion when `employee_count >= min_employee_count`,
+1. exclusion when `employee_count < min_employee_count`,
+1. unknown-size policy behaviour (`include` vs `exclude`) when employee count is missing.
+1. Add deterministic-order assertions so filtering does not change shortlist ordering for stable equal-input cases.
+1. Implement shortlist filtering in `src/uk_sponsor_pipeline/application/usage.py`:
+1. apply `min_employee_count` against scored employee-count fields,
+1. enforce configured unknown-size handling without mutating upstream scored outputs.
+1. Update shortlist/explain contracts and helpers used by tests and downstream outputs:
+1. `src/uk_sponsor_pipeline/schemas.py`,
+1. `src/uk_sponsor_pipeline/types.py`,
+1. relevant helpers in `tests/support/`.
+1. Update durable docs for runtime behaviour and operators:
+1. `docs/data-contracts.md`,
+1. `README.md`,
+1. `docs/troubleshooting.md` (if new failure/debug guidance is introduced).
+1. Verification and closeout:
+1. run `uv run pytest tests/application/test_usage_shortlist.py`,
+1. run `uv run check`,
+1. update batch status board, closeout log, and status tracking in this plan before moving to `M7-B5`.
 
 ### Milestone 8 TODO (Search CLI + Denormalised Views)
 
@@ -1000,20 +1017,44 @@ The following batches implement value-focused targeting outcomes from the new us
 
 1. Batch ID: `M7-B3`
 1. Objective: Add snapshot-backed employee-count input boundary and deterministic company-number join.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M7-B2`
 1. Scope (in): new dataset contract, manifest checks, protocol-backed loading, deterministic join semantics.
 1. Scope (out): shortlist filtering and explain output changes.
 1. Primary files:
-1. `src/uk_sponsor_pipeline/application/` (new boundary module as needed)
+1. `src/uk_sponsor_pipeline/application/` (new employee-count boundary module as needed)
+1. `src/uk_sponsor_pipeline/application/transform_score.py`
+1. `src/uk_sponsor_pipeline/schemas.py`
+1. `src/uk_sponsor_pipeline/types.py`
 1. `src/uk_sponsor_pipeline/devtools/validation_snapshots.py`
 1. `scripts/validation_check_snapshots.py`
-1. `tests/`
+1. `tests/devtools/test_validation_snapshots.py`
+1. `tests/scripts/test_validation_scripts.py`
+1. `tests/application/test_transform_score.py`
 1. `docs/data-contracts.md`
+1. `README.md` (if command/runtime expectations change)
+1. TDD tasks:
+1. add failing snapshot-validation tests for the new dataset contract,
+1. add failing transform-score tests for deterministic join and invalid-input fail-fast paths.
+1. Implementation tasks:
+1. add typed employee-count snapshot loader and deterministic company-number lookup,
+1. join size signal fields into scored-output preparation without applying usage filtering,
+1. update validation tooling for the new snapshot dataset contract.
+1. Docs/tasks updates:
+1. update `docs/data-contracts.md` with dataset/manifest/column contracts and auditable fields,
+1. update `README.md` only if command/runtime expectations changed during implementation.
+1. Verification commands:
+1. `uv run pytest tests/devtools/test_validation_snapshots.py tests/scripts/test_validation_scripts.py`
+1. `uv run pytest tests/application/test_transform_score.py`
+1. `uv run check`
 1. Exit criteria:
 1. Employee-count input artefacts are validated and auditable.
 1. Joined size signal is deterministic and keyed by company number.
+1. Shortlist filtering and explain-output changes remain out of scope.
 1. `uv run check` passes.
+1. Notes:
+1. Unknown-size filtering semantics are implemented in `M7-B4`, not `M7-B3`.
+1. Keep dependency direction unchanged (CLI → application → domain; no application → infrastructure imports).
 
 ### Batch M7-B4
 
@@ -1211,7 +1252,7 @@ Use this as the canonical live tracker for batch execution state.
 
 1. `M7-B1`: Complete
 1. `M7-B2`: Complete
-1. `M7-B3`: Planned
+1. `M7-B3`: Complete
 1. `M7-B4`: Planned
 1. `M7-B5`: Planned
 
@@ -1636,6 +1677,16 @@ Docs updated: src/uk_sponsor_pipeline/config.py, src/uk_sponsor_pipeline/config_
 Follow-ups: Execute M7-B3 (snapshot-backed employee-count input boundary and deterministic company-number join).
 ```
 
+```text
+Date: 2026-02-12
+Batch ID: M7-B3
+Status: Complete
+Summary: Added a snapshot-backed employee-count boundary with strict manifest/clean contract checks, joined deterministic employee-count signal + provenance fields into scored outputs keyed by `ch_company_number`, and extended snapshot-validation coverage, fixtures, and docs for the new dataset.
+Quality gates: uv run pytest tests/devtools/test_validation_snapshots.py tests/scripts/test_validation_scripts.py tests/application/test_transform_score.py (pass); uv run check (pass)
+Docs updated: src/uk_sponsor_pipeline/application/employee_count_source.py, src/uk_sponsor_pipeline/application/transform_score.py, src/uk_sponsor_pipeline/devtools/validation_snapshots.py, src/uk_sponsor_pipeline/exceptions.py, src/uk_sponsor_pipeline/schemas.py, src/uk_sponsor_pipeline/types.py, scripts/validation_e2e_fixture.py, tests/devtools/test_validation_snapshots.py, tests/scripts/test_validation_scripts.py, tests/application/test_transform_score.py, tests/application/test_pipeline.py, tests/integration/test_integration.py, tests/support/transform_score_rows.py, README.md, docs/data-contracts.md, docs/validation-protocol.md, docs/requirements/m7-value-focused-shortlists.md, docs/user-stories/us-m7-value-focused-shortlists.md, .env.example, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M7-B4 (usage shortlist filtering with unknown-size policy and explainability fields).
+```
+
 ## Durable Operational Records
 
 1. Validation run evidence is recorded in `docs/validation-run-evidence.md`.
@@ -1659,5 +1710,5 @@ Follow-ups: Execute M7-B3 (snapshot-backed employee-count input boundary and det
 1. Milestone 4: Complete.
 1. Milestone 5: Complete.
 1. Milestone 6: Complete.
-1. Milestone 7: In progress (`M7-B1`, `M7-B2` complete; `M7-B3` planned).
+1. Milestone 7: In progress (`M7-B1`, `M7-B2`, `M7-B3` complete; `M7-B4` planned).
 1. Milestone 8: Not started (planned queue `M8-B1` to `M8-B5`, begins after `M7-B5`).

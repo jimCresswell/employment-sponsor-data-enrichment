@@ -9,18 +9,21 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..application.companies_house_bulk import CANONICAL_HEADERS_V1
+from ..application.employee_count_source import EMPLOYEE_COUNT_CLEAN_COLUMNS
 from ..io_validation import IncomingDataError, validate_as
 from ..schemas import TRANSFORM_REGISTER_OUTPUT_COLUMNS
 
 _SNAPSHOT_DATE_PATTERN = re.compile(r"20\d{2}-\d{2}-\d{2}")
-_DATASETS = ("sponsor", "companies_house")
+_DATASETS = ("sponsor", "companies_house", "employee_count")
 _EXPECTED_SCHEMA_VERSION = {
     "sponsor": "sponsor_clean_v1",
     "companies_house": "ch_clean_v1",
+    "employee_count": "employee_count_v1",
 }
 _REQUIRED_ARTEFACTS = {
     "sponsor": ("raw.csv", "clean.csv", "register_stats.json", "manifest.json"),
     "companies_house": ("raw.csv", "clean.csv", "manifest.json"),
+    "employee_count": ("raw.csv", "clean.csv", "manifest.json"),
 }
 _REQUIRED_MANIFEST_FIELDS = (
     "dataset",
@@ -41,6 +44,7 @@ _REQUIRED_MANIFEST_FIELDS = (
 _REQUIRED_CLEAN_COLUMNS = {
     "sponsor": TRANSFORM_REGISTER_OUTPUT_COLUMNS,
     "companies_house": tuple(CANONICAL_HEADERS_V1),
+    "employee_count": EMPLOYEE_COUNT_CLEAN_COLUMNS,
 }
 
 
@@ -224,6 +228,8 @@ def _validate_manifest(
 def _required_artefact_keys(dataset: str) -> tuple[str, ...]:
     if dataset == "sponsor":
         return ("raw", "clean", "register_stats", "manifest")
+    if dataset == "employee_count":
+        return ("raw", "clean", "manifest")
     return ("raw", "clean")
 
 

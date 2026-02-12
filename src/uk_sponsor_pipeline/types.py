@@ -71,6 +71,15 @@ class CompaniesHouseCleanRow(TypedDict):
     uri: str
 
 
+class EmployeeCountCleanRow(TypedDict):
+    """Employee-count canonical clean row shape."""
+
+    company_number: str
+    employee_count: str
+    employee_count_source: str
+    employee_count_snapshot_date: str
+
+
 TransformEnrichCandidateRow = TypedDict(
     "TransformEnrichCandidateRow",
     {
@@ -207,6 +216,9 @@ TransformScoreRow = TypedDict(
         "ch_address_locality": str,
         "ch_address_region": str,
         "ch_address_postcode": str,
+        "employee_count": str,
+        "employee_count_source": str,
+        "employee_count_snapshot_date": str,
         "sic_tech_score": float,
         "is_active_score": float,
         "company_age_score": float,

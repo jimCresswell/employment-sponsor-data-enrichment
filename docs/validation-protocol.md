@@ -106,12 +106,15 @@ Acceptance checks:
 - Dated snapshot directories exist:
   - `data/cache/snapshots/sponsor/<YYYY-MM-DD>/`
   - `data/cache/snapshots/companies_house/<YYYY-MM-DD>/`
+  - `data/cache/snapshots/employee_count/<YYYY-MM-DD>/`
 - Sponsor artefacts present: `raw.csv`, `clean.csv`, `register_stats.json`, `manifest.json`.
 - Companies House artefacts present: `raw.csv`, `clean.csv`, `manifest.json`,
   `index_tokens_<bucket>.csv`, `profiles_<bucket>.csv`.
+- Employee-count artefacts present: `raw.csv`, `clean.csv`, `manifest.json`.
 - Manifest schema versions:
   - sponsor: `sponsor_clean_v1`
   - companies_house: `ch_clean_v1`
+  - employee_count: `employee_count_v1`
 
 ## Step 4: Cache-Only Runtime Steps
 
@@ -125,6 +128,7 @@ uv run uk-sponsor usage-shortlist
 
 Acceptance checks:
 
+- Latest `employee_count` snapshot is present and valid before running `transform-score`.
 - `transform-enrich` creates:
   - `data/processed/sponsor_enriched.csv`
   - `data/processed/sponsor_unmatched.csv`
@@ -167,6 +171,7 @@ Expected behaviour:
 
 - Exit code `0` with `PASS ...` output when validation succeeds.
 - Non-zero exit with `FAIL ...` output when any required artefact, field, or column check fails.
+- Snapshot validation covers `sponsor`, `companies_house`, and `employee_count`.
 - Enrichment audit prints key matching quality metrics and exits `0` by default.
 - Enrichment audit exit codes are:
   - `1` for structural/data-contract failures.
@@ -238,8 +243,10 @@ Environment:
 CH_SOURCE_TYPE:
 Sponsor CSV URL:
 Companies House ZIP URL:
+Employee count source URL:
 Sponsor snapshot date:
 Companies House snapshot date:
+Employee count snapshot date:
 Runtime commands executed:
 Output artefact locations:
 Observed issues:

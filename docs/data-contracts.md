@@ -131,10 +131,12 @@ uri
 - required snapshot datasets:
   - `sponsor`
   - `companies_house`
+  - `employee_count`
 - required artefacts in latest dated snapshot:
   - sponsor: `raw.csv`, `clean.csv`, `register_stats.json`, `manifest.json`
   - companies_house: `raw.csv`, `clean.csv`, `manifest.json`, plus at least one
     `index_tokens_<bucket>.csv` and one `profiles_<bucket>.csv`
+  - employee_count: `raw.csv`, `clean.csv`, `manifest.json`
 - required manifest fields:
   - `dataset`, `snapshot_date`, `source_url`, `downloaded_at_utc`, `last_updated_at_utc`,
     `schema_version`, `sha256_hash_raw`, `sha256_hash_clean`, `bytes_raw`, `row_counts`,
@@ -143,6 +145,45 @@ uri
   - sponsor: `raw`, `clean`, `register_stats`, `manifest`
   - companies_house: `raw`, `clean`
   - note: companies-house manifests do not require `artefacts.manifest`
+  - employee_count: `raw`, `clean`, `manifest`
+
+## Employee Count Snapshot Contract (employee_count_v1)
+
+Employee-count inputs are snapshot-backed under:
+
+```text
+data/cache/snapshots/employee_count/<YYYY-MM-DD>/
+```
+
+Required `clean.csv` columns:
+
+```text
+company_number
+employee_count
+employee_count_source
+employee_count_snapshot_date
+```
+
+Contract rules:
+
+- `company_number` must be non-empty and is the deterministic join key to
+  `ch_company_number`.
+- `employee_count` must be a positive integer.
+- `employee_count_source` must be non-empty.
+- `employee_count_snapshot_date` must be an ISO date (`YYYY-MM-DD`) and must match the
+  enclosing snapshot directory date.
+- The latest snapshot manifest must use `schema_version: employee_count_v1`.
+- Conflicting duplicate rows for the same `company_number` are fail-fast errors.
+
+Scored-output join contract:
+
+- `transform-score` loads the latest employee-count snapshot from `SNAPSHOT_ROOT`.
+- `companies_scored.csv` and `companies_shortlist.csv` now include:
+  - `employee_count`
+  - `employee_count_source`
+  - `employee_count_snapshot_date`
+- When no snapshot row exists for a company number, these fields are emitted as empty strings
+  (unknown-size case).
 
 ## Transform Enrich Output Partition Contract
 
@@ -213,7 +254,9 @@ Contract notes:
 
 - Invalid values fail fast during config/CLI parsing.
 - These controls are now part of `PipelineConfig` precedence and validation contracts.
-- Shortlist output filtering by employee count is scheduled for Milestone 7 batch `M7-B4`.
+- Employee-count snapshot ingestion and scored-output join are delivered in Milestone 7 batch
+  `M7-B3`.
+- Shortlist output filtering by employee count remains scheduled for Milestone 7 batch `M7-B4`.
 
 ## Enrichment Audit CLI Contract
 

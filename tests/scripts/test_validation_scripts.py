@@ -19,6 +19,13 @@ from uk_sponsor_pipeline.schemas import (
     TRANSFORM_SCORE_OUTPUT_COLUMNS,
 )
 
+_EMPLOYEE_COUNT_COLUMNS = (
+    "company_number",
+    "employee_count",
+    "employee_count_source",
+    "employee_count_snapshot_date",
+)
+
 
 def _write_csv(path: Path, headers: tuple[str, ...], row: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -115,6 +122,42 @@ def _write_valid_snapshot_root(root: Path) -> None:
         encoding="utf-8",
     )
 
+    employee_count_dir = root / "employee_count" / "2026-02-06"
+    _write_csv(
+        employee_count_dir / "clean.csv",
+        _EMPLOYEE_COUNT_COLUMNS,
+        ["12345678", "1200", "ons_business_register", "2026-02-06"],
+    )
+    _write_csv(
+        employee_count_dir / "raw.csv",
+        ("company_number", "employees"),
+        ["12345678", "1200"],
+    )
+    employee_count_manifest = {
+        "dataset": "employee_count",
+        "snapshot_date": "2026-02-06",
+        "source_url": "https://example.com/employee-count.csv",
+        "downloaded_at_utc": "2026-02-06T12:00:00+00:00",
+        "last_updated_at_utc": "2026-02-06T12:01:00+00:00",
+        "schema_version": "employee_count_v1",
+        "sha256_hash_raw": "raw",
+        "sha256_hash_clean": "clean",
+        "bytes_raw": 1,
+        "row_counts": {"raw": 1, "clean": 1},
+        "artefacts": {
+            "raw": "raw.csv",
+            "clean": "clean.csv",
+            "manifest": "manifest.json",
+        },
+        "git_sha": "abc",
+        "tool_version": "0.1.0",
+        "command_line": "uk-sponsor validate-employee-count-snapshot",
+    }
+    (employee_count_dir / "manifest.json").write_text(
+        json.dumps(employee_count_manifest),
+        encoding="utf-8",
+    )
+
 
 def _write_valid_output_dir(root: Path) -> None:
     _write_csv(
@@ -186,6 +229,7 @@ def test_validation_check_snapshots_script_passes_for_valid_snapshots(tmp_path: 
 
     assert result.returncode == 0
     assert "PASS snapshot validation" in result.stdout
+    assert "- employee_count: 2026-02-06" in result.stdout
 
 
 def test_validation_check_snapshots_script_fails_for_missing_root(tmp_path: Path) -> None:

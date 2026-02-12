@@ -232,12 +232,14 @@ def _resolve_companies_house_paths(
 def _with_snapshot_paths(
     *,
     config: PipelineConfig,
+    snapshot_root: Path | None,
     sponsor_clean_path: Path,
     ch_clean_path: Path,
     ch_token_index_dir: Path,
 ) -> PipelineConfig:
     return replace(
         config,
+        snapshot_root=str(snapshot_root) if snapshot_root is not None else config.snapshot_root,
         sponsor_clean_path=str(sponsor_clean_path),
         ch_clean_path=str(ch_clean_path),
         ch_token_index_dir=str(ch_token_index_dir),
@@ -524,6 +526,7 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
         )
         config = _with_snapshot_paths(
             config=config,
+            snapshot_root=None,
             sponsor_clean_path=register_value,
             ch_clean_path=ch_clean_path,
             ch_token_index_dir=ch_token_index_dir,
@@ -799,6 +802,7 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
             )
             config = _with_snapshot_paths(
                 config=config,
+                snapshot_root=root,
                 sponsor_clean_path=register_path,
                 ch_clean_path=ch_clean_path,
                 ch_token_index_dir=ch_token_index_dir,

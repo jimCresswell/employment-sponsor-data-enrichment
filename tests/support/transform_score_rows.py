@@ -12,6 +12,9 @@ def make_scored_row(**overrides: str | float) -> TransformScoreRow:
     base = make_enrich_row()
     row: TransformScoreRow = {
         **base,
+        "employee_count": "",
+        "employee_count_source": "",
+        "employee_count_snapshot_date": "",
         "sic_tech_score": 0.5,
         "is_active_score": 0.1,
         "company_age_score": 0.1,

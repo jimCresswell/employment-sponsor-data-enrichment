@@ -16,6 +16,13 @@ from uk_sponsor_pipeline.devtools.validation_snapshots import (
 from uk_sponsor_pipeline.io_validation import validate_as
 from uk_sponsor_pipeline.schemas import TRANSFORM_REGISTER_OUTPUT_COLUMNS
 
+_EMPLOYEE_COUNT_COLUMNS = (
+    "company_number",
+    "employee_count",
+    "employee_count_source",
+    "employee_count_snapshot_date",
+)
+
 
 def _write_csv(path: Path, headers: list[str] | tuple[str, ...], row: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,9 +131,36 @@ def _write_valid_companies_house_snapshot(root: Path, snapshot_date: str) -> Non
     (snapshot_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
 
+def _write_valid_employee_count_snapshot(root: Path, snapshot_date: str) -> None:
+    snapshot_dir = root / "employee_count" / snapshot_date
+    _write_csv(
+        snapshot_dir / "clean.csv",
+        _EMPLOYEE_COUNT_COLUMNS,
+        [
+            "12345678",
+            "1200",
+            "ons_business_register",
+            snapshot_date,
+        ],
+    )
+    _write_csv(snapshot_dir / "raw.csv", ("company_number", "employees"), ["12345678", "1200"])
+    manifest = _build_manifest(
+        dataset="employee_count",
+        snapshot_date=snapshot_date,
+        schema_version="employee_count_v1",
+        artefacts={
+            "raw": "raw.csv",
+            "clean": "clean.csv",
+            "manifest": "manifest.json",
+        },
+    )
+    (snapshot_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
 def _write_valid_snapshot_root(root: Path) -> None:
     _write_valid_sponsor_snapshot(root, "2026-02-06")
     _write_valid_companies_house_snapshot(root, "2026-02-06")
+    _write_valid_employee_count_snapshot(root, "2026-02-06")
 
 
 def test_validate_snapshots_accepts_valid_snapshots(tmp_path: Path) -> None:
@@ -136,9 +170,12 @@ def test_validate_snapshots_accepts_valid_snapshots(tmp_path: Path) -> None:
     result = validate_snapshots(snapshot_root)
 
     assert result.snapshot_root == snapshot_root
-    assert len(result.datasets) == 2
-    assert result.datasets[0].dataset == "sponsor"
-    assert result.datasets[1].dataset == "companies_house"
+    assert len(result.datasets) == 3
+    assert [dataset.dataset for dataset in result.datasets] == [
+        "sponsor",
+        "companies_house",
+        "employee_count",
+    ]
 
 
 def test_validate_snapshots_accepts_companies_house_manifest_without_manifest_key(
@@ -157,7 +194,19 @@ def test_validate_snapshots_accepts_companies_house_manifest_without_manifest_ke
     result = validate_snapshots(snapshot_root)
 
     assert result.snapshot_root == snapshot_root
-    assert len(result.datasets) == 2
+    assert len(result.datasets) == 3
+
+
+def test_validate_snapshots_raises_for_missing_employee_count_dataset(tmp_path: Path) -> None:
+    snapshot_root = tmp_path / "snapshots"
+    _write_valid_sponsor_snapshot(snapshot_root, "2026-02-06")
+    _write_valid_companies_house_snapshot(snapshot_root, "2026-02-06")
+
+    with pytest.raises(
+        SnapshotValidationError,
+        match="Dataset snapshot directory is missing: .*employee_count",
+    ):
+        validate_snapshots(snapshot_root)
 
 
 def test_validate_snapshots_raises_for_missing_snapshot_root(tmp_path: Path) -> None:
@@ -207,4 +256,14 @@ def test_validate_snapshots_raises_for_missing_required_headers(tmp_path: Path) 
     _write_csv(clean_path, ["Organisation Name"], ["Acme Ltd"])
 
     with pytest.raises(SnapshotValidationError, match="Missing required columns"):
+        validate_snapshots(snapshot_root)
+
+
+def test_validate_snapshots_raises_for_missing_employee_count_headers(tmp_path: Path) -> None:
+    snapshot_root = tmp_path / "snapshots"
+    _write_valid_snapshot_root(snapshot_root)
+    clean_path = snapshot_root / "employee_count" / "2026-02-06" / "clean.csv"
+    _write_csv(clean_path, ("company_number",), ["12345678"])
+
+    with pytest.raises(SnapshotValidationError, match="employee_count clean.csv"):
         validate_snapshots(snapshot_root)

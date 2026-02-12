@@ -316,6 +316,69 @@ class ConfigFileValidationError(PipelineError):
         super().__init__(f"Config file validation failed for {path}: {detail}")
 
 
+class EmployeeCountSnapshotError(PipelineError):
+    """Raised when employee-count snapshot artefacts are invalid."""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(f"Employee-count snapshot is invalid: {detail}")
+
+    @classmethod
+    def manifest_field_must_be_integer(cls, field_name: str) -> EmployeeCountSnapshotError:
+        return cls(f"manifest field '{field_name}' must be an integer.")
+
+    @classmethod
+    def manifest_field_must_be_non_empty_string(cls, field_name: str) -> EmployeeCountSnapshotError:
+        return cls(f"manifest field '{field_name}' must be a non-empty string.")
+
+    @classmethod
+    def manifest_artefact_key_must_be_non_empty(
+        cls, artefact_key: str
+    ) -> EmployeeCountSnapshotError:
+        return cls(f"manifest artefacts key '{artefact_key}' must be a non-empty string.")
+
+    @classmethod
+    def manifest_missing_field(cls, field_name: str) -> EmployeeCountSnapshotError:
+        return cls(f"manifest missing required field '{field_name}'.")
+
+    @classmethod
+    def manifest_dataset_mismatch(cls) -> EmployeeCountSnapshotError:
+        return cls("manifest dataset must be 'employee_count'.")
+
+    @classmethod
+    def manifest_snapshot_date_mismatch(cls) -> EmployeeCountSnapshotError:
+        return cls("manifest snapshot_date does not match snapshot directory.")
+
+    @classmethod
+    def manifest_schema_version_mismatch(cls, expected_schema: str) -> EmployeeCountSnapshotError:
+        return cls(f"manifest schema_version must be '{expected_schema}'.")
+
+    @classmethod
+    def employee_count_must_be_positive_int(cls, company_number: str) -> EmployeeCountSnapshotError:
+        return cls(f"employee_count must be a positive integer for company '{company_number}'.")
+
+    @classmethod
+    def company_number_required(cls) -> EmployeeCountSnapshotError:
+        return cls("company_number must be non-empty in employee_count clean.")
+
+    @classmethod
+    def employee_count_source_required(cls, company_number: str) -> EmployeeCountSnapshotError:
+        return cls(f"employee_count_source must be non-empty for company '{company_number}'.")
+
+    @classmethod
+    def employee_count_snapshot_date_invalid(
+        cls, company_number: str
+    ) -> EmployeeCountSnapshotError:
+        return cls(f"employee_count_snapshot_date is invalid for company '{company_number}'.")
+
+    @classmethod
+    def employee_count_snapshot_date_mismatch(cls) -> EmployeeCountSnapshotError:
+        return cls("employee_count_snapshot_date must match the enclosing snapshot directory date.")
+
+    @classmethod
+    def company_number_conflict(cls, company_number: str) -> EmployeeCountSnapshotError:
+        return cls(f"company_number '{company_number}' has conflicting employee-count rows.")
+
+
 class AuthenticationError(PipelineError):
     """Raised when API authentication fails (401 Unauthorised).
 

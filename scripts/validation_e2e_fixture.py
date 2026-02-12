@@ -37,6 +37,13 @@ _REQUIRED_OUTPUTS = (
     "companies_shortlist.csv",
     "companies_explain.csv",
 )
+_EMPLOYEE_COUNT_SNAPSHOT_DATE = "2026-02-06"
+_EMPLOYEE_COUNT_HEADERS = [
+    "company_number",
+    "employee_count",
+    "employee_count_source",
+    "employee_count_snapshot_date",
+]
 
 
 class _SilentHandler(SimpleHTTPRequestHandler):
@@ -126,6 +133,42 @@ def _build_fixture_payloads(http_root: Path) -> tuple[Path, Path]:
         archive.write(companies_house_csv, arcname=companies_house_csv.name)
 
     return sponsor_csv, companies_house_zip
+
+
+def _build_employee_count_snapshot(snapshot_root: Path) -> None:
+    snapshot_dir = snapshot_root / "employee_count" / _EMPLOYEE_COUNT_SNAPSHOT_DATE
+    _write_csv(
+        snapshot_dir / "raw.csv",
+        ["company_number", "employees"],
+        ["12345678", "1200"],
+    )
+    _write_csv(
+        snapshot_dir / "clean.csv",
+        _EMPLOYEE_COUNT_HEADERS,
+        ["12345678", "1200", "fixture_employee_count", _EMPLOYEE_COUNT_SNAPSHOT_DATE],
+    )
+    manifest = {
+        "dataset": "employee_count",
+        "snapshot_date": _EMPLOYEE_COUNT_SNAPSHOT_DATE,
+        "source_url": "https://example.test/employee_count_fixture.csv",
+        "downloaded_at_utc": "2026-02-06T12:00:00+00:00",
+        "last_updated_at_utc": "2026-02-06T12:05:00+00:00",
+        "schema_version": "employee_count_v1",
+        "sha256_hash_raw": "fixture-raw",
+        "sha256_hash_clean": "fixture-clean",
+        "bytes_raw": 16,
+        "row_counts": {"raw": 1, "clean": 1},
+        "artefacts": {
+            "raw": "raw.csv",
+            "clean": "clean.csv",
+            "manifest": "manifest.json",
+        },
+        "git_sha": "fixture",
+        "tool_version": "0.1.0",
+        "command_line": "scripts/validation_e2e_fixture.py",
+    }
+    (snapshot_dir / "manifest.json").parent.mkdir(parents=True, exist_ok=True)
+    (snapshot_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
 
 def _run_cli(command: list[str], *, env: dict[str, str], cwd: Path) -> None:
@@ -313,6 +356,7 @@ def _run_fixture_flow(*, work_dir: Path) -> None:
 
         for command in refresh_commands:
             _run_cli(command, env=env, cwd=repo_root)
+        _build_employee_count_snapshot(snapshot_root)
 
         first_run_dir = _run_transform_enrich_no_resume(
             output_parent=processed_root_one,

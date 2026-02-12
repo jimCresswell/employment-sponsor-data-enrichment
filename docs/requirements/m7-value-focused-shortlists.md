@@ -49,7 +49,8 @@ Define requirements needed to satisfy the value stories for:
 
 ## Current Contract Gaps (2026-02-12)
 
-1. Current scored/shortlist contracts do not include an employee-count field.
+1. Scored/shortlist contracts now include employee-count and provenance fields, but
+   shortlist filtering logic has not yet consumed them.
 1. Current usage filtering supports threshold + single-region/postcode filtering only.
 1. Scoring profile schema contains `size_signals`, but runtime scoring currently does not consume them.
 

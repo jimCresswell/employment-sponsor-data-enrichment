@@ -48,6 +48,7 @@ These include the area-targeted tech-search story and the planned large-employer
 ```text
 GOV.UK Sponsor Register -> refresh-sponsor -> sponsor snapshot (clean.csv)
 Companies House Bulk CSV -> refresh-companies-house -> CH snapshot (clean.csv + index + profiles)
+Employee count input -> snapshot-managed employee_count dataset (clean.csv + manifest)
 Snapshots -> transform-enrich -> transform-score -> usage-shortlist
 ```
 
@@ -56,7 +57,7 @@ Snapshots -> transform-enrich -> transform-score -> usage-shortlist
 | `refresh-sponsor` | Sponsor CSV URL | `data/cache/snapshots/sponsor/<YYYY-MM-DD>/...` | Discover, download, clean, snapshot sponsor data |
 | `refresh-companies-house` | Companies House ZIP/CSV URL | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/...` | Discover, download/extract, clean, index, snapshot CH data |
 | `transform-enrich` | Clean snapshots | `data/processed/sponsor_*.csv` | Match sponsor organisations to CH entities |
-| `transform-score` | Enriched CSV | `data/processed/companies_scored.csv` | Apply active role-likelihood scoring profile (`tech` default; starter profiles include `care_support`) |
+| `transform-score` | Enriched CSV + latest `employee_count` snapshot | `data/processed/companies_scored.csv` | Apply active role-likelihood scoring profile and join employee-count provenance by company number |
 | `usage-shortlist` | Scored CSV | `data/processed/companies_shortlist.csv`, `data/processed/companies_explain.csv` | Apply thresholds and geo filters for final shortlist |
 
 ## Quick Start (First Successful Run)
@@ -97,6 +98,19 @@ You can usually leave other values at defaults for the first run.
 uv run uk-sponsor refresh-sponsor
 uv run uk-sponsor refresh-companies-house
 ```
+
+Provide an `employee_count` snapshot before running `transform-score` or `run-all`.
+The latest dated snapshot under `SNAPSHOT_ROOT` is loaded automatically:
+
+```text
+data/cache/snapshots/employee_count/<YYYY-MM-DD>/
+  raw.csv
+  clean.csv
+  manifest.json
+```
+
+`clean.csv` must include:
+`company_number,employee_count,employee_count_source,employee_count_snapshot_date`
 
 ### 5. Run Cache-Only Pipeline
 
@@ -177,6 +191,8 @@ uv run uk-sponsor transform-score \
 By default, `transform-score` always loads `data/reference/scoring_profiles.json` and resolves
 the catalogue `default_profile` (`tech`) when no profile override is supplied.
 The starter catalogue currently includes `tech` and `care_support`.
+`transform-score` and `run-all` fail fast if the latest `employee_count` snapshot is missing
+or invalid.
 
 `run-all` supports `--only`:
 
@@ -252,7 +268,8 @@ Notes:
 - `--min-employee-count` must be a positive integer.
 - `--unknown-employee-count` accepts `include` or `exclude`.
 - `INCLUDE_UNKNOWN_EMPLOYEE_COUNT` accepts strict boolean values (`true/false`, `1/0`, `yes/no`, `on/off`).
-- These options are currently contract-wired for config/CLI validation; shortlist filtering execution is queued for Milestone 7 batch `M7-B4`.
+- Employee-count snapshot ingestion and scored-output join are implemented.
+- Shortlist filtering execution remains queued for Milestone 7 batch `M7-B4`.
 
 ## Configuration Reference
 
@@ -465,6 +482,9 @@ uv run python scripts/validation_check_snapshots.py --snapshot-root data/cache/s
 uv run python scripts/validation_check_outputs.py --out-dir data/processed
 uv run python scripts/validation_audit_enrichment.py --out-dir data/processed
 ```
+
+Snapshot validation covers the latest dated snapshots for `sponsor`, `companies_house`, and
+`employee_count`.
 
 `validation_audit_enrichment.py` contract:
 

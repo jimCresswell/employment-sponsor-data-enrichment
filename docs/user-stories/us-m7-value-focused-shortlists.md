@@ -59,7 +59,7 @@ so that I can trust changes and detect regressions early.
 ## Coverage Snapshot (2026-02-12)
 
 1. `US-1`: Partially delivered (profile + single-region filtering implemented; no company-size filter yet).
-1. `US-2`: Not yet delivered (employee-count signal and filtering contract missing).
+1. `US-2`: Partially delivered (employee-count snapshot signal and provenance join delivered; shortlist filtering still pending).
 1. `US-3`: Delivered (profile switching implemented with deterministic behaviour).
 1. `US-4`: Delivered (validation protocol and deterministic e2e checks in place).
 

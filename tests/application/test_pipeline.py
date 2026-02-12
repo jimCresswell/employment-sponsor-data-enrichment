@@ -14,8 +14,55 @@ from uk_sponsor_pipeline.config import PipelineConfig
 from uk_sponsor_pipeline.exceptions import DependencyMissingError
 
 
+def _write_employee_count_snapshot(
+    *,
+    fs: InMemoryFileSystem,
+    snapshot_root: Path,
+    snapshot_date: str = "2026-02-06",
+) -> None:
+    snapshot_dir = snapshot_root / "employee_count" / snapshot_date
+    fs.write_csv(
+        pd.DataFrame(
+            [
+                {
+                    "company_number": "12345678",
+                    "employee_count": "1200",
+                    "employee_count_source": "ons_business_register",
+                    "employee_count_snapshot_date": snapshot_date,
+                }
+            ]
+        ),
+        snapshot_dir / "clean.csv",
+    )
+    fs.write_csv(
+        pd.DataFrame([{"company_number": "12345678", "employees": "1200"}]),
+        snapshot_dir / "raw.csv",
+    )
+    fs.write_json(
+        {
+            "dataset": "employee_count",
+            "snapshot_date": snapshot_date,
+            "source_url": "https://example.com/employee_count.csv",
+            "downloaded_at_utc": "2026-02-06T12:00:00+00:00",
+            "last_updated_at_utc": "2026-02-06T12:05:00+00:00",
+            "schema_version": "employee_count_v1",
+            "sha256_hash_raw": "rawhash",
+            "sha256_hash_clean": "cleanhash",
+            "bytes_raw": 128,
+            "row_counts": {"raw": 1, "clean": 1},
+            "artefacts": {"raw": "raw.csv", "clean": "clean.csv", "manifest": "manifest.json"},
+            "git_sha": "abc123",
+            "tool_version": "0.1.0",
+            "command_line": "uk-sponsor refresh-employee-count",
+        },
+        snapshot_dir / "manifest.json",
+    )
+
+
 def test_run_pipeline_cache_only_returns_outputs() -> None:
     fs = InMemoryFileSystem()
+    snapshot_root = Path("data/cache/snapshots")
+    _write_employee_count_snapshot(fs=fs, snapshot_root=snapshot_root)
     write_default_scoring_profile_catalog(
         fs=fs,
         path=Path("data/reference/scoring_profiles.json"),
@@ -74,6 +121,7 @@ def test_run_pipeline_cache_only_returns_outputs() -> None:
             ch_min_match_score=0.0,
             ch_search_limit=5,
             ch_max_rpm=600,
+            snapshot_root=str(snapshot_root),
         ),
         register_path=register_path,
         fs=fs,

@@ -13,9 +13,59 @@ from uk_sponsor_pipeline.application.usage import run_usage_shortlist
 from uk_sponsor_pipeline.config import PipelineConfig
 
 
+def _write_employee_count_snapshot(
+    *,
+    fs: InMemoryFileSystem,
+    snapshot_root: Path,
+    snapshot_date: str = "2026-02-06",
+) -> None:
+    snapshot_dir = snapshot_root / "employee_count" / snapshot_date
+    fs.write_csv(
+        pd.DataFrame(
+            [
+                {
+                    "company_number": "12345678",
+                    "employee_count": "1200",
+                    "employee_count_source": "ons_business_register",
+                    "employee_count_snapshot_date": snapshot_date,
+                }
+            ]
+        ),
+        snapshot_dir / "clean.csv",
+    )
+    fs.write_csv(
+        pd.DataFrame([{"company_number": "12345678", "employees": "1200"}]),
+        snapshot_dir / "raw.csv",
+    )
+    fs.write_json(
+        {
+            "dataset": "employee_count",
+            "snapshot_date": snapshot_date,
+            "source_url": "https://example.com/employee_count.csv",
+            "downloaded_at_utc": "2026-02-06T12:00:00+00:00",
+            "last_updated_at_utc": "2026-02-06T12:05:00+00:00",
+            "schema_version": "employee_count_v1",
+            "sha256_hash_raw": "rawhash",
+            "sha256_hash_clean": "cleanhash",
+            "bytes_raw": 128,
+            "row_counts": {"raw": 1, "clean": 1},
+            "artefacts": {"raw": "raw.csv", "clean": "clean.csv", "manifest": "manifest.json"},
+            "git_sha": "abc123",
+            "tool_version": "0.1.0",
+            "command_line": "uk-sponsor refresh-employee-count",
+        },
+        snapshot_dir / "manifest.json",
+    )
+
+
 def test_pipeline_end_to_end_in_memory(
     in_memory_fs: InMemoryFileSystem, fake_http_client: FakeHttpClient
 ) -> None:
+    snapshot_root = Path("data/cache/snapshots")
+    _write_employee_count_snapshot(
+        fs=in_memory_fs,
+        snapshot_root=snapshot_root,
+    )
     write_default_scoring_profile_catalog(
         fs=in_memory_fs,
         path=Path("data/reference/scoring_profiles.json"),
@@ -89,14 +139,14 @@ def test_pipeline_end_to_end_in_memory(
     score_outs = run_transform_score(
         enriched_path=enrich_outs["enriched"],
         out_dir=Path("processed"),
-        config=PipelineConfig(tech_score_threshold=0.0),
+        config=PipelineConfig(tech_score_threshold=0.0, snapshot_root=str(snapshot_root)),
         fs=in_memory_fs,
     )
 
     usage_outs = run_usage_shortlist(
         scored_path=score_outs["scored"],
         out_dir=Path("processed"),
-        config=PipelineConfig(tech_score_threshold=0.0),
+        config=PipelineConfig(tech_score_threshold=0.0, snapshot_root=str(snapshot_root)),
         fs=in_memory_fs,
     )
 

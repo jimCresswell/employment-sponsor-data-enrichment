@@ -83,6 +83,9 @@ TRANSFORM_ENRICH_CANDIDATES_COLUMNS = (
 # Transform score output: scored for tech-likelihood
 TRANSFORM_SCORE_OUTPUT_COLUMNS = (
     *TRANSFORM_ENRICH_OUTPUT_COLUMNS,
+    "employee_count",
+    "employee_count_source",
+    "employee_count_snapshot_date",
     "sic_tech_score",
     "is_active_score",
     "company_age_score",

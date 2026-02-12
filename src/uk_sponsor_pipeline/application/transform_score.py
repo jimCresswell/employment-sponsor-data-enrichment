@@ -29,9 +29,11 @@ from ..schemas import (
     validate_columns,
 )
 from ..types import TransformEnrichRow
+from .employee_count_source import EmployeeCountLookup, load_employee_count_lookup
 from .scoring_profiles import load_scoring_profile_catalog, resolve_scoring_profile
 
 DEFAULT_SCORING_PROFILE_PATH = Path("data/reference/scoring_profiles.json")
+DEFAULT_SNAPSHOT_ROOT = Path("data/cache/snapshots")
 
 
 def _normalise_invalid_match_score(value: object) -> str:
@@ -74,6 +76,28 @@ def _resolve_active_profile(config: PipelineConfig, fs: FileSystem) -> ScoringPr
     return resolve_scoring_profile(catalog, profile_name=profile_name or None)
 
 
+def _resolve_employee_count_lookup(config: PipelineConfig, fs: FileSystem) -> EmployeeCountLookup:
+    root = (
+        Path(config.snapshot_root.strip())
+        if config.snapshot_root.strip()
+        else DEFAULT_SNAPSHOT_ROOT
+    )
+    return load_employee_count_lookup(snapshot_root=root, fs=fs)
+
+
+def _attach_employee_count_signals(
+    *,
+    df: pd.DataFrame,
+    lookup: EmployeeCountLookup,
+) -> None:
+    signals = [
+        lookup.signal_for_company_number(str(value)) for value in df["ch_company_number"].tolist()
+    ]
+    df["employee_count"] = [signal.employee_count for signal in signals]
+    df["employee_count_source"] = [signal.employee_count_source for signal in signals]
+    df["employee_count_snapshot_date"] = [signal.employee_count_snapshot_date for signal in signals]
+
+
 def run_transform_score(
     enriched_path: str | Path = "data/processed/sponsor_enriched.csv",
     out_dir: str | Path = "data/processed",
@@ -112,6 +136,7 @@ def run_transform_score(
     df["match_score"] = _parse_match_score(df["match_score"])
 
     active_profile = _resolve_active_profile(config, fs)
+    employee_count_lookup = _resolve_employee_count_lookup(config, fs)
     logger.info("Using scoring profile: %s", active_profile.name)
 
     logger.info("Scoring: %s companies", len(df))
@@ -127,6 +152,7 @@ def run_transform_score(
         )
 
     # Add feature columns to DataFrame
+    _attach_employee_count_signals(df=df, lookup=employee_count_lookup)
     df["sic_tech_score"] = [f.sic_tech_score for f in features_list]
     df["is_active_score"] = [f.is_active_score for f in features_list]
     df["company_age_score"] = [f.company_age_score for f in features_list]
