@@ -6,7 +6,7 @@ This directory contains planning documents for active and historical work.
 
 | File | Purpose | Status | Owner | Last Updated |
 | --- | --- | --- | --- | --- |
-| `.agent/plans/linear-delivery-plan.md` | Single ordered execution path with milestone requirements and acceptance criteria. | Active (`M7-B1`, `M7-B2` complete; `Next batch to execute: M7-B3`; Milestone 8 queued for grouped `admin`/`search` CLI + denormalised search views) | Jim + Codex | 2026-02-12 |
+| `.agent/plans/linear-delivery-plan.md` | Single ordered execution path with milestone requirements and acceptance criteria. | Active (Milestone 7 complete; `Next batch to execute: M8-B1`; Milestone 8 queued for grouped `admin`/`search` CLI + denormalised search views) | Jim + Codex | 2026-02-12 |
 | `.agent/plans/deferred-features.md` | Backlog items not in the active linear path. | Active backlog (currently empty) | Jim + Codex | 2026-02-10 |
 
 ## Archived Completed Plans

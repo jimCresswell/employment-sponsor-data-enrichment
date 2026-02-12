@@ -303,7 +303,8 @@ Source: user-confirmed next-step order from roadmap continuation review.
 ### Next Session Scope Lock
 
 1. Milestone 6 queue is complete.
-1. Milestone 7 queue is active.
+1. Milestone 7 queue is complete.
+1. Milestone 8 queue is active.
 1. Start next implementation from `M8-B1`.
 
 ## Milestone 7: Value-Focused User Stories and Size-Aware Targeting (Priority 2026-02-12)

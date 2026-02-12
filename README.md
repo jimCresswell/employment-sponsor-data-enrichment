@@ -33,7 +33,7 @@ The current value-focused user stories and requirement contracts live in:
 - `docs/validation-run-evidence.md`
 - `docs/operational-discoveries.md`
 
-These include the area-targeted tech-search story and the planned large-employer targeting
+These include the area-targeted tech-search story and the delivered large-employer targeting
 (`>= 1000` employees) requirement.
 
 ## Runtime Model (Important)

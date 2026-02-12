@@ -47,12 +47,13 @@ Define requirements needed to satisfy the value stories for:
 1. Extend validation scripts/contracts as needed to cover new required columns.
 1. Record one validation run evidence entry after implementation batches complete.
 
-## Current Contract Gaps (2026-02-12)
+## Current Contract Notes (2026-02-12)
 
-1. Scored/shortlist/explain contracts now include employee-count and provenance fields, and
-   shortlist filtering consumes these fields with explicit unknown handling.
-1. Scoring profile schema contains `size_signals`, but runtime scoring currently does not consume them.
-1. Milestone closeout evidence capture and status reconciliation remain in scope for `M7-B5`.
+1. Milestone 7 delivery is complete (`M7-B1` through `M7-B5`).
+1. Scored/shortlist/explain contracts include employee-count and provenance fields, and shortlist
+   filtering consumes these fields with explicit unknown handling.
+1. Scoring profile schema contains `size_signals`, but runtime scoring currently does not consume
+   them.
 
 ## Directives-Aligned Delivery Approach
 
