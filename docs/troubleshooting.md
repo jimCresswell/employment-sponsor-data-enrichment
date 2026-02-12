@@ -357,3 +357,25 @@ uv run python scripts/validation_e2e_fixture.py
    (template available in both `docs/validation-run-evidence.md` and
    `docs/validation-protocol.md`).
 4. If any command fails, fix the underlying contract/artefact issue and rerun before recording pass.
+
+## 17) `usage-shortlist` Fails on `employee_count` Values
+
+Symptom:
+
+- `usage-shortlist` fails with an error similar to:
+
+```text
+Usage shortlist: employee_count must be empty or a positive integer. Invalid values: <sample>
+```
+
+Cause:
+
+- `employee_count` in `companies_scored.csv` contains non-empty invalid values (for example
+  `abc`, negative numbers, or decimals).
+
+Recovery:
+
+1. Re-run `transform-score` with a valid `employee_count` snapshot to regenerate scored outputs.
+2. If editing fixture data manually, ensure `employee_count` is either empty (unknown) or a
+   positive integer string.
+3. Re-run `usage-shortlist` with the same size-filter options.

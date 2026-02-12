@@ -30,6 +30,7 @@ from ..domain.location_profiles import (
 )
 from ..exceptions import (
     DependencyMissingError,
+    InvalidEmployeeCountError,
     LocationAliasesNotFoundError,
     PipelineConfigMissingError,
 )
@@ -56,6 +57,30 @@ def _matches_geographic_filter_row(row: pd.Series[str], geo_filter: GeoFilter) -
     payload = row.to_dict()
     enrich_payload = {key: payload[key] for key in TRANSFORM_ENRICH_OUTPUT_COLUMNS}
     return domain_matches_geo_filter(validate_as(TransformEnrichRow, enrich_payload), geo_filter)
+
+
+def _build_employee_count_filter_mask(
+    shortlist: pd.DataFrame,
+    *,
+    min_employee_count: int,
+    include_unknown_employee_count: bool,
+) -> pd.Series:
+    employee_counts = shortlist["employee_count"].fillna("").astype(str).str.strip()
+    unknown_mask = employee_counts.eq("")
+    known_counts = employee_counts[~unknown_mask]
+    valid_known_mask = known_counts.str.fullmatch(r"[1-9][0-9]*").fillna(False)
+    if not bool(valid_known_mask.all()):
+        invalid_values = sorted(set(known_counts[~valid_known_mask].tolist()))
+        sample = ", ".join(invalid_values[:3])
+        raise InvalidEmployeeCountError(sample)
+
+    meets_minimum = pd.Series(False, index=shortlist.index)
+    if not known_counts.empty:
+        meets_minimum.loc[known_counts.index] = known_counts.astype(int) >= min_employee_count
+
+    if include_unknown_employee_count:
+        return meets_minimum | unknown_mask
+    return meets_minimum
 
 
 def run_usage_shortlist(
@@ -96,6 +121,20 @@ def run_usage_shortlist(
         (df["role_fit_score"].astype(float) >= config.tech_score_threshold)
         & (df["role_fit_bucket"].isin(["strong", "possible"]))
     ].copy()
+
+    if config.min_employee_count is not None:
+        employee_count_mask = _build_employee_count_filter_mask(
+            shortlist,
+            min_employee_count=config.min_employee_count,
+            include_unknown_employee_count=config.include_unknown_employee_count,
+        )
+        shortlist = shortlist[employee_count_mask]
+        logger.info(
+            "Employee-count filter: %s companies match (min=%s, include_unknown=%s)",
+            int(employee_count_mask.sum()),
+            config.min_employee_count,
+            config.include_unknown_employee_count,
+        )
 
     if config.geo_filter_region or config.geo_filter_postcodes:
         aliases_path = Path(config.location_aliases_path)

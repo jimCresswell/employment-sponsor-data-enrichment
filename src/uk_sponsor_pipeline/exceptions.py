@@ -188,6 +188,16 @@ class InvalidMatchScoreError(PipelineError):
         super().__init__(f"Transform score: match_score must be numeric. Invalid values: {sample}")
 
 
+class InvalidEmployeeCountError(PipelineError):
+    """Raised when scored employee_count values are not contract-valid."""
+
+    def __init__(self, sample: str) -> None:
+        super().__init__(
+            "Usage shortlist: employee_count must be empty or a positive integer. "
+            f"Invalid values: {sample}"
+        )
+
+
 class ScoringProfileFileNotFoundError(PipelineError):
     """Raised when a scoring profile catalogue file is missing."""
 

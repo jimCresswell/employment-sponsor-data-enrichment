@@ -49,10 +49,10 @@ Define requirements needed to satisfy the value stories for:
 
 ## Current Contract Gaps (2026-02-12)
 
-1. Scored/shortlist contracts now include employee-count and provenance fields, but
-   shortlist filtering logic has not yet consumed them.
-1. Current usage filtering supports threshold + single-region/postcode filtering only.
+1. Scored/shortlist/explain contracts now include employee-count and provenance fields, and
+   shortlist filtering consumes these fields with explicit unknown handling.
 1. Scoring profile schema contains `size_signals`, but runtime scoring currently does not consume them.
+1. Milestone closeout evidence capture and status reconciliation remain in scope for `M7-B5`.
 
 ## Directives-Aligned Delivery Approach
 

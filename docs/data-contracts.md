@@ -178,7 +178,7 @@ Contract rules:
 Scored-output join contract:
 
 - `transform-score` loads the latest employee-count snapshot from `SNAPSHOT_ROOT`.
-- `companies_scored.csv` and `companies_shortlist.csv` now include:
+- `companies_scored.csv`, `companies_shortlist.csv`, and `companies_explain.csv` include:
   - `employee_count`
   - `employee_count_source`
   - `employee_count_snapshot_date`
@@ -235,7 +235,7 @@ Example selection:
 uv run uk-sponsor transform-score --sector care_support
 ```
 
-## Size Filter Configuration Contract (M7-B2)
+## Size Filter Runtime Contract (M7-B2, M7-B4)
 
 Usage commands (`usage-shortlist`, `run-all`) accept these size-filter controls:
 
@@ -256,7 +256,12 @@ Contract notes:
 - These controls are now part of `PipelineConfig` precedence and validation contracts.
 - Employee-count snapshot ingestion and scored-output join are delivered in Milestone 7 batch
   `M7-B3`.
-- Shortlist output filtering by employee count remains scheduled for Milestone 7 batch `M7-B4`.
+- When `min_employee_count` is set, shortlist rows must satisfy
+  `employee_count >= min_employee_count`.
+- Unknown-size rows (`employee_count=""`) are excluded by default and only included when
+  unknown handling is explicitly enabled (`include` / `true`).
+- Non-empty invalid `employee_count` values fail fast during shortlist filtering.
+- Filtered shortlist/explain outputs preserve deterministic row order for identical inputs.
 
 ## Enrichment Audit CLI Contract
 

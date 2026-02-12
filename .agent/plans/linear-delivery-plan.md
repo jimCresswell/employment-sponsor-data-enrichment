@@ -4,7 +4,7 @@ Status: Active
 Last updated: 2026-02-12
 Handoff readiness: Ready
 Current batch in progress: `none`
-Next batch to execute: `M7-B4`
+Next batch to execute: `M8-B1`
 
 ## Start Here (No Prior Chat Context Assumed)
 
@@ -304,7 +304,7 @@ Source: user-confirmed next-step order from roadmap continuation review.
 
 1. Milestone 6 queue is complete.
 1. Milestone 7 queue is active.
-1. Start next implementation from `M7-B4`.
+1. Start next implementation from `M8-B1`.
 
 ## Milestone 7: Value-Focused User Stories and Size-Aware Targeting (Priority 2026-02-12)
 
@@ -497,34 +497,24 @@ Follow in order. Do not reorder milestones.
 
 ### Milestone 7 TODO (Value Stories + Size-Aware Targeting)
 
-1. `M7-B1`, `M7-B2`, and `M7-B3` are complete and locked.
-1. `M7-B4` is the next planned implementation batch and is the only in-scope feature work.
-1. Do not start `M7-B5` until all `M7-B4` exit criteria are met and recorded.
-1. Keep `M7-B5` as closeout-only work after `M7-B4` completion.
+1. `M7-B1`, `M7-B2`, `M7-B3`, `M7-B4`, and `M7-B5` are complete and locked.
+1. Milestone 7 is complete.
+1. Next implementation batch is `M8-B1`.
 
-#### Current Piece of Work TODO (`M7-B4`)
+#### Next Piece of Work TODO (`M8-B1`)
 
-1. TDD first: add failing usage-shortlist tests for large-employer filtering semantics.
-1. Extend `tests/application/test_usage_shortlist.py` to cover:
-1. inclusion when `employee_count >= min_employee_count`,
-1. exclusion when `employee_count < min_employee_count`,
-1. unknown-size policy behaviour (`include` vs `exclude`) when employee count is missing.
-1. Add deterministic-order assertions so filtering does not change shortlist ordering for stable equal-input cases.
-1. Implement shortlist filtering in `src/uk_sponsor_pipeline/application/usage.py`:
-1. apply `min_employee_count` against scored employee-count fields,
-1. enforce configured unknown-size handling without mutating upstream scored outputs.
-1. Update shortlist/explain contracts and helpers used by tests and downstream outputs:
-1. `src/uk_sponsor_pipeline/schemas.py`,
-1. `src/uk_sponsor_pipeline/types.py`,
-1. relevant helpers in `tests/support/`.
-1. Update durable docs for runtime behaviour and operators:
-1. `docs/data-contracts.md`,
+1. TDD first: add failing CLI contract tests for grouped `admin` and `search` sub-tools.
+1. Define and implement grouped command taxonomy in `src/uk_sponsor_pipeline/cli.py`:
+1. lock top-level command names and alias behaviour,
+1. ensure fail-fast help/error flows for unsupported command combinations.
+1. Reconcile operator docs and examples:
 1. `README.md`,
-1. `docs/troubleshooting.md` (if new failure/debug guidance is introduced).
+1. `docs/data-contracts.md`,
+1. `docs/troubleshooting.md` (if command migration errors need recovery guidance).
 1. Verification and closeout:
-1. run `uv run pytest tests/application/test_usage_shortlist.py`,
+1. run `uv run pytest tests/cli`,
 1. run `uv run check`,
-1. update batch status board, closeout log, and status tracking in this plan before moving to `M7-B5`.
+1. update batch status board, closeout log, and status tracking in this plan before moving to `M8-B2`.
 
 ### Milestone 8 TODO (Search CLI + Denormalised Views)
 
@@ -1060,7 +1050,7 @@ The following batches implement value-focused targeting outcomes from the new us
 
 1. Batch ID: `M7-B4`
 1. Objective: Apply large-employer filtering in usage shortlist and expose explainability fields.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M7-B3`
 1. Scope (in): usage filtering logic, unknown-size handling, explain output contract updates, deterministic tests.
 1. Scope (out): new scoring-model features beyond shortlist filtering.
@@ -1079,7 +1069,7 @@ The following batches implement value-focused targeting outcomes from the new us
 
 1. Batch ID: `M7-B5`
 1. Objective: Milestone 7 closeout with validation evidence and docs reconciliation.
-1. Status: `Planned`
+1. Status: `Complete`
 1. Depends on: `M7-B4`
 1. Scope (in): run-log evidence capture, docs/plan closeout, final status reconciliation.
 1. Scope (out): additional feature work beyond Milestone 7.
@@ -1253,8 +1243,8 @@ Use this as the canonical live tracker for batch execution state.
 1. `M7-B1`: Complete
 1. `M7-B2`: Complete
 1. `M7-B3`: Complete
-1. `M7-B4`: Planned
-1. `M7-B5`: Planned
+1. `M7-B4`: Complete
+1. `M7-B5`: Complete
 
 ### Milestone 8
 
@@ -1687,6 +1677,26 @@ Docs updated: src/uk_sponsor_pipeline/application/employee_count_source.py, src/
 Follow-ups: Execute M7-B4 (usage shortlist filtering with unknown-size policy and explainability fields).
 ```
 
+```text
+Date: 2026-02-12
+Batch ID: M7-B4
+Status: Complete
+Summary: Implemented deterministic large-employer filtering in `usage-shortlist` using `min_employee_count` and explicit unknown-size handling, added fail-fast validation for invalid non-empty employee-count values, and expanded explain output to include employee-count provenance fields.
+Quality gates: uv run pytest tests/application/test_usage_shortlist.py (pass); uv run check (pass)
+Docs updated: src/uk_sponsor_pipeline/application/usage.py, src/uk_sponsor_pipeline/exceptions.py, src/uk_sponsor_pipeline/schemas.py, src/uk_sponsor_pipeline/types.py, tests/application/test_usage_shortlist.py, README.md, docs/data-contracts.md, docs/troubleshooting.md, docs/requirements/m7-value-focused-shortlists.md, docs/user-stories/us-m7-value-focused-shortlists.md, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M7-B5 (Milestone 7 closeout and validation evidence reconciliation).
+```
+
+```text
+Date: 2026-02-12
+Batch ID: M7-B5
+Status: Complete
+Summary: Closed Milestone 7 by capturing an auditable fixture-based validation run with employee-count source/snapshot evidence, reconciling value-story and requirement coverage state, and advancing the execution queue to Milestone 8 (`M8-B1`).
+Quality gates: uv run python scripts/validation_e2e_fixture.py --work-dir /tmp/m7_b5_validation_e2e (pass); uv run check (pass)
+Docs updated: docs/validation-run-evidence.md, docs/user-stories/us-m7-value-focused-shortlists.md, docs/requirements/m7-value-focused-shortlists.md, docs/data-contracts.md, README.md, docs/troubleshooting.md, .agent/plans/linear-delivery-plan.md
+Follow-ups: Execute M8-B1 (grouped CLI contract definition for `admin` and `search` sub-tools).
+```
+
 ## Durable Operational Records
 
 1. Validation run evidence is recorded in `docs/validation-run-evidence.md`.
@@ -1710,5 +1720,5 @@ Follow-ups: Execute M7-B4 (usage shortlist filtering with unknown-size policy an
 1. Milestone 4: Complete.
 1. Milestone 5: Complete.
 1. Milestone 6: Complete.
-1. Milestone 7: In progress (`M7-B1`, `M7-B2`, `M7-B3` complete; `M7-B4` planned).
-1. Milestone 8: Not started (planned queue `M8-B1` to `M8-B5`, begins after `M7-B5`).
+1. Milestone 7: Complete.
+1. Milestone 8: Not started (planned queue `M8-B1` to `M8-B5`; next batch `M8-B1`).

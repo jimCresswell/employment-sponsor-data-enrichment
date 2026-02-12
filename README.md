@@ -58,7 +58,7 @@ Snapshots -> transform-enrich -> transform-score -> usage-shortlist
 | `refresh-companies-house` | Companies House ZIP/CSV URL | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/...` | Discover, download/extract, clean, index, snapshot CH data |
 | `transform-enrich` | Clean snapshots | `data/processed/sponsor_*.csv` | Match sponsor organisations to CH entities |
 | `transform-score` | Enriched CSV + latest `employee_count` snapshot | `data/processed/companies_scored.csv` | Apply active role-likelihood scoring profile and join employee-count provenance by company number |
-| `usage-shortlist` | Scored CSV | `data/processed/companies_shortlist.csv`, `data/processed/companies_explain.csv` | Apply thresholds and geo filters for final shortlist |
+| `usage-shortlist` | Scored CSV | `data/processed/companies_shortlist.csv`, `data/processed/companies_explain.csv` | Apply threshold, geo, and size filters and emit explainability columns |
 
 ## Quick Start (First Successful Run)
 
@@ -247,7 +247,7 @@ Notes:
 - `GEO_FILTER_REGION` accepts one value only.
 - Comma-separated region values fail fast.
 
-### Size Filtering (Contract Stage)
+### Size Filtering
 
 CLI examples:
 
@@ -268,8 +268,10 @@ Notes:
 - `--min-employee-count` must be a positive integer.
 - `--unknown-employee-count` accepts `include` or `exclude`.
 - `INCLUDE_UNKNOWN_EMPLOYEE_COUNT` accepts strict boolean values (`true/false`, `1/0`, `yes/no`, `on/off`).
-- Employee-count snapshot ingestion and scored-output join are implemented.
-- Shortlist filtering execution remains queued for Milestone 7 batch `M7-B4`.
+- When `min_employee_count` is set, shortlist rows must have `employee_count >= min_employee_count`.
+- Unknown employee-count rows are excluded by default and only included when explicitly configured (`include` / `true`).
+- Non-empty invalid `employee_count` values in scored input fail fast during shortlist filtering.
+- `companies_explain.csv` includes `employee_count`, `employee_count_source`, and `employee_count_snapshot_date` for auditability.
 
 ## Configuration Reference
 
