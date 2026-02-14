@@ -157,7 +157,7 @@ def run_refresh_sponsor_clean(
         raise PendingAcquireSnapshotNotFoundError(
             SPONSOR_DATASET,
             str(snapshot_root),
-            "uk-sponsor refresh-sponsor --only acquire",
+            "uship admin refresh sponsor --only acquire",
         )
     return _finalise_sponsor_snapshot(
         paths=pending.paths,

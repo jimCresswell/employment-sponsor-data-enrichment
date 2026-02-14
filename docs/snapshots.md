@@ -7,7 +7,7 @@ They are designed for reproducibility, auditability, and safe reruns.
 
 Snapshots provide:
 
-- deterministic inputs for `transform-enrich` and `run-all`,
+- deterministic inputs for `admin build enrich` and `admin build all`,
 - explicit artefact boundaries for auditing and incident recovery,
 - fail-fast validation when required files are missing.
 
@@ -76,7 +76,7 @@ When explicit paths are not provided, the latest snapshot is resolved by:
 1. `snapshot_date` descending (`YYYY-MM-DD`)
 2. `manifest.json` mtime descending (tie-breaker)
 
-`transform-enrich` and `run-all` rely on this behaviour when only `SNAPSHOT_ROOT`
+`admin build enrich` and `admin build all` rely on this behaviour when only `SNAPSHOT_ROOT`
 is provided.
 
 ## Manifest Contract
@@ -116,7 +116,7 @@ After refresh completes:
 2. Confirm expected artefacts exist for each dataset.
 3. Open `manifest.json` and verify `schema_version` and `snapshot_date`.
 4. Confirm `clean.csv` headers match `docs/data-contracts.md`.
-5. Run `uv run uk-sponsor run-all` to validate cache-only consumption.
+5. Run `uv run uship admin build all` to validate cache-only consumption.
 
 ## Recovery Notes
 

@@ -60,10 +60,31 @@ Define requirements needed to satisfy the value stories for:
 1. Batch-first, contract-first sequence:
 1. `M7-B2`: add config/CLI/schema contracts and fail-fast validation for employee-count filters.
 1. `M7-B3`: add a snapshot-backed company-size input boundary and deterministic join by company number.
-1. `M7-B4`: apply size filtering in `usage-shortlist` and expose explainability columns.
+1. `M7-B4`: apply size filtering in `admin build shortlist` and expose explainability columns.
 1. `M7-B5`: close out docs, validation evidence, and milestone status.
 1. Introduce a new ADR only when a new cross-cutting boundary is finalised (for example, external size-data source strategy).
 1. Keep behavioural scope minimal in each batch; no speculative cross-feature expansion.
+
+## M8-B1 CLI Contract Extension (2026-02-12)
+
+1. Runtime executable name is `uship`.
+1. Public grouped CLI surface is:
+1. `uship admin ...`
+1. `uship search ...`
+1. Legacy flat commands are fail-fast with migration guidance (`refresh-sponsor`,
+   `refresh-companies-house`, `transform-enrich`, `transform-score`, `usage-shortlist`,
+   `run-all`).
+1. `search` contract in `M8-B1`:
+1. at least one filter required (`--sector`, `--size`, `--region`, `--keyword`),
+1. `--size` values fixed to `micro`, `small`, `medium`, `large`, `mega`,
+1. size-band mapping fixed for Milestone 8:
+1. `micro <= 10`
+1. `small 11-50`
+1. `medium 51-250`
+1. `large 251-999`
+1. `mega >= 1000`
+1. `search` and `admin validate` remain explicit fail-fast placeholders until later
+   Milestone 8 batches.
 
 ## Traceability
 

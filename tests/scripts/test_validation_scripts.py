@@ -76,7 +76,7 @@ def _write_valid_snapshot_root(root: Path) -> None:
         },
         "git_sha": "abc",
         "tool_version": "0.1.0",
-        "command_line": "uk-sponsor refresh-sponsor",
+        "command_line": "uship admin refresh sponsor",
     }
     (sponsor_dir / "manifest.json").write_text(json.dumps(sponsor_manifest), encoding="utf-8")
 
@@ -115,7 +115,7 @@ def _write_valid_snapshot_root(root: Path) -> None:
         },
         "git_sha": "abc",
         "tool_version": "0.1.0",
-        "command_line": "uk-sponsor refresh-companies-house",
+        "command_line": "uship admin refresh companies-house",
     }
     (companies_house_dir / "manifest.json").write_text(
         json.dumps(companies_house_manifest),
@@ -151,7 +151,7 @@ def _write_valid_snapshot_root(root: Path) -> None:
         },
         "git_sha": "abc",
         "tool_version": "0.1.0",
-        "command_line": "uk-sponsor validate-employee-count-snapshot",
+        "command_line": "uship validate-employee-count-snapshot",
     }
     (employee_count_dir / "manifest.json").write_text(
         json.dumps(employee_count_manifest),
@@ -213,7 +213,7 @@ def _write_valid_output_dir(root: Path) -> None:
         "processed_in_run": 1,
         "processed_total": 1,
         "remaining": 0,
-        "resume_command": "uv run uk-sponsor transform-enrich --resume",
+        "resume_command": "uv run uship admin build enrich --resume",
     }
     (root / "sponsor_enrich_resume_report.json").write_text(json.dumps(report), encoding="utf-8")
 

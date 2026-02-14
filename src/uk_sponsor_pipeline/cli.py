@@ -1,12 +1,10 @@
 """CLI for UK Sponsor Pipeline.
 
 Commands:
-- refresh-sponsor: Download and snapshot the sponsor register
-- refresh-companies-house: Download and snapshot Companies House bulk data
-- transform-enrich: Enrich with Companies House data
-- transform-score: Score for tech-likelihood (scored output)
-- usage-shortlist: Filter scored output into shortlist and explainability
-- run-all: Execute cache-only steps sequentially
+- admin refresh sponsor|companies-house: Download and snapshot source datasets
+- admin build enrich|score|shortlist|all: Build cache-only pipeline outputs
+- admin validate: Placeholder for search-artefact validation (M8-B1)
+- search: Placeholder for denormalised search query flow (M8-B1)
 """
 
 from __future__ import annotations
@@ -110,7 +108,7 @@ class CliContextNotInitialisedError(typer.BadParameter):
     """Raised when CLI context is missing."""
 
     def __init__(self) -> None:
-        super().__init__("CLI context is not initialised. Use the uk-sponsor entry point.")
+        super().__init__("CLI context is not initialised. Use the uship entry point.")
 
 
 class UrlWithCleanOnlyError(typer.BadParameter):
@@ -125,6 +123,37 @@ class RuntimeFileSourceRequiredError(typer.BadParameter):
 
     def __init__(self, command_name: str, source_type: str) -> None:
         super().__init__(f"{command_name} supports CH_SOURCE_TYPE=file only (got '{source_type}').")
+
+
+class LegacyCommandMovedError(typer.BadParameter):
+    """Raised when a removed flat command is invoked."""
+
+    def __init__(self, legacy_command: str, replacement_command: str) -> None:
+        super().__init__(f"`{legacy_command}` is no longer supported. Use `{replacement_command}`.")
+
+
+class AdminValidateNotImplementedError(typer.BadParameter):
+    """Raised for admin validate placeholder in M8-B1."""
+
+    def __init__(self) -> None:
+        super().__init__("`admin validate` is not implemented in M8-B1.")
+
+
+class SearchFilterRequiredError(typer.BadParameter):
+    """Raised when search is invoked without any filters."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "At least one search filter is required. Provide --sector, --size, --region, or "
+            "--keyword."
+        )
+
+
+class SearchNotImplementedError(typer.BadParameter):
+    """Raised for search placeholder in M8-B1."""
+
+    def __init__(self) -> None:
+        super().__init__("`search` is not implemented in M8-B1.")
 
 
 DEFAULT_SNAPSHOT_ROOT = Path("data/cache/snapshots")
@@ -159,9 +188,19 @@ class UnknownEmployeeCountMode(StrEnum):
     EXCLUDE = "exclude"
 
 
+class SearchSizeBand(StrEnum):
+    """Allowed search size bands for grouped search contract."""
+
+    MICRO = "micro"
+    SMALL = "small"
+    MEDIUM = "medium"
+    LARGE = "large"
+    MEGA = "mega"
+
+
 def _version_callback(value: bool) -> None:
     if value:
-        rprint(f"uk-sponsor {__version__}")
+        rprint(f"uship {__version__}")
         raise typer.Exit()
 
 
@@ -250,8 +289,14 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
     """Create a Typer app wired with the provided dependencies builder."""
     app = typer.Typer(
         add_completion=False,
-        help=("UK sponsor pipeline: refresh → enrich → score → usage-shortlist"),
+        help=("UK sponsor pipeline: grouped admin/search workflows"),
     )
+    admin_app = typer.Typer(help="Administrative commands.")
+    admin_refresh_app = typer.Typer(help="Refresh snapshot datasets.")
+    admin_build_app = typer.Typer(help="Build artefacts from snapshots and processed data.")
+    app.add_typer(admin_app, name="admin")
+    admin_app.add_typer(admin_refresh_app, name="refresh")
+    admin_app.add_typer(admin_build_app, name="build")
 
     @app.callback()
     def main(
@@ -294,33 +339,13 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
 
         ctx.obj = CliContext(config=config, deps_builder=deps_builder)
 
-    @app.command(name="refresh-sponsor")
-    def refresh_sponsor(
+    def _run_refresh_sponsor_command(
+        *,
         ctx: typer.Context,
-        url: Annotated[
-            str | None,
-            typer.Option(
-                "--url",
-                "-u",
-                help="Direct CSV URL for the sponsor register (optional)",
-            ),
-        ] = None,
-        snapshot_root: Annotated[
-            Path | None,
-            typer.Option(
-                "--snapshot-root",
-                help="Snapshot root directory (defaults to SNAPSHOT_ROOT)",
-            ),
-        ] = None,
-        only: Annotated[
-            RefreshOnly,
-            typer.Option(
-                "--only",
-                help="Run only one logical refresh group (default: all).",
-            ),
-        ] = RefreshOnly.ALL,
+        url: str | None,
+        snapshot_root: Path | None,
+        only: RefreshOnly,
     ) -> None:
-        """Refresh sponsor register snapshot (download + clean)."""
         state = _get_context(ctx)
         config = state.config
         root = snapshot_root or Path(config.snapshot_root or DEFAULT_SNAPSHOT_ROOT)
@@ -374,15 +399,15 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
         rprint(f"  Snapshot date: {result.snapshot_date}")
         rprint(f"  Clean rows: {result.row_counts['clean']:,}")
 
-    @app.command(name="refresh-companies-house")
-    def refresh_companies_house(
+    @admin_refresh_app.command(name="sponsor")
+    def admin_refresh_sponsor(
         ctx: typer.Context,
         url: Annotated[
             str | None,
             typer.Option(
                 "--url",
                 "-u",
-                help="Direct ZIP URL for Companies House bulk data (optional)",
+                help="Direct CSV URL for the sponsor register (optional)",
             ),
         ] = None,
         snapshot_root: Annotated[
@@ -400,7 +425,16 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
             ),
         ] = RefreshOnly.ALL,
     ) -> None:
-        """Refresh Companies House bulk snapshot (download + clean + index)."""
+        """Refresh sponsor register snapshot (download + clean)."""
+        _run_refresh_sponsor_command(ctx=ctx, url=url, snapshot_root=snapshot_root, only=only)
+
+    def _run_refresh_companies_house_command(
+        *,
+        ctx: typer.Context,
+        url: str | None,
+        snapshot_root: Path | None,
+        only: RefreshOnly,
+    ) -> None:
         state = _get_context(ctx)
         config = state.config
         root = snapshot_root or Path(config.snapshot_root or DEFAULT_SNAPSHOT_ROOT)
@@ -455,8 +489,91 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
         rprint(f"  Snapshot date: {result.snapshot_date}")
         rprint(f"  Clean rows: {result.row_counts['clean']:,}")
 
-    @app.command(name="transform-enrich")
-    def transform_enrich(
+    @admin_refresh_app.command(name="companies-house")
+    def admin_refresh_companies_house(
+        ctx: typer.Context,
+        url: Annotated[
+            str | None,
+            typer.Option(
+                "--url",
+                "-u",
+                help="Direct ZIP URL for Companies House bulk data (optional)",
+            ),
+        ] = None,
+        snapshot_root: Annotated[
+            Path | None,
+            typer.Option(
+                "--snapshot-root",
+                help="Snapshot root directory (defaults to SNAPSHOT_ROOT)",
+            ),
+        ] = None,
+        only: Annotated[
+            RefreshOnly,
+            typer.Option(
+                "--only",
+                help="Run only one logical refresh group (default: all).",
+            ),
+        ] = RefreshOnly.ALL,
+    ) -> None:
+        """Refresh Companies House bulk snapshot (download + clean + index)."""
+        _run_refresh_companies_house_command(
+            ctx=ctx,
+            url=url,
+            snapshot_root=snapshot_root,
+            only=only,
+        )
+
+    def _run_build_enrich_command(
+        *,
+        ctx: typer.Context,
+        register_path: Path | None,
+        out_dir: Path,
+        resume: bool,
+        batch_start: int,
+        batch_count: int | None,
+        batch_size: int | None,
+    ) -> None:
+        state = _get_context(ctx)
+        config = state.config
+        _require_file_runtime_source(config, command_name="admin build enrich")
+        deps = state.build_dependencies(
+            cache_dir=DEFAULT_CACHE_DIR,
+            build_http_client=False,
+            config=config,
+        )
+        register_value = register_path or _resolve_sponsor_clean_path(
+            config=config,
+            fs=deps.fs,
+        )
+        ch_clean_path, ch_token_index_dir = _resolve_companies_house_paths(
+            config=config,
+            fs=deps.fs,
+        )
+        config = _with_snapshot_paths(
+            config=config,
+            snapshot_root=None,
+            sponsor_clean_path=register_value,
+            ch_clean_path=ch_clean_path,
+            ch_token_index_dir=ch_token_index_dir,
+        )
+        outs = run_transform_enrich(
+            register_path=register_value,
+            out_dir=out_dir,
+            cache_dir=DEFAULT_CACHE_DIR,
+            resume=resume,
+            batch_start=batch_start,
+            batch_count=batch_count,
+            batch_size=batch_size,
+            config=config,
+            http_client=deps.http_client,
+            fs=deps.fs,
+        )
+        rprint("[green]✓ Transform enrich complete:[/green]")
+        for key, value in outs.items():
+            rprint(f"  {key}: {value}")
+
+    @admin_build_app.command(name="enrich")
+    def admin_build_enrich(
         ctx: typer.Context,
         register_path: Annotated[
             Path | None,
@@ -508,47 +625,48 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
         Batching: use --batch-start/--batch-count/--batch-size.
         Resume: --resume and check data/processed/sponsor_enrich_resume_report.json.
         """
+        _run_build_enrich_command(
+            ctx=ctx,
+            register_path=register_path,
+            out_dir=out_dir,
+            resume=resume,
+            batch_start=batch_start,
+            batch_count=batch_count,
+            batch_size=batch_size,
+        )
+
+    def _run_build_score_command(
+        *,
+        ctx: typer.Context,
+        enriched_path: Path,
+        out_dir: Path,
+        sector_profile: Path | None,
+        sector: str | None,
+    ) -> None:
         state = _get_context(ctx)
         config = state.config
-        _require_file_runtime_source(config, command_name="transform-enrich")
+        if sector_profile is not None or sector is not None:
+            config = config.with_overrides(
+                sector_profile_path=str(sector_profile) if sector_profile is not None else None,
+                sector_name=sector,
+            )
         deps = state.build_dependencies(
             cache_dir=DEFAULT_CACHE_DIR,
             build_http_client=False,
             config=config,
         )
-        register_value = register_path or _resolve_sponsor_clean_path(
-            config=config,
-            fs=deps.fs,
-        )
-        ch_clean_path, ch_token_index_dir = _resolve_companies_house_paths(
-            config=config,
-            fs=deps.fs,
-        )
-        config = _with_snapshot_paths(
-            config=config,
-            snapshot_root=None,
-            sponsor_clean_path=register_value,
-            ch_clean_path=ch_clean_path,
-            ch_token_index_dir=ch_token_index_dir,
-        )
-        outs = run_transform_enrich(
-            register_path=register_value,
+        outs = run_transform_score(
+            enriched_path=enriched_path,
             out_dir=out_dir,
-            cache_dir=DEFAULT_CACHE_DIR,
-            resume=resume,
-            batch_start=batch_start,
-            batch_count=batch_count,
-            batch_size=batch_size,
             config=config,
-            http_client=deps.http_client,
             fs=deps.fs,
         )
-        rprint("[green]✓ Transform enrich complete:[/green]")
-        for k, v in outs.items():
-            rprint(f"  {k}: {v}")
+        rprint("[green]✓ Transform score complete:[/green]")
+        for key, value in outs.items():
+            rprint(f"  {key}: {value}")
 
-    @app.command(name="transform-score")
-    def transform_score(
+    @admin_build_app.command(name="score")
+    def admin_build_score(
         ctx: typer.Context,
         enriched_path: Annotated[
             Path,
@@ -582,30 +700,61 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
         ] = None,
     ) -> None:
         """Transform score: score for tech-likelihood and write scored output."""
+        _run_build_score_command(
+            ctx=ctx,
+            enriched_path=enriched_path,
+            out_dir=out_dir,
+            sector_profile=sector_profile,
+            sector=sector,
+        )
+
+    def _run_build_shortlist_command(
+        *,
+        ctx: typer.Context,
+        scored_path: Path,
+        out_dir: Path,
+        threshold: float | None,
+        region: list[str] | None,
+        postcode_prefix: list[str] | None,
+        min_employee_count: int | None,
+        unknown_employee_count: UnknownEmployeeCountMode | None,
+    ) -> None:
         state = _get_context(ctx)
         config = state.config
-        if sector_profile is not None or sector is not None:
+        if (
+            threshold is not None
+            or region
+            or postcode_prefix
+            or min_employee_count is not None
+            or unknown_employee_count is not None
+        ):
             config = config.with_overrides(
-                sector_profile_path=str(sector_profile) if sector_profile is not None else None,
-                sector_name=sector,
+                tech_score_threshold=threshold,
+                geo_filter_region=_single_region(region),
+                geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
+                min_employee_count=min_employee_count,
+                include_unknown_employee_count=_unknown_employee_count_to_bool(
+                    unknown_employee_count
+                ),
             )
+
         deps = state.build_dependencies(
             cache_dir=DEFAULT_CACHE_DIR,
             build_http_client=False,
             config=config,
         )
-        outs = run_transform_score(
-            enriched_path=enriched_path,
+        outs = run_usage_shortlist(
+            scored_path=scored_path,
             out_dir=out_dir,
             config=config,
             fs=deps.fs,
         )
-        rprint("[green]✓ Transform score complete:[/green]")
-        for k, v in outs.items():
-            rprint(f"  {k}: {v}")
+        rprint("[green]✓ Usage shortlist complete:[/green]")
+        for key, value in outs.items():
+            rprint(f"  {key}: {value}")
 
-    @app.command(name="usage-shortlist")
-    def usage_shortlist(
+    @admin_build_app.command(name="shortlist")
+    def admin_build_shortlist(
         ctx: typer.Context,
         scored_path: Annotated[
             Path,
@@ -667,105 +816,31 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
         ] = None,
     ) -> None:
         """Usage shortlist: filter scored output into shortlist and explainability."""
-        state = _get_context(ctx)
-        config = state.config
-        if (
-            threshold is not None
-            or region
-            or postcode_prefix
-            or min_employee_count is not None
-            or unknown_employee_count is not None
-        ):
-            config = config.with_overrides(
-                tech_score_threshold=threshold,
-                geo_filter_region=_single_region(region),
-                geo_filter_postcodes=tuple(postcode_prefix) if postcode_prefix else None,
-                min_employee_count=min_employee_count,
-                include_unknown_employee_count=_unknown_employee_count_to_bool(
-                    unknown_employee_count
-                ),
-            )
-
-        deps = state.build_dependencies(
-            cache_dir=DEFAULT_CACHE_DIR,
-            build_http_client=False,
-            config=config,
-        )
-        outs = run_usage_shortlist(
+        _run_build_shortlist_command(
+            ctx=ctx,
             scored_path=scored_path,
             out_dir=out_dir,
-            config=config,
-            fs=deps.fs,
+            threshold=threshold,
+            region=region,
+            postcode_prefix=postcode_prefix,
+            min_employee_count=min_employee_count,
+            unknown_employee_count=unknown_employee_count,
         )
-        rprint("[green]✓ Usage shortlist complete:[/green]")
-        for k, v in outs.items():
-            rprint(f"  {k}: {v}")
 
-    @app.command(name="run-all")
-    def run_all(
+    def _run_build_all_command(
+        *,
         ctx: typer.Context,
-        snapshot_root: Annotated[
-            Path | None,
-            typer.Option(
-                "--snapshot-root",
-                help="Snapshot root directory (defaults to SNAPSHOT_ROOT)",
-            ),
-        ] = None,
-        region: Annotated[
-            list[str] | None,
-            typer.Option(
-                "--region",
-                "-r",
-                help="Filter final shortlist by region (single value)",
-            ),
-        ] = None,
-        postcode_prefix: Annotated[
-            list[str] | None,
-            typer.Option(
-                "--postcode-prefix",
-                "-p",
-                help="Filter final shortlist by postcode prefix (repeatable)",
-            ),
-        ] = None,
-        threshold: Annotated[
-            float | None,
-            typer.Option(
-                "--threshold",
-                "-t",
-                help="Override tech score threshold for scoring",
-            ),
-        ] = None,
-        min_employee_count: Annotated[
-            int | None,
-            typer.Option(
-                "--min-employee-count",
-                min=1,
-                help="Filter final shortlist by minimum employee count.",
-            ),
-        ] = None,
-        unknown_employee_count: Annotated[
-            UnknownEmployeeCountMode | None,
-            typer.Option(
-                "--unknown-employee-count",
-                help="How to handle rows with unknown employee count: include or exclude.",
-            ),
-        ] = None,
-        only: Annotated[
-            RunAllOnly,
-            typer.Option(
-                "--only",
-                help="Run only one logical group (default: all).",
-            ),
-        ] = RunAllOnly.ALL,
+        snapshot_root: Path | None,
+        region: list[str] | None,
+        postcode_prefix: list[str] | None,
+        threshold: float | None,
+        min_employee_count: int | None,
+        unknown_employee_count: UnknownEmployeeCountMode | None,
+        only: RunAllOnly,
     ) -> None:
-        """Run cache-only pipeline steps sequentially.
-
-        Executes: transform-enrich → transform-score → usage-shortlist
-        Geographic filters apply to the final shortlist.
-        """
         state = _get_context(ctx)
         config = state.config
-        _require_file_runtime_source(config, command_name="run-all")
+        _require_file_runtime_source(config, command_name="admin build all")
         if (
             threshold is not None
             or region
@@ -847,14 +922,163 @@ def create_app(deps_builder: DependenciesBuilder) -> typer.Typer:
         rprint(f"Final shortlist: {usage_outs['shortlist']}")
         rprint(f"Explainability: {usage_outs['explain']}")
 
+    @admin_build_app.command(name="all")
+    def admin_build_all(
+        ctx: typer.Context,
+        snapshot_root: Annotated[
+            Path | None,
+            typer.Option(
+                "--snapshot-root",
+                help="Snapshot root directory (defaults to SNAPSHOT_ROOT)",
+            ),
+        ] = None,
+        region: Annotated[
+            list[str] | None,
+            typer.Option(
+                "--region",
+                "-r",
+                help="Filter final shortlist by region (single value)",
+            ),
+        ] = None,
+        postcode_prefix: Annotated[
+            list[str] | None,
+            typer.Option(
+                "--postcode-prefix",
+                "-p",
+                help="Filter final shortlist by postcode prefix (repeatable)",
+            ),
+        ] = None,
+        threshold: Annotated[
+            float | None,
+            typer.Option(
+                "--threshold",
+                "-t",
+                help="Override tech score threshold for scoring",
+            ),
+        ] = None,
+        min_employee_count: Annotated[
+            int | None,
+            typer.Option(
+                "--min-employee-count",
+                min=1,
+                help="Filter final shortlist by minimum employee count.",
+            ),
+        ] = None,
+        unknown_employee_count: Annotated[
+            UnknownEmployeeCountMode | None,
+            typer.Option(
+                "--unknown-employee-count",
+                help="How to handle rows with unknown employee count: include or exclude.",
+            ),
+        ] = None,
+        only: Annotated[
+            RunAllOnly,
+            typer.Option(
+                "--only",
+                help="Run only one logical group (default: all).",
+            ),
+        ] = RunAllOnly.ALL,
+    ) -> None:
+        """Run cache-only pipeline steps sequentially.
+
+        Executes: transform-enrich → transform-score → usage-shortlist
+        Geographic filters apply to the final shortlist.
+        """
+        _run_build_all_command(
+            ctx=ctx,
+            snapshot_root=snapshot_root,
+            region=region,
+            postcode_prefix=postcode_prefix,
+            threshold=threshold,
+            min_employee_count=min_employee_count,
+            unknown_employee_count=unknown_employee_count,
+            only=only,
+        )
+
+    @admin_app.command(name="validate")
+    def admin_validate() -> None:
+        """Validate search-ready artefacts (placeholder)."""
+        raise AdminValidateNotImplementedError()
+
+    @app.command(name="search")
+    def search(
+        sector: Annotated[
+            str | None,
+            typer.Option(
+                "--sector",
+                help="Filter by sector profile name.",
+            ),
+        ] = None,
+        size: Annotated[
+            SearchSizeBand | None,
+            typer.Option(
+                "--size",
+                help="Filter by organisation size band.",
+            ),
+        ] = None,
+        region: Annotated[
+            str | None,
+            typer.Option(
+                "--region",
+                help="Filter by target region.",
+            ),
+        ] = None,
+        keyword: Annotated[
+            str | None,
+            typer.Option(
+                "--keyword",
+                help="Optional keyword filter for organisation names.",
+            ),
+        ] = None,
+    ) -> None:
+        """Query denormalised search views (placeholder)."""
+        if not any([sector, size, region, keyword]):
+            raise SearchFilterRequiredError()
+        raise SearchNotImplementedError()
+
+    @app.command(name="refresh-sponsor", hidden=True)
+    def legacy_refresh_sponsor() -> None:
+        raise LegacyCommandMovedError("refresh-sponsor", "uship admin refresh sponsor")
+
+    @app.command(name="refresh-companies-house", hidden=True)
+    def legacy_refresh_companies_house() -> None:
+        raise LegacyCommandMovedError(
+            "refresh-companies-house",
+            "uship admin refresh companies-house",
+        )
+
+    @app.command(name="transform-enrich", hidden=True)
+    def legacy_transform_enrich() -> None:
+        raise LegacyCommandMovedError("transform-enrich", "uship admin build enrich")
+
+    @app.command(name="transform-score", hidden=True)
+    def legacy_transform_score() -> None:
+        raise LegacyCommandMovedError("transform-score", "uship admin build score")
+
+    @app.command(name="usage-shortlist", hidden=True)
+    def legacy_usage_shortlist() -> None:
+        raise LegacyCommandMovedError("usage-shortlist", "uship admin build shortlist")
+
+    @app.command(name="run-all", hidden=True)
+    def legacy_run_all() -> None:
+        raise LegacyCommandMovedError("run-all", "uship admin build all")
+
     _ = (
         main,
-        refresh_sponsor,
-        refresh_companies_house,
-        transform_enrich,
-        transform_score,
-        usage_shortlist,
-        run_all,
+        admin_refresh_sponsor,
+        admin_refresh_companies_house,
+        admin_build_enrich,
+        admin_build_score,
+        admin_build_shortlist,
+        admin_build_all,
+        admin_validate,
+        search,
+        legacy_refresh_sponsor,
+        legacy_refresh_companies_house,
+        legacy_transform_enrich,
+        legacy_transform_score,
+        legacy_usage_shortlist,
+        legacy_run_all,
     )
 
     return app

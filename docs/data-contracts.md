@@ -232,12 +232,12 @@ Runtime scoring requirements:
 Example selection:
 
 ```bash
-uv run uk-sponsor transform-score --sector care_support
+uv run uship admin build score --sector care_support
 ```
 
 ## Size Filter Runtime Contract (M7-B2, M7-B4)
 
-Usage commands (`usage-shortlist`, `run-all`) accept these size-filter controls:
+Usage commands (`admin build shortlist`, `admin build all`) accept these size-filter controls:
 
 - CLI:
   - `--min-employee-count` (positive integer)
@@ -262,6 +262,37 @@ Contract notes:
   unknown handling is explicitly enabled (`include` / `true`).
 - Non-empty invalid `employee_count` values fail fast during shortlist filtering.
 - Filtered shortlist/explain outputs preserve deterministic row order for identical inputs.
+
+## Grouped CLI Contract (`M8-B1`)
+
+Executable:
+
+- `uship`
+
+Top-level command groups:
+
+- `admin`
+- `search`
+
+Legacy flat commands are intentionally fail-fast and must not be used:
+
+- `refresh-sponsor` -> `admin refresh sponsor`
+- `refresh-companies-house` -> `admin refresh companies-house`
+- `transform-enrich` -> `admin build enrich`
+- `transform-score` -> `admin build score`
+- `usage-shortlist` -> `admin build shortlist`
+- `run-all` -> `admin build all`
+
+Search contract state in `M8-B1`:
+
+- `search` requires at least one filter: `--sector`, `--size`, `--region`, or `--keyword`.
+- `--size` accepted values:
+  - `micro` (`<= 10`)
+  - `small` (`11-50`)
+  - `medium` (`51-250`)
+  - `large` (`251-999`)
+  - `mega` (`>= 1000`)
+- `search` and `admin validate` are explicit fail-fast placeholders in `M8-B1`.
 
 ## Enrichment Audit CLI Contract
 
@@ -297,15 +328,15 @@ uv run python scripts/validation_e2e_fixture.py
 The script contract is:
 
 1. Run grouped refresh once on local fixtures.
-2. Run `transform-enrich --no-resume` twice on unchanged snapshots.
+2. Run `admin build enrich --no-resume` twice on unchanged snapshots.
 3. Assert byte-identical output for:
    - `sponsor_enriched.csv`
    - `sponsor_unmatched.csv`
    - `sponsor_match_candidates_top3.csv`
    - `sponsor_enrich_checkpoint.csv`
-4. Run `transform-enrich --resume` against the second no-resume output.
+4. Run `admin build enrich --resume` against the second no-resume output.
 5. Assert resume invariants:
    - `status=complete`
    - `processed_in_run=0`
    - `remaining=0`
-6. Run `transform-score` and `usage-shortlist` on the validated second-run output.
+6. Run `admin build score` and `admin build shortlist` on the validated second-run output.

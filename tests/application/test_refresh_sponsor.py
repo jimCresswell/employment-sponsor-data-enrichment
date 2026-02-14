@@ -70,7 +70,7 @@ def test_refresh_sponsor_writes_snapshot_and_manifest(tmp_path: Path) -> None:
         snapshot_root=snapshot_root,
         fs=fs,
         http_session=session,
-        command_line="uk-sponsor refresh-sponsor --url https://example.com",
+        command_line="uship admin refresh sponsor --url https://example.com",
         progress=progress,
         now_fn=lambda: now,
     )
@@ -110,7 +110,7 @@ def test_refresh_sponsor_fails_on_missing_columns(tmp_path: Path) -> None:
             snapshot_root=snapshot_root,
             fs=fs,
             http_session=session,
-            command_line="uk-sponsor refresh-sponsor --url https://example.com",
+            command_line="uship admin refresh sponsor --url https://example.com",
             now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
         )
 
@@ -136,7 +136,7 @@ def test_refresh_sponsor_discovers_csv_link(tmp_path: Path) -> None:
         snapshot_root=snapshot_root,
         fs=fs,
         http_session=session,
-        command_line="uk-sponsor refresh-sponsor",
+        command_line="uship admin refresh sponsor",
         now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
         source_page_url="https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers",
     )
@@ -158,7 +158,7 @@ def test_refresh_sponsor_acquire_writes_pending_raw(tmp_path: Path) -> None:
         snapshot_root=snapshot_root,
         fs=fs,
         http_session=session,
-        command_line="uk-sponsor refresh-sponsor --only acquire",
+        command_line="uship admin refresh sponsor --only acquire",
         now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
     )
 
@@ -182,14 +182,14 @@ def test_refresh_sponsor_clean_commits_pending_snapshot(tmp_path: Path) -> None:
         snapshot_root=snapshot_root,
         fs=fs,
         http_session=session,
-        command_line="uk-sponsor refresh-sponsor --only acquire",
+        command_line="uship admin refresh sponsor --only acquire",
         now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
     )
 
     result = run_refresh_sponsor_clean(
         snapshot_root=snapshot_root,
         fs=fs,
-        command_line="uk-sponsor refresh-sponsor --only clean",
+        command_line="uship admin refresh sponsor --only clean",
         now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
     )
 
@@ -207,6 +207,6 @@ def test_refresh_sponsor_clean_raises_without_pending_snapshot(tmp_path: Path) -
         run_refresh_sponsor_clean(
             snapshot_root=snapshot_root,
             fs=fs,
-            command_line="uk-sponsor refresh-sponsor --only clean",
+            command_line="uship admin refresh sponsor --only clean",
             now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
         )

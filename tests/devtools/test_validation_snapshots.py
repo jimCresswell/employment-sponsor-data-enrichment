@@ -53,7 +53,7 @@ def _build_manifest(
         "artefacts": artefacts,
         "git_sha": "abc123",
         "tool_version": "0.1.0",
-        "command_line": "uk-sponsor refresh-sponsor",
+        "command_line": "uship admin refresh sponsor",
     }
 
 

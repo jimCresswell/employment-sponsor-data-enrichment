@@ -261,8 +261,10 @@ def _run_transform_enrich_no_resume(
         [
             "uv",
             "run",
-            "uk-sponsor",
-            "transform-enrich",
+            "uship",
+            "admin",
+            "build",
+            "enrich",
             "--output-dir",
             str(output_parent),
             "--no-resume",
@@ -311,8 +313,10 @@ def _run_fixture_flow(*, work_dir: Path) -> None:
             [
                 "uv",
                 "run",
-                "uk-sponsor",
-                "refresh-sponsor",
+                "uship",
+                "admin",
+                "refresh",
+                "sponsor",
                 "--only",
                 "acquire",
                 "--snapshot-root",
@@ -323,8 +327,10 @@ def _run_fixture_flow(*, work_dir: Path) -> None:
             [
                 "uv",
                 "run",
-                "uk-sponsor",
-                "refresh-sponsor",
+                "uship",
+                "admin",
+                "refresh",
+                "sponsor",
                 "--only",
                 "clean",
                 "--snapshot-root",
@@ -333,8 +339,10 @@ def _run_fixture_flow(*, work_dir: Path) -> None:
             [
                 "uv",
                 "run",
-                "uk-sponsor",
-                "refresh-companies-house",
+                "uship",
+                "admin",
+                "refresh",
+                "companies-house",
                 "--only",
                 "acquire",
                 "--snapshot-root",
@@ -345,8 +353,10 @@ def _run_fixture_flow(*, work_dir: Path) -> None:
             [
                 "uv",
                 "run",
-                "uk-sponsor",
-                "refresh-companies-house",
+                "uship",
+                "admin",
+                "refresh",
+                "companies-house",
                 "--only",
                 "clean",
                 "--snapshot-root",
@@ -374,8 +384,10 @@ def _run_fixture_flow(*, work_dir: Path) -> None:
             [
                 "uv",
                 "run",
-                "uk-sponsor",
-                "transform-enrich",
+                "uship",
+                "admin",
+                "build",
+                "enrich",
                 "--output-dir",
                 str(second_run_dir),
                 "--resume",
@@ -389,8 +401,10 @@ def _run_fixture_flow(*, work_dir: Path) -> None:
             [
                 "uv",
                 "run",
-                "uk-sponsor",
-                "transform-score",
+                "uship",
+                "admin",
+                "build",
+                "score",
                 "--input",
                 str(second_run_dir / "sponsor_enriched.csv"),
                 "--output-dir",
@@ -403,8 +417,10 @@ def _run_fixture_flow(*, work_dir: Path) -> None:
             [
                 "uv",
                 "run",
-                "uk-sponsor",
-                "usage-shortlist",
+                "uship",
+                "admin",
+                "build",
+                "shortlist",
                 "--input",
                 str(second_run_dir / "companies_scored.csv"),
                 "--output-dir",
@@ -434,7 +450,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.work_dir is None:
-        with tempfile.TemporaryDirectory(prefix="uk-sponsor-validation-e2e-") as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="uship-validation-e2e-") as temp_dir:
             work_dir = Path(temp_dir)
             _run_fixture_flow(work_dir=work_dir)
             print(f"PASS validation e2e fixture run: {work_dir}")

@@ -39,26 +39,26 @@ These include the area-targeted tech-search story and the delivered large-employ
 ## Runtime Model (Important)
 
 - Runtime commands are **file-only** for Companies House (`CH_SOURCE_TYPE=file`).
-- Network access is owned by refresh commands (`refresh-sponsor`, `refresh-companies-house`).
-- `transform-enrich` and `run-all` fail fast unless `CH_SOURCE_TYPE=file`.
+- Network access is owned by refresh commands (`admin refresh sponsor`, `admin refresh companies-house`).
+- `admin build enrich` and `admin build all` fail fast unless `CH_SOURCE_TYPE=file`.
 - Archived runtime API wiring notes live in `docs/archived-api-runtime-mode.md`.
 
 ## Pipeline Overview
 
 ```text
-GOV.UK Sponsor Register -> refresh-sponsor -> sponsor snapshot (clean.csv)
-Companies House Bulk CSV -> refresh-companies-house -> CH snapshot (clean.csv + index + profiles)
+GOV.UK Sponsor Register -> admin refresh sponsor -> sponsor snapshot (clean.csv)
+Companies House Bulk CSV -> admin refresh companies-house -> CH snapshot (clean.csv + index + profiles)
 Employee count input -> snapshot-managed employee_count dataset (clean.csv + manifest)
-Snapshots -> transform-enrich -> transform-score -> usage-shortlist
+Snapshots -> admin build enrich -> admin build score -> admin build shortlist
 ```
 
 | Step | Input | Output | Purpose |
 | --- | --- | --- | --- |
-| `refresh-sponsor` | Sponsor CSV URL | `data/cache/snapshots/sponsor/<YYYY-MM-DD>/...` | Discover, download, clean, snapshot sponsor data |
-| `refresh-companies-house` | Companies House ZIP/CSV URL | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/...` | Discover, download/extract, clean, index, snapshot CH data |
-| `transform-enrich` | Clean snapshots | `data/processed/sponsor_*.csv` | Match sponsor organisations to CH entities |
-| `transform-score` | Enriched CSV + latest `employee_count` snapshot | `data/processed/companies_scored.csv` | Apply active role-likelihood scoring profile and join employee-count provenance by company number |
-| `usage-shortlist` | Scored CSV | `data/processed/companies_shortlist.csv`, `data/processed/companies_explain.csv` | Apply threshold, geo, and size filters and emit explainability columns |
+| `admin refresh sponsor` | Sponsor CSV URL | `data/cache/snapshots/sponsor/<YYYY-MM-DD>/...` | Discover, download, clean, snapshot sponsor data |
+| `admin refresh companies-house` | Companies House ZIP/CSV URL | `data/cache/snapshots/companies_house/<YYYY-MM-DD>/...` | Discover, download/extract, clean, index, snapshot CH data |
+| `admin build enrich` | Clean snapshots | `data/processed/sponsor_*.csv` | Match sponsor organisations to CH entities |
+| `admin build score` | Enriched CSV + latest `employee_count` snapshot | `data/processed/companies_scored.csv` | Apply active role-likelihood scoring profile and join employee-count provenance by company number |
+| `admin build shortlist` | Scored CSV | `data/processed/companies_shortlist.csv`, `data/processed/companies_explain.csv` | Apply threshold, geo, and size filters and emit explainability columns |
 
 ## Quick Start (First Successful Run)
 
@@ -95,11 +95,11 @@ You can usually leave other values at defaults for the first run.
 ### 4. Build Snapshots
 
 ```bash
-uv run uk-sponsor refresh-sponsor
-uv run uk-sponsor refresh-companies-house
+uv run uship admin refresh sponsor
+uv run uship admin refresh companies-house
 ```
 
-Provide an `employee_count` snapshot before running `transform-score` or `run-all`.
+Provide an `employee_count` snapshot before running `admin build score` or `admin build all`.
 The latest dated snapshot under `SNAPSHOT_ROOT` is loaded automatically:
 
 ```text
@@ -115,7 +115,7 @@ data/cache/snapshots/employee_count/<YYYY-MM-DD>/
 ### 5. Run Cache-Only Pipeline
 
 ```bash
-uv run uk-sponsor run-all
+uv run uship admin build all
 ```
 
 ### 6. Check Outputs
@@ -135,7 +135,7 @@ Expected files in `data/processed/`:
 
 ### Refresh Commands (Grouped Execution)
 
-`refresh-sponsor` and `refresh-companies-house` support:
+`admin refresh sponsor` and `admin refresh companies-house` support:
 
 - `--only discovery`: resolve source URL only
 - `--only acquire`: download raw payload (and ZIP extract for CH)
@@ -145,56 +145,79 @@ Expected files in `data/processed/`:
 Examples:
 
 ```bash
-uv run uk-sponsor refresh-sponsor --only discovery
-uv run uk-sponsor refresh-sponsor --only acquire
-uv run uk-sponsor refresh-sponsor --only clean
+uv run uship admin refresh sponsor --only discovery
+uv run uship admin refresh sponsor --only acquire
+uv run uship admin refresh sponsor --only clean
 
-uv run uk-sponsor refresh-companies-house --only discovery
-uv run uk-sponsor refresh-companies-house --only acquire
-uv run uk-sponsor refresh-companies-house --only clean
+uv run uship admin refresh companies-house --only discovery
+uv run uship admin refresh companies-house --only acquire
+uv run uship admin refresh companies-house --only clean
 ```
 
 You can bypass discovery with explicit URLs:
 
 ```bash
-uv run uk-sponsor refresh-sponsor --url <sponsor-csv-url>
-uv run uk-sponsor refresh-companies-house --url <companies-house-zip-url>
+uv run uship admin refresh sponsor --url <sponsor-csv-url>
+uv run uship admin refresh companies-house --url <companies-house-zip-url>
 ```
 
 ### Runtime and Processing Commands
 
 ```bash
-uv run uk-sponsor transform-enrich
-uv run uk-sponsor transform-score
-uv run uk-sponsor usage-shortlist
-uv run uk-sponsor run-all
+uv run uship admin build enrich
+uv run uship admin build score
+uv run uship admin build shortlist
+uv run uship admin build all
 ```
 
 Print installed tool version:
 
 ```bash
-uv run uk-sponsor --version
+uv run uship --version
 ```
+
+Historical note:
+- Older run logs and archived documents may still show `uk-sponsor` command examples from pre-`M8-B1` sessions.
+
+### Search Command Contract (`M8-B1`)
+
+`search` is now part of the public grouped CLI surface:
+
+```bash
+uv run uship search --sector tech --size large --region London --keyword platform
+```
+
+Current contract:
+
+- At least one filter is required: `--sector`, `--size`, `--region`, or `--keyword`.
+- `--size` accepts: `micro`, `small`, `medium`, `large`, `mega`.
+- Size-band mapping is fixed for Milestone 8:
+  - `micro`: `<= 10`
+  - `small`: `11-50`
+  - `medium`: `51-250`
+  - `large`: `251-999`
+  - `mega`: `>= 1000`
+- `search` and `admin validate` are explicit fail-fast placeholders in `M8-B1` and are implemented in later Milestone 8 batches.
 
 Optional scoring profile selection:
 
 ```bash
-uv run uk-sponsor transform-score \
+uv run uship admin build score \
   --sector-profile data/reference/scoring_profiles.json \
   --sector tech
 
-uv run uk-sponsor transform-score \
+uv run uship admin build score \
   --sector-profile data/reference/scoring_profiles.json \
   --sector care_support
 ```
 
-By default, `transform-score` always loads `data/reference/scoring_profiles.json` and resolves
+By default, `admin build score` always loads `data/reference/scoring_profiles.json` and resolves
 the catalogue `default_profile` (`tech`) when no profile override is supplied.
 The starter catalogue currently includes `tech` and `care_support`.
-`transform-score` and `run-all` fail fast if the latest `employee_count` snapshot is missing
+`admin build score` and `admin build all` fail fast if the latest `employee_count` snapshot is missing
 or invalid.
 
-`run-all` supports `--only`:
+`admin build all` supports `--only`:
 
 - `all` (default)
 - `transform-enrich`
@@ -205,13 +228,13 @@ or invalid.
 
 ```bash
 # Run first two batches after resume filtering
-uv run uk-sponsor transform-enrich --batch-count 2
+uv run uship admin build enrich --batch-count 2
 
 # Start at batch three and run two batches
-uv run uk-sponsor transform-enrich --batch-start 3 --batch-count 2
+uv run uship admin build enrich --batch-start 3 --batch-count 2
 
 # Override batch size for this run
-uv run uk-sponsor transform-enrich --batch-size 50
+uv run uship admin build enrich --batch-size 50
 ```
 
 Resume artefacts:
@@ -221,7 +244,7 @@ Resume artefacts:
 
 When running with `--no-resume`, outputs are written to a timestamped subdirectory under the
 selected output directory.
-`run-all` uses resume mode for enrich by default, so repeated unchanged-input runs may report
+`admin build all` uses resume mode for enrich by default, so repeated unchanged-input runs may report
 zero additional processed organisations.
 
 ### Geographic Filtering (Single Region Contract)
@@ -229,9 +252,9 @@ zero additional processed organisations.
 CLI examples:
 
 ```bash
-uv run uk-sponsor usage-shortlist --region London
-uv run uk-sponsor usage-shortlist --postcode-prefix EC --postcode-prefix SW
-uv run uk-sponsor run-all --region London --threshold 0.50
+uv run uship admin build shortlist --region London
+uv run uship admin build shortlist --postcode-prefix EC --postcode-prefix SW
+uv run uship admin build all --region London --threshold 0.50
 ```
 
 Environment variables:
@@ -252,8 +275,8 @@ Notes:
 CLI examples:
 
 ```bash
-uv run uk-sponsor usage-shortlist --min-employee-count 1000 --unknown-employee-count exclude
-uv run uk-sponsor run-all --min-employee-count 1000 --unknown-employee-count include
+uv run uship admin build shortlist --min-employee-count 1000 --unknown-employee-count exclude
+uv run uship admin build all --min-employee-count 1000 --unknown-employee-count include
 ```
 
 Environment variables:
@@ -314,7 +337,7 @@ INCLUDE_UNKNOWN_EMPLOYEE_COUNT=false
 You can supply a TOML config file at the CLI entry point:
 
 ```bash
-uv run uk-sponsor --config config/pipeline.toml run-all
+uv run uship --config config/pipeline.toml admin build all
 ```
 
 Precedence is fixed:

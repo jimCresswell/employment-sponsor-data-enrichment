@@ -199,7 +199,7 @@ def _write_employee_count_snapshot(
         "artefacts": {"raw": "raw.csv", "clean": "clean.csv", "manifest": "manifest.json"},
         "git_sha": "abc123",
         "tool_version": "0.1.0",
-        "command_line": "uk-sponsor refresh-employee-count",
+        "command_line": "uship refresh-employee-count",
     }
     (snapshot_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     return snapshot_root

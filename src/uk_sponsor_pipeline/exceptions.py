@@ -57,7 +57,7 @@ class MissingRawCsvError(PipelineError):
     """Raised when the raw sponsor register CSV cannot be found."""
 
     def __init__(self, raw_dir: str) -> None:
-        super().__init__(f"No raw CSV found in {raw_dir}. Run `uk-sponsor refresh-sponsor` first.")
+        super().__init__(f"No raw CSV found in {raw_dir}. Run `uship admin refresh sponsor` first.")
 
 
 class CsvLinkNotFoundError(PipelineError):

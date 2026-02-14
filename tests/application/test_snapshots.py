@@ -126,7 +126,7 @@ def test_build_snapshot_manifest_includes_required_fields() -> None:
         bytes_raw=123,
         row_counts=row_counts,
         artefacts=artefacts,
-        command_line="uk-sponsor refresh-sponsor --url https://example.com/register.csv",
+        command_line="uship admin refresh sponsor --url https://example.com/register.csv",
         git_sha="abc123",
         tool_version="1.2.3",
     )
@@ -168,7 +168,7 @@ def test_build_snapshot_manifest_defaults_git_sha_and_version(
         bytes_raw=1,
         row_counts=row_counts,
         artefacts={"raw": "raw.csv", "clean": "clean.csv"},
-        command_line="uk-sponsor refresh-sponsor --url https://example.com/register.csv",
+        command_line="uship admin refresh sponsor --url https://example.com/register.csv",
         git_sha=None,
         tool_version=None,
     )
@@ -198,7 +198,7 @@ def test_build_snapshot_manifest_defaults_to_package_version(
         bytes_raw=1,
         row_counts=row_counts,
         artefacts={"raw": "raw.csv", "clean": "clean.csv"},
-        command_line="uk-sponsor refresh-sponsor --url https://example.com/register.csv",
+        command_line="uship admin refresh sponsor --url https://example.com/register.csv",
         git_sha=None,
         tool_version=None,
     )

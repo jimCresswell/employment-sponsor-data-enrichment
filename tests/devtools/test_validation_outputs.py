@@ -56,7 +56,7 @@ def _resume_report(status: str = "complete") -> dict[str, object]:
         "processed_in_run": 1,
         "processed_total": 1,
         "remaining": 0,
-        "resume_command": "uv run uk-sponsor transform-enrich --resume",
+        "resume_command": "uv run uship admin build enrich --resume",
     }
 
 

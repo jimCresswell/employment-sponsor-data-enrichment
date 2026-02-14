@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-uk-sponsor = "uk_sponsor_pipeline.composition:app"
+uship = "uk_sponsor_pipeline.composition:app"
 lint = "uk_sponsor_pipeline.devtools:lint"
 format = "uk_sponsor_pipeline.devtools:format_code"
 format-check = "uk_sponsor_pipeline.devtools:format_check"

@@ -265,7 +265,7 @@ def run_refresh_companies_house_clean(
         raise PendingAcquireSnapshotNotFoundError(
             CH_DATASET,
             str(snapshot_root),
-            "uk-sponsor refresh-companies-house --only acquire",
+            "uship admin refresh companies-house --only acquire",
         )
     return _finalise_companies_house_snapshot(
         paths=pending.paths,

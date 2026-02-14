@@ -111,7 +111,7 @@ def test_refresh_companies_house_csv_writes_snapshot_and_index(tmp_path: Path) -
         snapshot_root=snapshot_root,
         fs=fs,
         http_session=session,
-        command_line="uk-sponsor refresh-companies-house --url https://example.com",
+        command_line="uship admin refresh companies-house --url https://example.com",
         progress=progress,
         now_fn=lambda: now,
     )
@@ -152,7 +152,7 @@ def test_refresh_companies_house_zip_extracts_raw_csv(tmp_path: Path) -> None:
         snapshot_root=snapshot_root,
         fs=fs,
         http_session=session,
-        command_line="uk-sponsor refresh-companies-house --url https://example.com",
+        command_line="uship admin refresh companies-house --url https://example.com",
         now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
     )
 
@@ -177,7 +177,7 @@ def test_refresh_companies_house_fails_on_uri_mismatch(tmp_path: Path) -> None:
             snapshot_root=snapshot_root,
             fs=fs,
             http_session=session,
-            command_line="uk-sponsor refresh-companies-house --url https://example.com",
+            command_line="uship admin refresh companies-house --url https://example.com",
             now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
         )
 
@@ -197,7 +197,7 @@ def test_refresh_companies_house_fails_on_missing_columns(tmp_path: Path) -> Non
             snapshot_root=snapshot_root,
             fs=fs,
             http_session=session,
-            command_line="uk-sponsor refresh-companies-house --url https://example.com",
+            command_line="uship admin refresh companies-house --url https://example.com",
             now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
         )
 
@@ -226,7 +226,7 @@ def test_refresh_companies_house_discovers_zip_link(tmp_path: Path) -> None:
         snapshot_root=snapshot_root,
         fs=fs,
         http_session=session,
-        command_line="uk-sponsor refresh-companies-house",
+        command_line="uship admin refresh companies-house",
         now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
         source_page_url="https://download.companieshouse.gov.uk/en_output.html",
     )
@@ -251,7 +251,7 @@ def test_refresh_companies_house_acquire_downloads_and_extracts_zip(tmp_path: Pa
         snapshot_root=snapshot_root,
         fs=fs,
         http_session=session,
-        command_line="uk-sponsor refresh-companies-house --only acquire",
+        command_line="uship admin refresh companies-house --only acquire",
         now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
     )
 
@@ -279,14 +279,14 @@ def test_refresh_companies_house_clean_commits_pending_snapshot(tmp_path: Path) 
         snapshot_root=snapshot_root,
         fs=fs,
         http_session=session,
-        command_line="uk-sponsor refresh-companies-house --only acquire",
+        command_line="uship admin refresh companies-house --only acquire",
         now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
     )
 
     result = run_refresh_companies_house_clean(
         snapshot_root=snapshot_root,
         fs=fs,
-        command_line="uk-sponsor refresh-companies-house --only clean",
+        command_line="uship admin refresh companies-house --only clean",
         now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
     )
 
@@ -305,6 +305,6 @@ def test_refresh_companies_house_clean_raises_without_pending_snapshot(tmp_path:
         run_refresh_companies_house_clean(
             snapshot_root=snapshot_root,
             fs=fs,
-            command_line="uk-sponsor refresh-companies-house --only clean",
+            command_line="uship admin refresh companies-house --only clean",
             now_fn=lambda: datetime(2026, 2, 4, tzinfo=UTC),
         )

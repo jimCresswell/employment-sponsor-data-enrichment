@@ -179,8 +179,7 @@ def _build_resume_report(
         overall_batch_range = {"start": overall_batch_start, "end": overall_batch_end}
 
     resume_command = (
-        "uv run uk-sponsor transform-enrich "
-        f"--input {register_path} --output-dir {out_dir} --resume"
+        f"uv run uship admin build enrich --input {register_path} --output-dir {out_dir} --resume"
     )
 
     return {

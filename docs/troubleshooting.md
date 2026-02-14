@@ -2,26 +2,42 @@
 
 This page maps common failures to the fastest safe recovery path.
 
+## 0) Legacy Flat Command Fails Fast
+
+Symptom:
+
+- A command such as `refresh-sponsor`, `transform-enrich`, or `run-all` fails with a migration
+  hint to use grouped commands.
+
+Cause:
+
+- `M8-B1` removed flat command execution by contract.
+
+Recovery:
+
+- Use grouped commands only (`admin refresh ...`, `admin build ...`, `search`).
+- Follow the migration hint printed in the CLI error output.
+
 ## 1) Missing Snapshots for Cache-Only Commands
 
 Symptom:
 
-- `run-all` or `transform-enrich` fails because snapshot artefacts are missing.
+- `admin build all` or `admin build enrich` fails because snapshot artefacts are missing.
 
 Recovery:
 
 ```bash
-uv run uk-sponsor refresh-sponsor
-uv run uk-sponsor refresh-companies-house
+uv run uship admin refresh sponsor
+uv run uship admin refresh companies-house
 ```
 
 If running staged refresh:
 
 ```bash
-uv run uk-sponsor refresh-sponsor --only acquire
-uv run uk-sponsor refresh-sponsor --only clean
-uv run uk-sponsor refresh-companies-house --only acquire
-uv run uk-sponsor refresh-companies-house --only clean
+uv run uship admin refresh sponsor --only acquire
+uv run uship admin refresh sponsor --only clean
+uv run uship admin refresh companies-house --only acquire
+uv run uship admin refresh companies-house --only clean
 ```
 
 If you manage paths explicitly, set:
@@ -86,15 +102,15 @@ Recovery:
 Run acquire first for the same dataset:
 
 ```bash
-uv run uk-sponsor refresh-sponsor --only acquire
-uv run uk-sponsor refresh-sponsor --only clean
+uv run uship admin refresh sponsor --only acquire
+uv run uship admin refresh sponsor --only clean
 ```
 
 or
 
 ```bash
-uv run uk-sponsor refresh-companies-house --only acquire
-uv run uk-sponsor refresh-companies-house --only clean
+uv run uship admin refresh companies-house --only acquire
+uv run uship admin refresh companies-house --only clean
 ```
 
 ## 5) URL Supplied with `--only clean`
@@ -125,8 +141,8 @@ Recovery:
 Use explicit URLs:
 
 ```bash
-uv run uk-sponsor refresh-sponsor --url <sponsor-csv-url>
-uv run uk-sponsor refresh-companies-house --url <companies-house-zip-url>
+uv run uship admin refresh sponsor --url <sponsor-csv-url>
+uv run uship admin refresh companies-house --url <companies-house-zip-url>
 ```
 
 Record failure details in your run log so docs can be improved.
@@ -135,7 +151,7 @@ Record failure details in your run log so docs can be improved.
 
 Symptom:
 
-- `usage-shortlist` fails when geo filtering is enabled.
+- `admin build shortlist` fails when geo filtering is enabled.
 
 Recovery:
 
@@ -205,9 +221,9 @@ Recovery:
 1. Rerun runtime steps:
 
 ```bash
-uv run uk-sponsor transform-enrich
-uv run uk-sponsor transform-score
-uv run uk-sponsor usage-shortlist
+uv run uship admin build enrich
+uv run uship admin build score
+uv run uship admin build shortlist
 ```
 
 2. Re-run the output validation command.
@@ -341,7 +357,7 @@ Recovery:
 1. Run the recurring evidence command set:
 
 ```bash
-uv run uk-sponsor run-all
+uv run uship admin build all
 uv run python scripts/validation_check_snapshots.py --snapshot-root data/cache/snapshots
 uv run python scripts/validation_check_outputs.py --out-dir data/processed
 uv run python scripts/validation_audit_enrichment.py --out-dir data/processed --strict
@@ -358,11 +374,11 @@ uv run python scripts/validation_e2e_fixture.py
    `docs/validation-protocol.md`).
 4. If any command fails, fix the underlying contract/artefact issue and rerun before recording pass.
 
-## 17) `usage-shortlist` Fails on `employee_count` Values
+## 17) `admin build shortlist` Fails on `employee_count` Values
 
 Symptom:
 
-- `usage-shortlist` fails with an error similar to:
+- `admin build shortlist` fails with an error similar to:
 
 ```text
 Usage shortlist: employee_count must be empty or a positive integer. Invalid values: <sample>
@@ -375,7 +391,7 @@ Cause:
 
 Recovery:
 
-1. Re-run `transform-score` with a valid `employee_count` snapshot to regenerate scored outputs.
+1. Re-run `admin build score` with a valid `employee_count` snapshot to regenerate scored outputs.
 2. If editing fixture data manually, ensure `employee_count` is either empty (unknown) or a
    positive integer string.
-3. Re-run `usage-shortlist` with the same size-filter options.
+3. Re-run `admin build shortlist` with the same size-filter options.

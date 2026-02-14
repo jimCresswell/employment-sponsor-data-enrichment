@@ -25,6 +25,9 @@ Out of scope:
 Durable schema/output and validation contracts are defined in `docs/data-contracts.md`.
 This runbook focuses on operational command execution and acceptance checks.
 
+Historical note:
+- Older evidence entries may use `uk-sponsor` command examples from sessions before `M8-B1`.
+
 ## Pre-Flight Checklist
 
 1. Confirm tooling:
@@ -61,8 +64,8 @@ uv sync --group dev
 Run:
 
 ```bash
-uv run uk-sponsor refresh-sponsor --only discovery
-uv run uk-sponsor refresh-companies-house --only discovery
+uv run uship admin refresh sponsor --only discovery
+uv run uship admin refresh companies-house --only discovery
 ```
 
 Acceptance checks:
@@ -78,8 +81,8 @@ If discovery fails, capture the error and continue using explicit `--url` values
 Run:
 
 ```bash
-uv run uk-sponsor refresh-sponsor --only acquire
-uv run uk-sponsor refresh-companies-house --only acquire
+uv run uship admin refresh sponsor --only acquire
+uv run uship admin refresh companies-house --only acquire
 ```
 
 Acceptance checks:
@@ -97,8 +100,8 @@ Acceptance checks:
 Run:
 
 ```bash
-uv run uk-sponsor refresh-sponsor --only clean
-uv run uk-sponsor refresh-companies-house --only clean
+uv run uship admin refresh sponsor --only clean
+uv run uship admin refresh companies-house --only clean
 ```
 
 Acceptance checks:
@@ -121,23 +124,23 @@ Acceptance checks:
 Run:
 
 ```bash
-uv run uk-sponsor transform-enrich
-uv run uk-sponsor transform-score
-uv run uk-sponsor usage-shortlist
+uv run uship admin build enrich
+uv run uship admin build score
+uv run uship admin build shortlist
 ```
 
 Acceptance checks:
 
-- Latest `employee_count` snapshot is present and valid before running `transform-score`.
-- `transform-enrich` creates:
+- Latest `employee_count` snapshot is present and valid before running `admin build score`.
+- `admin build enrich` creates:
   - `data/processed/sponsor_enriched.csv`
   - `data/processed/sponsor_unmatched.csv`
   - `data/processed/sponsor_match_candidates_top3.csv`
   - `data/processed/sponsor_enrich_checkpoint.csv`
   - `data/processed/sponsor_enrich_resume_report.json`
-- `transform-score` creates:
+- `admin build score` creates:
   - `data/processed/companies_scored.csv`
-- `usage-shortlist` creates:
+- `admin build shortlist` creates:
   - `data/processed/companies_shortlist.csv`
   - `data/processed/companies_explain.csv`
 
@@ -146,7 +149,7 @@ Acceptance checks:
 Run:
 
 ```bash
-uv run uk-sponsor run-all
+uv run uship admin build all
 ```
 
 Acceptance checks:
@@ -154,7 +157,7 @@ Acceptance checks:
 - CLI reports final shortlist and explain outputs.
 - Reported output paths exist.
 - No runtime source-mode errors occur.
-- If enrich outputs are already complete, `run-all` may reuse resume state and report
+- If enrich outputs are already complete, `admin build all` may reuse resume state and report
   zero additional processed organisations; this is expected.
 
 ## Step 6: Run Validation Scripts
@@ -187,15 +190,15 @@ uv run python scripts/validation_e2e_fixture.py
 Expected behaviour:
 
 - Script builds local fixtures, serves them on a local HTTP server, executes grouped refresh once,
-  then runs `transform-enrich --no-resume` twice on unchanged snapshots.
+  then runs `admin build enrich --no-resume` twice on unchanged snapshots.
 - Script verifies deterministic enrich contracts by asserting byte-identical outputs for:
   - `sponsor_enriched.csv`
   - `sponsor_unmatched.csv`
   - `sponsor_match_candidates_top3.csv`
   - `sponsor_enrich_checkpoint.csv`
-- Script reruns `transform-enrich --resume` against the second no-resume output and verifies
+- Script reruns `admin build enrich --resume` against the second no-resume output and verifies
   resume completion invariants (`status=complete`, `processed_in_run=0`, `remaining=0`).
-- Script then runs `transform-score` and `usage-shortlist` on the validated second-run outputs,
+- Script then runs `admin build score` and `admin build shortlist` on the validated second-run outputs,
   validates required output contracts, and exits `0` on success.
 - On failure, script exits non-zero with the failing command or contract violation in stderr.
 
@@ -204,8 +207,8 @@ Expected behaviour:
 Validate single-region and postcode filtering behaviour:
 
 ```bash
-uv run uk-sponsor usage-shortlist --region London
-uv run uk-sponsor usage-shortlist --postcode-prefix EC --postcode-prefix SW
+uv run uship admin build shortlist --region London
+uv run uship admin build shortlist --postcode-prefix EC --postcode-prefix SW
 ```
 
 Expected:
@@ -271,7 +274,7 @@ Minimum cadence:
 Copy-paste weekly evidence command set:
 
 ```bash
-uv run uk-sponsor run-all
+uv run uship admin build all
 uv run python scripts/validation_check_snapshots.py --snapshot-root data/cache/snapshots
 uv run python scripts/validation_check_outputs.py --out-dir data/processed
 uv run python scripts/validation_audit_enrichment.py --out-dir data/processed --strict

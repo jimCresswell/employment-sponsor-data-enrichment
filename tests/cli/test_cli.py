@@ -100,6 +100,69 @@ def test_cli_version_option_prints_package_version(monkeypatch: pytest.MonkeyPat
     assert result.exit_code == 0
     plain_output = _strip_ansi(result.output)
     assert "9.9.9" in plain_output
+    assert "uship" in plain_output
+
+
+def test_cli_help_shows_grouped_surface_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig()
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    app = _build_app()
+    result = runner.invoke(app, ["--help"])
+    plain_output = _strip_ansi(result.output)
+
+    assert result.exit_code == 0
+    assert "admin" in plain_output
+    assert "search" in plain_output
+    assert "refresh-sponsor" not in plain_output
+    assert "refresh-companies-house" not in plain_output
+    assert "transform-enrich" not in plain_output
+    assert "transform-score" not in plain_output
+    assert "usage-shortlist" not in plain_output
+    assert "run-all" not in plain_output
+
+
+@pytest.mark.parametrize(
+    ("command", "replacement"),
+    [
+        ("refresh-sponsor", "uship admin refresh sponsor"),
+        ("refresh-companies-house", "uship admin refresh companies-house"),
+        ("transform-enrich", "uship admin build enrich"),
+        ("transform-score", "uship admin build score"),
+        ("usage-shortlist", "uship admin build shortlist"),
+        ("run-all", "uship admin build all"),
+    ],
+)
+def test_legacy_flat_commands_fail_with_migration_hints(
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+    replacement: str,
+) -> None:
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig(ch_source_type="file")
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    app = _build_app()
+    result = runner.invoke(app, [command])
+    plain_output = _strip_ansi(result.output)
+    collapsed_output = " ".join(plain_output.split())
+
+    assert result.exit_code != 0
+    for token in replacement.split():
+        assert token in collapsed_output
 
 
 def test_cli_usage_shortlist_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -129,7 +192,9 @@ def test_cli_usage_shortlist_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     result = runner.invoke(
         app,
         [
-            "usage-shortlist",
+            "admin",
+            "build",
+            "shortlist",
             "--threshold",
             "0.4",
             "--region",
@@ -183,7 +248,9 @@ def test_cli_transform_score_overrides_profile_selection(
     result = runner.invoke(
         app,
         [
-            "transform-score",
+            "admin",
+            "build",
+            "score",
             "--sector-profile",
             "data/reference/scoring_profiles.json",
             "--sector",
@@ -244,7 +311,7 @@ include_unknown_employee_count = true
     app = _build_app_with_dependencies(deps)
     result = runner.invoke(
         app,
-        ["--config", "config/pipeline.toml", "usage-shortlist"],
+        ["--config", "config/pipeline.toml", "admin", "build", "shortlist"],
     )
 
     assert result.exit_code == 0
@@ -308,7 +375,9 @@ include_unknown_employee_count = true
         [
             "--config",
             "config/pipeline.toml",
-            "usage-shortlist",
+            "admin",
+            "build",
+            "shortlist",
             "--threshold",
             "0.3",
             "--region",
@@ -350,7 +419,7 @@ def test_cli_global_config_file_missing_fails_fast(monkeypatch: pytest.MonkeyPat
     app = _build_app_with_dependencies(deps)
     result = runner.invoke(
         app,
-        ["--config", "config/missing.toml", "usage-shortlist"],
+        ["--config", "config/missing.toml", "admin", "build", "shortlist"],
     )
 
     assert result.exit_code != 0
@@ -371,7 +440,7 @@ def test_cli_usage_shortlist_rejects_multiple_regions(monkeypatch: pytest.Monkey
     app = _build_app()
     result = runner.invoke(
         app,
-        ["usage-shortlist", "--region", "London", "--region", "Leeds"],
+        ["admin", "build", "shortlist", "--region", "London", "--region", "Leeds"],
     )
 
     assert result.exit_code != 0
@@ -397,7 +466,7 @@ def test_cli_usage_shortlist_rejects_non_positive_min_employee_count(
     app = _build_app()
     result = runner.invoke(
         app,
-        ["usage-shortlist", "--min-employee-count", "0"],
+        ["admin", "build", "shortlist", "--min-employee-count", "0"],
     )
 
     assert result.exit_code != 0
@@ -421,7 +490,7 @@ def test_cli_usage_shortlist_rejects_unknown_employee_count_mode(
     app = _build_app()
     result = runner.invoke(
         app,
-        ["usage-shortlist", "--unknown-employee-count", "sometimes"],
+        ["admin", "build", "shortlist", "--unknown-employee-count", "sometimes"],
     )
 
     assert result.exit_code != 0
@@ -443,7 +512,7 @@ def test_cli_run_all_rejects_multiple_regions(monkeypatch: pytest.MonkeyPatch) -
     app = _build_app()
     result = runner.invoke(
         app,
-        ["run-all", "--region", "London", "--region", "Leeds"],
+        ["admin", "build", "all", "--region", "London", "--region", "Leeds"],
     )
 
     assert result.exit_code != 0
@@ -533,7 +602,7 @@ def test_cli_run_all_resolves_snapshot_paths(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(cli, "_resolve_companies_house_paths", fake_resolve_companies_house_paths)
 
     app = _build_app()
-    result = runner.invoke(app, ["run-all"])
+    result = runner.invoke(app, ["admin", "build", "all"])
 
     assert result.exit_code == 0
     assert captured_register_path == Path("snapshots/sponsor/2026-02-01/clean.csv")
@@ -602,7 +671,15 @@ snapshot_root = "cfg/snapshots"
     app = _build_app_with_dependencies(deps)
     result = runner.invoke(
         app,
-        ["--config", "config/pipeline.toml", "run-all", "--only", "transform-enrich"],
+        [
+            "--config",
+            "config/pipeline.toml",
+            "admin",
+            "build",
+            "all",
+            "--only",
+            "transform-enrich",
+        ],
     )
 
     assert result.exit_code == 0
@@ -641,7 +718,7 @@ def test_cli_refresh_sponsor_discovery_only(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(cli, "resolve_sponsor_csv_url", fake_resolve_sponsor_csv_url)
 
     app = _build_app()
-    result = runner.invoke(app, ["refresh-sponsor", "--only", "discovery"])
+    result = runner.invoke(app, ["admin", "refresh", "sponsor", "--only", "discovery"])
 
     assert result.exit_code == 0
     assert called is False
@@ -674,7 +751,7 @@ def test_cli_refresh_sponsor_acquire_only(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(cli, "run_refresh_sponsor_acquire", fake_run_refresh_sponsor_acquire)
 
     app = _build_app()
-    result = runner.invoke(app, ["refresh-sponsor", "--only", "acquire"])
+    result = runner.invoke(app, ["admin", "refresh", "sponsor", "--only", "acquire"])
 
     assert result.exit_code == 0
     assert called is True
@@ -706,7 +783,7 @@ def test_cli_refresh_sponsor_clean_only(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(cli, "run_refresh_sponsor_clean", fake_run_refresh_sponsor_clean)
 
     app = _build_app()
-    result = runner.invoke(app, ["refresh-sponsor", "--only", "clean"])
+    result = runner.invoke(app, ["admin", "refresh", "sponsor", "--only", "clean"])
 
     assert result.exit_code == 0
     assert called is True
@@ -747,7 +824,10 @@ def test_cli_refresh_companies_house_discovery_only(monkeypatch: pytest.MonkeyPa
     )
 
     app = _build_app()
-    result = runner.invoke(app, ["refresh-companies-house", "--only", "discovery"])
+    result = runner.invoke(
+        app,
+        ["admin", "refresh", "companies-house", "--only", "discovery"],
+    )
 
     assert result.exit_code == 0
     assert called is False
@@ -785,7 +865,10 @@ def test_cli_refresh_companies_house_acquire_only(monkeypatch: pytest.MonkeyPatc
     )
 
     app = _build_app()
-    result = runner.invoke(app, ["refresh-companies-house", "--only", "acquire"])
+    result = runner.invoke(
+        app,
+        ["admin", "refresh", "companies-house", "--only", "acquire"],
+    )
 
     assert result.exit_code == 0
     assert called is True
@@ -821,7 +904,10 @@ def test_cli_refresh_companies_house_clean_only(monkeypatch: pytest.MonkeyPatch)
     )
 
     app = _build_app()
-    result = runner.invoke(app, ["refresh-companies-house", "--only", "clean"])
+    result = runner.invoke(
+        app,
+        ["admin", "refresh", "companies-house", "--only", "clean"],
+    )
 
     assert result.exit_code == 0
     assert called is True
@@ -878,7 +964,9 @@ def test_cli_run_all_only_usage_shortlist(monkeypatch: pytest.MonkeyPatch) -> No
     result = runner.invoke(
         app,
         [
-            "run-all",
+            "admin",
+            "build",
+            "all",
             "--only",
             "usage-shortlist",
             "--min-employee-count",
@@ -908,7 +996,7 @@ def test_cli_transform_enrich_rejects_api_runtime_mode(
     )
 
     app = _build_app()
-    result = runner.invoke(app, ["transform-enrich"])
+    result = runner.invoke(app, ["admin", "build", "enrich"])
 
     assert result.exit_code != 0
     assert "supports CH_SOURCE_TYPE=file only" in result.output
@@ -926,7 +1014,86 @@ def test_cli_run_all_rejects_api_runtime_mode(monkeypatch: pytest.MonkeyPatch) -
     )
 
     app = _build_app()
-    result = runner.invoke(app, ["run-all"])
+    result = runner.invoke(app, ["admin", "build", "all"])
 
     assert result.exit_code != 0
     assert "supports CH_SOURCE_TYPE=file only" in result.output
+
+
+def test_admin_validate_command_is_fail_fast_placeholder(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = dotenv_path
+        return PipelineConfig()
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    app = _build_app()
+    result = runner.invoke(app, ["admin", "validate"])
+
+    assert result.exit_code != 0
+    plain_output = _strip_ansi(result.output)
+    assert "not implemented in M8-B1" in plain_output
+
+
+def test_search_requires_at_least_one_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig()
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    app = _build_app()
+    result = runner.invoke(app, ["search"])
+
+    assert result.exit_code != 0
+    plain_output = _strip_ansi(result.output)
+    assert "At least one search filter is required" in plain_output
+
+
+def test_search_rejects_invalid_size_band(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig()
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    app = _build_app()
+    result = runner.invoke(app, ["search", "--size", "giant"])
+
+    assert result.exit_code != 0
+    plain_output = _strip_ansi(result.output)
+    assert "size" in plain_output
+
+
+def test_search_with_valid_filter_is_fail_fast_placeholder(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_from_env(cls: type[PipelineConfig], dotenv_path: str | None = None) -> PipelineConfig:
+        _ = (cls, dotenv_path)
+        return PipelineConfig()
+
+    monkeypatch.setattr(
+        cli.PipelineConfig,
+        "from_env",
+        classmethod(fake_from_env),
+    )
+
+    app = _build_app()
+    result = runner.invoke(
+        app,
+        ["search", "--sector", "tech", "--size", "large", "--region", "London"],
+    )
+
+    assert result.exit_code != 0
+    plain_output = _strip_ansi(result.output)
+    assert "not implemented in M8-B1" in plain_output
